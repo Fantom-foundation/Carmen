@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"golang.org/x/exp/maps"
 
 	"go.uber.org/mock/gomock"
@@ -217,9 +218,9 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 			defer archive.Close()
 
 			addr1 := common.Address{1}
-			blc0 := common.Balance{0}
-			blc1 := common.Balance{1}
-			blc2 := common.Balance{2}
+			blc0 := amount.New()
+			blc1 := amount.New(1)
+			blc2 := amount.New(2)
 
 			archive.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
@@ -234,7 +235,7 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 				},
 			}, nil)
 
-			want := []common.Balance{blc0, blc1, blc1, blc2}
+			want := []amount.Amount{blc0, blc1, blc1, blc2}
 			for i, want := range want {
 				got, err := archive.GetBalance(uint64(i), addr1)
 				if err != nil || got != want {
@@ -255,7 +256,7 @@ func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 			defer archive.Close()
 
 			addr := common.Address{1}
-			balance := common.Balance{0}
+			balance := amount.New()
 
 			// Block 1 adds an actual change.
 			err = archive.Add(1, common.Update{
@@ -329,8 +330,8 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 
 			addr1 := common.Address{1}
 			addr2 := common.Address{2}
-			blc1 := common.Balance{1}
-			blc2 := common.Balance{2}
+			blc1 := amount.New(1)
+			blc2 := amount.New(2)
 
 			// Block 1
 			update := common.Update{
@@ -794,7 +795,7 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 			if err := arch.Add(1, common.Update{
 				CreatedAccounts: []common.Address{{1}},
 				Balances: []common.BalanceUpdate{
-					{Account: common.Address{1}, Balance: common.Balance{0x12}},
+					{Account: common.Address{1}, Balance: amount.New(12)},
 				},
 				Slots: []common.SlotUpdate{
 					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
@@ -825,7 +826,7 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 			if !complete {
 				t.Errorf("balance proof is incomplete")
 			}
-			if got, want := balance, (common.Balance{0x12}); got != want {
+			if got, want := balance, amount.New(12); got != want {
 				t.Errorf("unexpected balance; got: %x, want: %x", got, want)
 			}
 			value, complete, err := proof.GetState(hash, common.Address{1}, common.Key{2})
@@ -1657,7 +1658,7 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 			update := common.Update{
 				DeletedAccounts: []common.Address{{0xA}},
 				CreatedAccounts: []common.Address{{0xB}},
-				Balances:        []common.BalanceUpdate{{common.Address{0xA}, common.Balance{0x1}}},
+				Balances:        []common.BalanceUpdate{{common.Address{0xA}, amount.New(1)}},
 				Nonces:          []common.NonceUpdate{{common.Address{0xA}, common.Nonce{0x1}}},
 				Codes:           []common.CodeUpdate{{common.Address{0xA}, []byte{0x1}}},
 				Slots:           []common.SlotUpdate{{common.Address{0xA}, common.Key{0xB}, common.Value{0x1}}},

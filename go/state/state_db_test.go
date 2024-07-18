@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 	"reflect"
 	"testing"
 
@@ -915,7 +914,7 @@ func TestStateDB_RepeatedSuicide(t *testing.T) {
 	newBalance := amount.New(456)
 	mock.EXPECT().Apply(uint64(1), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: newBalance.Bytes32()}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: newBalance}},
 		Nonces:          []common.NonceUpdate{{Account: address1}},
 		Codes:           []common.CodeUpdate{{Account: address1, Code: []byte{}}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key2, Value: val2}},
@@ -1277,14 +1276,13 @@ func TestStateDB_SettingTheBalanceCreatesAccount(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	addedBalance := amount.New(5)
-	balance := addedBalance.Bytes32()
 
 	// The account have not existed - must be created by AddBalance call.
 	mock.EXPECT().Check().AnyTimes()
 	mock.EXPECT().Exists(address1).Return(false, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: addedBalance}},
 	})
 
 	db.AddBalance(address1, addedBalance)
@@ -1537,7 +1535,7 @@ func TestStateDB_BalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	balance = amount.New(12)
 	mock.EXPECT().Apply(uint64(1), common.Update{
-		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
+		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance}},
 	})
 	mock.EXPECT().Apply(uint64(2), common.Update{})
 
@@ -1563,7 +1561,7 @@ func TestStateDB_BalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	balance = amount.New(14)
 	mock.EXPECT().Apply(uint64(1), common.Update{
-		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
+		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance}},
 	})
 	mock.EXPECT().Exists(address1).Return(true, nil)
 
@@ -3775,7 +3773,7 @@ func TestStateDB_BulkLoadReachesState(t *testing.T) {
 
 	mock.EXPECT().Apply(uint64(0), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance}},
 		Nonces:          []common.NonceUpdate{{Account: address1, Nonce: common.ToNonce(14)}},
 		Codes:           []common.CodeUpdate{{Account: address1, Code: code}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},
@@ -3785,32 +3783,12 @@ func TestStateDB_BulkLoadReachesState(t *testing.T) {
 
 	load := db.StartBulkLoad(0)
 	load.CreateAccount(address1)
-	load.SetBalance(address1, big.NewInt(12))
+	load.SetBalance(address1, amount.New(12))
 	load.SetNonce(address1, 14)
 	load.SetState(address1, key1, val1)
 	load.SetCode(address1, code)
 
 	load.Close()
-}
-
-func TestStateDB_BulkLoadSetBalanceFailsForInvalidBalances(t *testing.T) {
-	tests := map[string]*big.Int{
-		"negative": big.NewInt(-1),
-		"toBig":    big.NewInt(0).Lsh(big.NewInt(1), 256),
-	}
-
-	for name, value := range tests {
-		t.Run(name, func(t *testing.T) {
-			bulk := bulkLoad{}
-			if len(bulk.errs) != 0 {
-				t.Fatalf("initial bulk load instance is not error free")
-			}
-			bulk.SetBalance(address1, value)
-			if len(bulk.errs) == 0 {
-				t.Errorf("balance issue not detected")
-			}
-		})
-	}
 }
 
 func TestStateDB_BulkLoadApplyDetectsInconsistencies(t *testing.T) {

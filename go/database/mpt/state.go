@@ -22,6 +22,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
@@ -239,15 +240,15 @@ func (s *MptState) DeleteAccount(address common.Address) error {
 	return s.trie.SetAccountInfo(address, AccountInfo{})
 }
 
-func (s *MptState) GetBalance(address common.Address) (balance common.Balance, err error) {
+func (s *MptState) GetBalance(address common.Address) (balance amount.Amount, err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if !exists || err != nil {
-		return common.Balance{}, err
+		return amount.New(), err
 	}
 	return info.Balance, nil
 }
 
-func (s *MptState) SetBalance(address common.Address, balance common.Balance) (err error) {
+func (s *MptState) SetBalance(address common.Address, balance amount.Amount) (err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err

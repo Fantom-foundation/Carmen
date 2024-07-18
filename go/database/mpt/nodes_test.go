@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -2467,7 +2468,7 @@ func TestAccountNode_AddressIsAccessible(t *testing.T) {
 
 func TestAccountNode_InfoIsAccessible(t *testing.T) {
 	node := AccountNode{info: AccountInfo{
-		Balance:  common.Balance{1, 2, 3},
+		Balance:  amount.New(123),
 		Nonce:    common.Nonce{4, 5},
 		CodeHash: common.Hash{6, 7, 8},
 	}}
@@ -3337,7 +3338,7 @@ func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
 
 	ref, node := ctxt.Build(&Account{
 		address: addr,
-		info:    AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+		info:    AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 		storage: &Value{key: key, value: value},
 	})
 	ctxt.Freeze(ref)
@@ -3386,10 +3387,10 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 	ref, node := ctxt.Build(
 		&Branch{
 			children: Children{
-				0xA: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+				0xA: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 					storage:    &Value{key: key, value: value, length: 64},
 					pathLength: 39},
-				0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAB}},
+				0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAB}},
 					pathLength: 39},
 			},
 		})
@@ -3399,14 +3400,14 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 
 	before, _ := ctxt.Clone(ref)
 
-	newInfo := AccountInfo{common.Nonce{1}, common.Balance{100}, common.Hash{0xAA}}
+	newInfo := AccountInfo{common.Nonce{1}, amount.New(100), common.Hash{0xAA}}
 	newAddr := common.Address{0xAA, 0xB}
 
 	after, _ := ctxt.Build(&Branch{
 		children: Children{
 			0xA: &Branch{
 				children: Children{
-					0: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+					0: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 						storage:    &Value{key: key, value: value, length: 64, frozen: true},
 						pathLength: 38, dirty: true, dirtyHash: true},
 					0xA: &Account{address: newAddr, info: newInfo,
@@ -3416,7 +3417,7 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 				dirtyHash:        true,
 				dirtyChildHashes: []int{0, 0xA},
 			},
-			0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAB}},
+			0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAB}},
 				pathLength: 39, frozen: true},
 		},
 		dirty:            true,
@@ -3454,13 +3455,13 @@ func TestAccountNode_ClearStorage(t *testing.T) {
 
 	ref, node := ctxt.Build(&Account{
 		address: addr,
-		info:    AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+		info:    AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 		storage: &Tag{"A", &Value{key: key, value: value}},
 	})
 
 	after, _ := ctxt.Build(&Account{
 		address:          addr,
-		info:             AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+		info:             AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 		dirty:            true,
 		dirtyHash:        true,
 		storageHashDirty: true,
@@ -3490,7 +3491,7 @@ func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 
 	ref, node := ctxt.Build(&Account{
 		address: addr,
-		info:    AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+		info:    AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 		storage: &Value{key: key, value: value},
 	})
 	ctxt.Freeze(ref)
@@ -4585,7 +4586,7 @@ func TestAccountNodeEncoderWithNodeHash(t *testing.T) {
 		},
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
-			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			Balance:  amount.NewFromBytes(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
 		storage: NewNodeReference(NodeId(12)),
@@ -4605,7 +4606,7 @@ func TestAccountNodeEncoderWithChildHash(t *testing.T) {
 	node := AccountNode{
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
-			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			Balance:  amount.NewFromBytes(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
 		storage:     NewNodeReference(NodeId(12)),
@@ -4629,7 +4630,7 @@ func TestAccountNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 		},
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
-			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			Balance:  amount.NewFromBytes(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
 		storage:    NewNodeReference(NodeId(12)),
@@ -6100,7 +6101,7 @@ func getTestTransitions() []transition {
 		operation:   otSetValue,
 		description: "no_change",
 		before: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{5},
 				value: common.Value{1, 2, 3},
@@ -6110,7 +6111,7 @@ func getTestTransitions() []transition {
 			return trg.SetValue(common.Address{}, common.Key{5}, common.Value{1, 2, 3})
 		},
 		after: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{5},
 				value: common.Value{1, 2, 3},
@@ -6123,7 +6124,7 @@ func getTestTransitions() []transition {
 		operation:   otSetValue,
 		description: "update",
 		before: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{5},
 				value: common.Value{1, 2, 3},
@@ -6133,7 +6134,7 @@ func getTestTransitions() []transition {
 			return trg.SetValue(common.Address{}, common.Key{5}, common.Value{3, 2, 1})
 		},
 		after: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{5},
 				value: common.Value{3, 2, 1},
@@ -6146,7 +6147,7 @@ func getTestTransitions() []transition {
 		operation:   otSetValue,
 		description: "delete",
 		before: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{5},
 				value: common.Value{1, 2, 3},
@@ -6156,7 +6157,7 @@ func getTestTransitions() []transition {
 			return trg.SetValue(common.Address{}, common.Key{5}, common.Value{})
 		},
 		after: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 		},
 	})
 
@@ -6165,7 +6166,7 @@ func getTestTransitions() []transition {
 		operation:   otSetValue,
 		description: "new_zero_value",
 		before: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{5},
 				value: common.Value{1, 2, 3},
@@ -6175,7 +6176,7 @@ func getTestTransitions() []transition {
 			return trg.SetValue(common.Address{}, common.Key{8}, common.Value{})
 		},
 		after: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{5},
 				value: common.Value{1, 2, 3},
@@ -6188,7 +6189,7 @@ func getTestTransitions() []transition {
 		operation:   otSetValue,
 		description: "new_sibling_with_common_prefix_length_0",
 		before: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{0x12, 0x34},
 				value: common.Value{1, 2, 3},
@@ -6198,7 +6199,7 @@ func getTestTransitions() []transition {
 			return trg.SetValue(common.Address{}, common.Key{0x43, 0x21}, common.Value{3, 2, 1})
 		},
 		after: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Branch{children: Children{
 				1: &Value{
 					key:   common.Key{0x12, 0x34},
@@ -6217,7 +6218,7 @@ func getTestTransitions() []transition {
 		operation:   otSetValue,
 		description: "new_sibling_with_common_prefix_length_1",
 		before: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{0x12, 0x34},
 				value: common.Value{1, 2, 3},
@@ -6227,7 +6228,7 @@ func getTestTransitions() []transition {
 			return trg.SetValue(common.Address{}, common.Key{0x14, 0x21}, common.Value{3, 2, 1})
 		},
 		after: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Extension{
 				path: []Nibble{1},
 				next: &Branch{children: Children{
@@ -6249,7 +6250,7 @@ func getTestTransitions() []transition {
 		operation:   otSetValue,
 		description: "new_sibling_with_common_prefix_length_2",
 		before: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Value{
 				key:   common.Key{0x12, 0x34},
 				value: common.Value{1, 2, 3},
@@ -6259,7 +6260,7 @@ func getTestTransitions() []transition {
 			return trg.SetValue(common.Address{}, common.Key{0x12, 0x43}, common.Value{3, 2, 1})
 		},
 		after: &Account{
-			info: AccountInfo{Balance: common.Balance{1}},
+			info: AccountInfo{Balance: amount.New(1)},
 			storage: &Extension{
 				path: []Nibble{1, 2},
 				next: &Branch{children: Children{

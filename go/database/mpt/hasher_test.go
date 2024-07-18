@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -436,7 +437,7 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 		(&AccountNode{}),
 		(&AccountNode{storage: NewNodeReference(BranchId(12))}),
 		(&AccountNode{info: AccountInfo{Nonce: common.Nonce{1, 2, 3}}}),
-		(&AccountNode{info: AccountInfo{Balance: common.Balance{1, 2, 3}}}),
+		(&AccountNode{info: AccountInfo{Balance: amount.New(123)}}),
 		(&AccountNode{info: AccountInfo{CodeHash: common.Hash{1, 2, 3, 4}}}),
 	}
 
@@ -597,7 +598,7 @@ func TestEthereumLikeHasher_EmbeddedNode_Hashes_As_Itself(t *testing.T) {
 
 	desc := &Extension{
 		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}},
 			storage: &Extension{
 				path:         KeyToNibblePath(key, ctxt)[0:40],
 				nextEmbedded: true,

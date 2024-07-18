@@ -19,6 +19,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	_ "github.com/mattn/go-sqlite3"
@@ -325,7 +326,8 @@ func (a *Archive) addUpdateIntoTx(tx *sql.Tx, block uint64, update common.Update
 
 	stmt = tx.Stmt(a.addBalanceStmt)
 	for _, balanceUpdate := range update.Balances {
-		_, err := stmt.Exec(balanceUpdate.Account[:], block, balanceUpdate.Balance[:])
+		b := balanceUpdate.Balance.Bytes32()
+		_, err := stmt.Exec(balanceUpdate.Account[:], block, b[:])
 		if err != nil {
 			return fmt.Errorf("failed to add balance; %s", err)
 		}
@@ -408,19 +410,19 @@ func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err
 	return exists, err
 }
 
-func (a *Archive) GetBalance(block uint64, account common.Address) (balance common.Balance, err error) {
+func (a *Archive) GetBalance(block uint64, account common.Address) (balance amount.Amount, err error) {
 	rows, err := a.getBalanceStmt.Query(account[:], block)
 	if err != nil {
-		return common.Balance{}, err
+		return amount.New(), err
 	}
 	defer rows.Close()
 	if rows.Next() {
 		var bytes sql.RawBytes
 		err = rows.Scan(&bytes)
-		copy(balance[:], bytes)
+		balance = amount.NewFromBytes(bytes[:]...)
 		return balance, err
 	}
-	return common.Balance{}, rows.Err()
+	return amount.New(), rows.Err()
 }
 
 func (a *Archive) GetCode(block uint64, account common.Address) (code []byte, err error) {

@@ -91,8 +91,7 @@ func (w witnessProof) IsValid() bool {
 }
 
 func (w witnessProof) GetBalance(root Hash, address Address) (Amount, bool, error) {
-	balance, complete, err := w.proof.GetBalance(common.Hash(root), common.Address(address))
-	return NewAmountFromBytes(balance[:]...), complete, err
+	return w.proof.GetBalance(common.Hash(root), common.Address(address))
 }
 
 func (w witnessProof) GetNonce(root Hash, address Address) (uint64, bool, error) {

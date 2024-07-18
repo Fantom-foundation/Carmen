@@ -21,6 +21,7 @@ import (
 	"path"
 	"sort"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
@@ -151,7 +152,8 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 				if _, err := out.Write([]byte{'B'}); err != nil {
 					return err
 				}
-				if _, err := out.Write((*accountDiff.Balance)[:]); err != nil {
+				b := accountDiff.Balance.Bytes32()
+				if _, err := out.Write(b[:]); err != nil {
 					return err
 				}
 			}
@@ -308,11 +310,11 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 			context.deleteAccount()
 
 		case 'B':
-			balance := common.Balance{}
+			var balance [amount.BytesLength]byte
 			if _, err := io.ReadFull(in, balance[:]); err != nil {
 				return err
 			}
-			context.setBalance(balance)
+			context.setBalance(amount.NewFromBytes(balance[:]...))
 
 		case 'N':
 			nonce := common.Nonce{}
@@ -392,7 +394,7 @@ func (c *importContext) deleteAccount() {
 	c.currentUpdate.AppendDeleteAccount(c.currentAccount)
 }
 
-func (c *importContext) setBalance(balance common.Balance) {
+func (c *importContext) setBalance(balance amount.Amount) {
 	c.currentUpdate.AppendBalanceUpdate(c.currentAccount, balance)
 }
 

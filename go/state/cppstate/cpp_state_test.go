@@ -72,7 +72,7 @@ func TestReadUninitializedBalance(t *testing.T) {
 func TestWriteAndReadBalance(t *testing.T) {
 	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		err := state.Apply(1, common.Update{
-			Balances: []common.BalanceUpdate{{Account: address1, Balance: balance1.Bytes32()}},
+			Balances: []common.BalanceUpdate{{Account: address1, Balance: balance1}},
 		})
 		if err != nil {
 			t.Fatalf("Error updating balance: %v", err)
