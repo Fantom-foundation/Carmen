@@ -396,8 +396,26 @@ func TestDecoder_Decode_ExtensionNodeHasEmbeddedValue(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected *ExtensionNode, got %T", want)
 			}
-			if wantExt.nextIsEmbedded {
-				got, err := DecodeFromRlp(wantExt.nextHash[:])
+
+			// when a node is encoded to RLP and decoded back,
+			// hash must be replaced with the embedded node
+			rlp, err := encodeToRlp(want, ctxt, []byte{})
+			if err != nil {
+				t.Fatalf("failed to encode node: %v", err)
+			}
+			recovered, err := DecodeFromRlp(rlp)
+			if err != nil {
+				t.Fatalf("failed to decode node: %v", err)
+			}
+
+			recoveredExtension, ok := recovered.(*ExtensionNode)
+			if !ok {
+				t.Fatalf("expected *ExtensionNode, got %T", recovered)
+			}
+
+			if wantExt.nextIsEmbedded && recoveredExtension.nextIsEmbedded {
+				// now the hash must contain the embedded node
+				got, err := DecodeFromRlp(recoveredExtension.nextHash[:])
 				if err != nil {
 					t.Fatalf("failed to decode embedded node: %v", err)
 				}
@@ -408,7 +426,7 @@ func TestDecoder_Decode_ExtensionNodeHasEmbeddedValue(t *testing.T) {
 				defer wantHandle.Release()
 				matchNodesRlpDecoded(t, customiseNodePaths(ctxt, wantHandle.Get(), wantExt.path.Length()), got)
 			} else {
-				t.Fatalf("expected embedded node, got hash")
+				t.Errorf("expected embedded node, got hash: %v, %v", wantExt.nextIsEmbedded, recoveredExtension.nextIsEmbedded)
 			}
 		})
 	}
@@ -500,9 +518,26 @@ func TestDecoder_Decode_BranchNodeHasEmbeddedValue(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected *BranchNode, got %T", want)
 			}
+
+			// when a node is encoded to RLP and decoded back,
+			// hash must be replaced with the embedded node
+			rlp, err := encodeToRlp(want, ctxt, []byte{})
+			if err != nil {
+				t.Fatalf("failed to encode node: %v", err)
+			}
+			recovered, err := DecodeFromRlp(rlp)
+			if err != nil {
+				t.Fatalf("failed to decode node: %v", err)
+			}
+
+			recoveredBranch := recovered.(*BranchNode)
+			if recoveredBranch.embeddedChildren != wantBranch.embeddedChildren {
+				t.Errorf("expected embeddedChildren %v, got %v", wantBranch.embeddedChildren, recoveredBranch.embeddedChildren)
+			}
+
 			var hasEmbedded bool
-			for i, hash := range wantBranch.hashes {
-				if wantBranch.isEmbedded(byte(i)) {
+			for i, hash := range recoveredBranch.hashes {
+				if recoveredBranch.isEmbedded(byte(i)) {
 					got, err := DecodeFromRlp(hash[:])
 					if err != nil {
 						t.Fatalf("failed to decode embedded node: %v", err)
