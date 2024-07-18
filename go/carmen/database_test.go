@@ -2008,3 +2008,16 @@ func TestDatabase_ArchiveCanBeAccessedAsync(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestDatabase_GetMemoryFootprint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := state.NewMockState(ctrl)
+
+	state.EXPECT().GetMemoryFootprint()
+
+	db := &database{
+		db: state,
+	}
+
+	db.GetMemoryFootprint()
+}

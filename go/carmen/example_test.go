@@ -12,11 +12,11 @@ package carmen_test
 
 import (
 	"fmt"
-	"golang.org/x/exp/maps"
 	"log"
 	"os"
 
 	"github.com/Fantom-foundation/Carmen/go/carmen"
+	"golang.org/x/exp/maps"
 )
 
 func ExampleDatabase_AddBlock() {
@@ -408,4 +408,33 @@ func ExampleHistoricBlockContext_GetProof() {
 	//Storage slot value of key 0x0800000000000000000000000000000000000000000000000000000000000000 at block: 8 and address: 0x0800000000000000000000000000000000000000 is 0x0800000000000000000000000000000000000000000000000000000000000000
 	//Balance of address 0x0900000000000000000000000000000000000000 at block: 9 is 0x39
 	//Storage slot value of key 0x0900000000000000000000000000000000000000000000000000000000000000 at block: 9 and address: 0x0900000000000000000000000000000000000000 is 0x0900000000000000000000000000000000000000000000000000000000000000
+}
+
+func ExampleDatabase_GetMemoryFootprint() {
+	dir, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temporary directory: %v", err)
+	}
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// block wait until the archive is in sync
+	if err := db.Flush(); err != nil {
+		log.Fatalf("cannot flush: %v", err)
+	}
+
+	fp := db.GetMemoryFootprint()
+
+	fmt.Printf("Database currently uses %v B", fp.Total())
+	fmt.Printf("Memory breakdown:\n%s", fp)
+
+	if err := db.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+
+	if err := os.RemoveAll(dir); err != nil {
+		log.Fatalf("cannot remove dir: %v", err)
+	}
 }
