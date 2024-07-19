@@ -33,6 +33,7 @@ var ExportCmd = cli.Command{
 	ArgsUsage: "<db director> <target-file>",
 	Flags: []cli.Flag{
 		&cpuProfileFlag,
+		&targetBlockFlag,
 	},
 }
 
@@ -52,15 +53,25 @@ func doExport(context *cli.Context) error {
 		defer stopCpuProfiler()
 	}
 
+	blkNumber := context.Uint64(targetBlockFlag.Name)
+
 	// check the type of target database
 	mptInfo, err := io.CheckMptDirectoryAndGetInfo(dir)
 	if err != nil {
 		return err
 	}
 
-	export := io.Export
-	if mptInfo.Mode == mpt.Immutable {
-		export = io.ExportArchive
+	hasGivenBlock := blkNumber > 0
+
+	export := io.ExportArchive
+	if hasGivenBlock && mptInfo.Mode == mpt.Immutable {
+		// Exporting live genesis from Archive
+		export = io.ExportFromArchive
+	} else if !hasGivenBlock && mptInfo.Mode != mpt.Immutable {
+		// Exporting live genesis
+		export = io.Export
+	} else if hasGivenBlock && mptInfo.Mode != mpt.Immutable {
+		return errors.New("cannot export live genesis file for given block from live-db; either pass archive or do not pass block")
 	}
 
 	start := time.Now()
@@ -76,7 +87,7 @@ func doExport(context *cli.Context) error {
 	ctx := interrupt.CancelOnInterrupt(context.Context)
 
 	if err = errors.Join(
-		export(ctx, dir, out),
+		export(ctx, dir, out, blkNumber),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),

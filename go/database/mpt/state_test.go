@@ -520,10 +520,7 @@ func TestState_GetCodes(t *testing.T) {
 				}
 			}
 
-			codes, err := state.GetCodes()
-			if err != nil {
-				t.Errorf("cannot get codes: %s", err)
-			}
+			codes := state.GetCodes()
 			if got, want := len(codes), size-1; got != want {
 				t.Errorf("sizes do not much: got: %d != want: %d", got, want)
 			}

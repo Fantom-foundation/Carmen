@@ -58,14 +58,14 @@ const (
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
 // state of the LiveDB.
-func Export(ctx context.Context, directory string, out io.Writer) error {
+func Export(ctx context.Context, directory string, out io.Writer, _ uint64) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
 	}
 
 	if info.Config.Name != mpt.S5LiveConfig.Name {
-		return fmt.Errorf("can only support export of LiveDB instances, found %v in directory", info.Mode)
+		return fmt.Errorf("can only support exportLive of LiveDB instances, found %v in directory", info.Mode)
 	}
 
 	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.NodeCacheConfig{})
@@ -74,6 +74,31 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	}
 	defer db.Close()
 
+	return exportLive(ctx, db, out)
+}
+
+func ExportFromArchive(ctx context.Context, directory string, out io.Writer, block uint64) error {
+	info, err := CheckMptDirectoryAndGetInfo(directory)
+	if err != nil {
+		return fmt.Errorf("error in input directory: %v", err)
+	}
+
+	if info.Config.Name != mpt.S5ArchiveConfig.Name {
+		return fmt.Errorf("can only support exportLive of S5 Archive instances, found %v in directory", info.Config.Name)
+	}
+
+	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{})
+	if err != nil {
+		return err
+	}
+
+	defer archive.Close()
+
+	return exportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+}
+
+// exportLive exports given db into out.
+func exportLive(ctx context.Context, db exportable, out io.Writer) error {
 	// Start with the magic number.
 	if _, err := out.Write(stateMagicNumber); err != nil {
 		return err
@@ -301,7 +326,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 
 // getReferencedCodes returns a map of codes referenced by accounts in the
 // given database. The map is indexed by the code hash.
-func getReferencedCodes(db *mpt.MptState) (map[common.Hash][]byte, error) {
+func getReferencedCodes(db exportable) (map[common.Hash][]byte, error) {
 	codes := make(map[common.Hash][]byte)
 	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		if n, ok := node.(*mpt.AccountNode); ok {

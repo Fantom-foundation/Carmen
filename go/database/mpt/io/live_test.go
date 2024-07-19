@@ -113,10 +113,8 @@ func TestIO_ExportedDataDoesNotContainExtraCodes(t *testing.T) {
 	// Modify the state by adding and removing code from an account.
 	// This temporary code should not be included in the resulting exported data.
 	modified, modifiedHash := exportExampleStateWithModification(t, func(s *mpt.MptState) {
-		codesBefore, err := s.GetCodes()
-		if err != nil {
-			t.Fatalf("failed to fetch codes: %v", err)
-		}
+		codesBefore := s.GetCodes()
+
 		addr1 := common.Address{1}
 		code, err := s.GetCode(addr1)
 		if err != nil {
@@ -125,10 +123,7 @@ func TestIO_ExportedDataDoesNotContainExtraCodes(t *testing.T) {
 		modified := append(code, []byte("extra_code")...)
 		s.SetCode(addr1, modified)
 		s.SetCode(addr1, code)
-		codesAfter, err := s.GetCodes()
-		if err != nil {
-			t.Fatalf("failed to fetch codes: %v", err)
-		}
+		codesAfter := s.GetCodes()
 		if before, after := len(codesBefore), len(codesAfter); before+1 != after {
 			t.Fatalf("modification did not had expected code-altering effect: %d -> %d", before, after)
 		}
@@ -214,7 +209,7 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 
 	// Export database to buffer.
 	var buffer bytes.Buffer
-	if err := Export(context.Background(), sourceDir, &buffer); err != nil {
+	if err := Export(context.Background(), sourceDir, &buffer, 0); err != nil {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 
@@ -285,5 +280,66 @@ func TestCheckEmptyDirectory_FailsIfDirectoryContainsADirectory(t *testing.T) {
 	}
 	if err := checkEmptyDirectory(dir); err == nil || !strings.Contains(err.Error(), "is not empty") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestIO_ExportLiveFromArchive(t *testing.T) {
+	// Create a small Archive from which we export LiveDB genesis.
+	sourceDir := t.TempDir()
+	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+	_ = fillTestBlocksIntoArchive(t, source)
+	exportedBlockHeight := uint64(2)
+	hash, err := source.GetHash(exportedBlockHeight)
+	if err != nil {
+		t.Fatalf("cannot get hash: %v", err)
+	}
+
+	if err := source.Close(); err != nil {
+		t.Fatalf("failed to close source archive: %v", err)
+	}
+
+	// Export live database from archive.
+	buffer := new(bytes.Buffer)
+	if err := ExportFromArchive(context.Background(), sourceDir, buffer, exportedBlockHeight); err != nil {
+		t.Fatalf("failed to export Archive: %v", err)
+	}
+
+	// Import live database.
+	targetDir := t.TempDir()
+	if err := ImportLiveDb(targetDir, buffer); err != nil {
+		t.Fatalf("failed to import DB: %v", err)
+	}
+
+	if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+		t.Fatalf("verification of imported DB failed: %v", err)
+	}
+
+	db, err := mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	if err != nil {
+		t.Fatalf("failed to open recovered DB: %v", err)
+	}
+	defer db.Close()
+
+	exists, err := db.Exists(common.Address{1})
+	if err != nil {
+		t.Fatalf("cannot find whether account exists: %v", err)
+	}
+	if !exists {
+		t.Fatalf("restored DB does not contain account 1")
+	}
+
+	exists, err = db.Exists(common.Address{2})
+	if err != nil {
+		t.Fatalf("cannot find whether account exists: %v", err)
+	}
+	if exists {
+		t.Fatal("restored DB contains account 2 added after exported block")
+	}
+
+	if got, err := db.GetHash(); err != nil || got != hash {
+		t.Fatalf("restored DB failed to reproduce same hash\nwanted %x\n   got %x\n   err %v", hash, got, err)
 	}
 }

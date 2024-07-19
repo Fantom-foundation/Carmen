@@ -25,7 +25,7 @@ import (
 func TestExport_CanBeInterrupted(t *testing.T) {
 	type testFuncs struct {
 		// export is the tested export func
-		export func(context.Context, string, io.Writer) error
+		export func(context.Context, string, io.Writer, uint64) error
 		// createDB is an init of the database
 		createDB func(t *testing.T, sourceDir string)
 		// check that the interrupted did not corrupt the db by re-opening it
@@ -43,6 +43,11 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			createDB: createTestArchive,
 			check:    checkCanOpenArchive,
 		},
+		"live-from-archive": {
+			export:   ExportFromArchive,
+			createDB: createTestArchive,
+			check:    checkCanOpenArchive,
+		},
 	}
 
 	for name, tf := range tests {
@@ -53,7 +58,7 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 
 			countWriter := &interruptSendingWriter{signalInterrupt: false}
 			// first find number of writes
-			if err := tf.export(context.Background(), sourceDir, countWriter); err != nil {
+			if err := tf.export(context.Background(), sourceDir, countWriter, 3); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
@@ -64,7 +69,7 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 
 			writer := &interruptSendingWriter{}
 			writer.signalInterrupt = true
-			err := tf.export(ctx, sourceDir, writer)
+			err := tf.export(ctx, sourceDir, writer, 3)
 			if got, want := err, interrupt.ErrCanceled; !errors.Is(got, want) {
 				t.Errorf("unexpected error: got: %v, want: %v", got, want)
 			}

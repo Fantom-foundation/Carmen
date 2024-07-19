@@ -57,7 +57,7 @@ var archiveMagicNumber []byte = []byte("Fantom-Archive-State")
 
 const archiveFormatVersion = byte(1)
 
-func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
+func ExportArchive(ctx context.Context, directory string, out io.Writer, _ uint64) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -83,7 +83,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	}
 
 	// Write out codes.
-	codes, err := archive.GetCodes()
+	codes := archive.GetCodes()
 	if err != nil {
 		return fmt.Errorf("failed to retrieve codes: %v", err)
 	}
