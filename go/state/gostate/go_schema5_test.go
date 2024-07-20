@@ -15,6 +15,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -129,5 +130,44 @@ func TestCarmen_Empty_Archive_And_Live_Must_Be_InSync(t *testing.T) {
 	// opening archive should fail as archive and non-archive is not in-sync
 	if _, err := archiveConfig.createState(dir); err == nil {
 		t.Errorf("opening database should fail")
+	}
+}
+
+func TestGetNodeCacheConfig(t *testing.T) {
+	tests := map[string]struct {
+		cacheSize int64 // in bytes
+		capacity  int   // in number of nodes
+	}{
+		"zero": {
+			cacheSize: 0,
+			capacity:  0,
+		},
+		"none-zero": {
+			cacheSize: 1, // < if the cache size is greater than 0,
+			capacity:  1, // < than the capacity should be greater than 0 to trigger
+			// the usage of the minimum cache size instead of the default
+			// cache size
+		},
+		"one node": {
+			cacheSize: int64(mpt.EstimatePerNodeMemoryUsage()),
+			capacity:  1,
+		},
+		"ten nodes": {
+			cacheSize: 10 * int64(mpt.EstimatePerNodeMemoryUsage()),
+			capacity:  10,
+		},
+		"negative": {
+			cacheSize: -1,
+			capacity:  0,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			cfg := getNodeCacheConfig(test.cacheSize)
+			if cfg.Capacity != test.capacity {
+				t.Errorf("unexpected capacity: %d != %d", cfg.Capacity, test.capacity)
+			}
+		})
 	}
 }
