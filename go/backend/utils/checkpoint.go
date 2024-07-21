@@ -44,12 +44,12 @@ type CheckpointParticipant interface {
 	// the given checkpoint, an error is returned. If the participant finds the given
 	// checkpoint as a prepared checkpoint that has not yet been committed, it should
 	// be committed. If there is a prepared checkpoint beyond the given checkpoint,
-	// it shall be discarded.
+	// it can be discarded.
 	GuaranteeCheckpoint(Checkpoint) error
 
 	// Prepare is called to signal the participant to prepare for a new checkpoint.
 	// The new checkpoint shall be created, but not yet committed to be the new
-	// primary target for future restore calls.
+	// target for future restore calls.
 	Prepare(Checkpoint) error
 
 	// Commit is called to signal the participant to commit the previously prepared
@@ -60,8 +60,8 @@ type CheckpointParticipant interface {
 
 	// Abort is called to signal the participant to undo the preparation step
 	// of a commit started by a Prepare call. The participant should discard the
-	// newly created checkpoint and retain the previous checkpoint as the primary
-	// target for future restore calls.
+	// newly created checkpoint and retain the previous checkpoint as the target
+	// for future restore calls.
 	Abort(Checkpoint) error
 
 	// Restore requests this participant to restore the state overed by the given
@@ -89,23 +89,22 @@ func NewCheckpointCoordinator(directory string, participants ...CheckpointPartic
 		return nil, fmt.Errorf("failed to create directory %s: %w", directory, err)
 	}
 
-	// TODO: make sure path is a write-able directory
-
-	file, err := os.Open(filepath.Join(directory, "committed"))
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
+	// Check that directory provides required permissions.
+	testFile := filepath.Join(directory, "test")
+	err := errors.Join(
+		createCheckpointFile(testFile, 42),
+		os.Remove(testFile),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to access directory %s: %w", directory, err)
 	}
 
-	var lastCheckpoint Checkpoint
-	if err == nil {
-		content := make([]byte, 4)
-		if _, err := io.ReadFull(file, content); err != nil {
-			return nil, err // < TODO: decorate errors
+	lastCheckpoint, err := readCheckpointFile(filepath.Join(directory, "committed"))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read last checkpoint: %w", err)
 		}
-		if err := file.Close(); err != nil {
-			return nil, err
-		}
-		lastCheckpoint = Checkpoint(binary.BigEndian.Uint32(content))
+		lastCheckpoint = 0
 	}
 
 	errs := []error{}
@@ -126,53 +125,45 @@ func NewCheckpointCoordinator(directory string, participants ...CheckpointPartic
 }
 
 func (c *checkpointCoordinator) CreateCheckpoint() (Checkpoint, error) {
-	errs := []error{}
 	commit := c.lastCheckpoint + 1
+
+	prepared := make([]CheckpointParticipant, 0, len(c.participants))
+	abort := func() error {
+		errs := []error{}
+		for _, p := range prepared {
+			if err := p.Abort(commit); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
+	}
 
 	// Signal all participants to prepare. If any participant fails, all
 	// previous participants are rolled back to retain their current
 	// checkpoint.
-	for i, p := range c.participants {
+	for _, p := range c.participants {
 		if err := p.Prepare(commit); err != nil {
-			errs = append(errs, err)
-			for j := i - 1; j >= 0; j-- {
-				if err := c.participants[j].Abort(commit); err != nil {
-					errs = append(errs, err)
-				}
-			}
-			return 0, errors.Join(errs...)
+			return 0, errors.Join(err, abort())
 		}
+		prepared = append(prepared, p)
 	}
 
-	// Prepare atomic commit.
-	var data [4]byte
-	binary.BigEndian.PutUint32(data[:], uint32(commit))
+	// Prepare and commit the checkpoint file atomically.
 	prepareFile := filepath.Join(c.path, "prepare")
-	if err := os.WriteFile(prepareFile, data[:], 0644); err != nil {
-		errs = append(errs, err)
-		for _, p := range c.participants {
-			if err := p.Abort(commit); err != nil {
-				errs = append(errs, err)
-			}
-		}
-		return 0, errors.Join(errs...)
-	}
-
-	// Perform atomic commit by renaming the prepare file to the commit file.
 	commitFile := filepath.Join(c.path, "committed")
-	if err := os.Rename(prepareFile, commitFile); err != nil {
-		errs = append(errs, err)
-		for _, p := range c.participants {
-			if err := p.Abort(commit); err != nil {
-				errs = append(errs, err)
-			}
-		}
-		return 0, errors.Join(errs...)
+	err := errors.Join(
+		createCheckpointFile(prepareFile, commit),
+		// Renaming files in the same directory is (in most cases) atomic on POSIX systems.
+		os.Rename(prepareFile, commitFile),
+	)
+	if err != nil {
+		return 0, errors.Join(err, abort())
 	}
 
 	// Signal all participants to commit. At this point, all participants
 	// have to eventually transition to the committed state. If they fail
 	// healing has to handle the recovery.
+	errs := []error{}
 	for _, p := range c.participants {
 		if err := p.Commit(commit); err != nil {
 			errs = append(errs, err)
@@ -195,4 +186,22 @@ func (c *checkpointCoordinator) Restore() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func createCheckpointFile(path string, checkpoint Checkpoint) error {
+	var data [4]byte
+	binary.BigEndian.PutUint32(data[:], uint32(checkpoint))
+	return os.WriteFile(path, data[:], 0600)
+}
+
+func readCheckpointFile(path string) (Checkpoint, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	content := make([]byte, 4)
+	if _, err := io.ReadFull(file, content); err != nil {
+		return 0, err
+	}
+	return Checkpoint(binary.BigEndian.Uint32(content)), file.Close()
 }
