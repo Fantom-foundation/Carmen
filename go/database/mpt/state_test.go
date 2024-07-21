@@ -26,6 +26,7 @@ import (
 
 	"go.uber.org/mock/gomock"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/exp/maps"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -792,7 +793,10 @@ func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 				}
 				handle.Release()
 			})
-			state.codes.dirty = true
+			if err := os.Remove(state.codes.file); err != nil {
+				b.Fatalf("failed to remove codes file: %v", err)
+			}
+			state.codes.pending = maps.Keys(state.codes.codes)
 		}
 		if err = state.Flush(); err != nil {
 			b.Fatalf("failed to flush state: %v", err)

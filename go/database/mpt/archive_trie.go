@@ -84,9 +84,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		forest.extensions,
 		forest.values,
 		roots,
-		// TODO: add support for the following
-		//  - codes
-		//  - metadata
+		state.codes,
 	)
 	if err != nil {
 		return nil, errors.Join(err, head.Close())

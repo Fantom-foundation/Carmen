@@ -11,13 +11,14 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
 )
 
 type codes struct {
 	codes     map[common.Hash][]byte
-	dirty     bool
+	pending   []common.Hash
 	mutex     sync.Mutex
 	file      string
 	directory string
@@ -45,8 +46,10 @@ func openCodes(file string, directory string) (*codes, error) {
 func (c *codes) add(code []byte) common.Hash {
 	hash := common.GetHash(c.hasher, code)
 	c.mutex.Lock()
-	c.codes[hash] = code
-	c.dirty = true
+	if _, found := c.codes[hash]; !found {
+		c.codes[hash] = code
+		c.pending = append(c.pending, hash)
+	}
 	c.mutex.Unlock()
 	return hash
 }
@@ -68,12 +71,18 @@ func (c *codes) getCodes() map[common.Hash][]byte {
 func (c *codes) Flush() error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	if !c.dirty {
+
+	if len(c.pending) == 0 {
 		return nil
 	}
-	err := writeCodes(c.codes, c.file)
+	codes := make(map[common.Hash][]byte, len(c.pending))
+	for _, hash := range c.pending {
+		codes[hash] = c.codes[hash]
+	}
+
+	err := appendCodes(codes, c.file)
 	if err == nil {
-		c.dirty = false
+		c.pending = c.pending[:0]
 	}
 	return err
 }
@@ -86,6 +95,26 @@ func (c *codes) GetMemoryFootprint() *common.MemoryFootprint {
 	}
 	c.mutex.Unlock()
 	return common.NewMemoryFootprint(unsafe.Sizeof(*c) + uintptr(sizeCodes))
+}
+
+func (c *codes) GuaranteeCheckpoint(checkpoint utils.Checkpoint) error {
+	return nil // any checkpoint can be restored
+}
+
+func (c *codes) Prepare(checkpoint utils.Checkpoint) error {
+	return c.Flush() // all that is needed is to make sure that all codes are on the disk
+}
+
+func (c *codes) Commit(checkpoint utils.Checkpoint) error {
+	return nil // nothing to do
+}
+
+func (c *codes) Abort(checkpoint utils.Checkpoint) error {
+	return nil // nothing to do
+}
+
+func (c *codes) Restore(checkpoint utils.Checkpoint) error {
+	return nil // restoration is a no-op
 }
 
 // readCodes parses the content of the given file if it exists or returns
@@ -136,14 +165,26 @@ func writeCodes(codes map[common.Hash][]byte, filename string) (err error) {
 	if err != nil {
 		return err
 	}
-	writer := bufio.NewWriter(file)
 	return errors.Join(
-		writeCodesTo(codes, writer),
-		writer.Flush(),
-		file.Close())
+		writeCodesTo(codes, file),
+		file.Close(),
+	)
 }
 
-func writeCodesTo(codes map[common.Hash][]byte, writer io.Writer) (err error) {
+// appendCodes appends the given map of codes to the given file.
+func appendCodes(codes map[common.Hash][]byte, filename string) (err error) {
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	return errors.Join(
+		writeCodesTo(codes, file),
+		file.Close(),
+	)
+}
+
+func writeCodesTo(codes map[common.Hash][]byte, out io.Writer) (err error) {
+	writer := bufio.NewWriter(out)
 	// The format is simple: [<key>, <length>, <code>]*
 	for key, code := range codes {
 		if _, err := writer.Write(key[:]); err != nil {
@@ -158,5 +199,5 @@ func writeCodesTo(codes map[common.Hash][]byte, writer io.Writer) (err error) {
 			return err
 		}
 	}
-	return nil
+	return writer.Flush()
 }
