@@ -12,7 +12,6 @@ package memory
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -45,15 +44,13 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		encoder:   encoder,
 	}
 
-	mainDir := filepath.Join(directory, "main")
-
 	// Create the directory if needed.
-	if err := os.MkdirAll(mainDir, 0700); err != nil {
+	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, err
 	}
 
 	// Test whether a meta file exists in this directory.
-	metafile := filepath.Join(mainDir, "meta.json")
+	metafile := filepath.Join(directory, "meta.json")
 	if _, err := os.Stat(metafile); err != nil {
 		return res, nil
 	}
@@ -84,7 +81,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Load list of values.
 	{
-		valuefile := filepath.Join(mainDir, "values.dat")
+		valuefile := filepath.Join(directory, "values.dat")
 		stats, err := os.Stat(valuefile)
 		if err != nil {
 			return nil, err
@@ -112,7 +109,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Load freelist.
 	{
-		freelistfile := filepath.Join(mainDir, "freelist.dat")
+		freelistfile := filepath.Join(directory, "freelist.dat")
 		stats, err := os.Stat(freelistfile)
 		if err != nil {
 			return nil, err
@@ -209,7 +206,7 @@ func (s *inMemoryStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *inMemoryStock[I, V]) Flush() error {
-	return s.writeTo(filepath.Join(s.directory, "main"))
+	return s.writeTo(s.directory)
 }
 
 func (s *inMemoryStock[I, V]) writeTo(dir string) error {
@@ -300,47 +297,45 @@ func (s *inMemoryStock[I, V]) GuaranteeCheckpoint(checkpoint utils.Checkpoint) e
 }
 
 func (s *inMemoryStock[I, V]) Prepare(commit utils.Checkpoint) error {
+	if s.checkpoint+1 != commit {
+		return fmt.Errorf("unable to prepare checkpoint %d, expected %d", commit, s.checkpoint+1)
+	}
 	if err := s.Flush(); err != nil {
 		return err
 	}
-	s.backupCheckpointValueListLength = s.checkpointValueListLength
-	s.backupCheckpointFreeListLength = s.checkpointFreeListLength
-	s.checkpointValueListLength = I(len(s.values))
-	s.checkpointFreeListLength = len(s.freeList)
-	return s.writeTo(filepath.Join(s.directory, "prepare"))
+	return writeCheckpointMetaData(filepath.Join(s.directory, "prepare.json"), checkpointData{
+		Checkpoint:     commit,
+		NumValues:      len(s.values),
+		FreeListLength: len(s.freeList),
+	})
 }
 
 func (s *inMemoryStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
+	prepareFile := filepath.Join(s.directory, "prepare.json")
+	commitFile := filepath.Join(s.directory, "commit.json")
+	meta, err := readCheckpointMetaData(prepareFile)
+	if err != nil {
+		return err
+	}
+	if meta.Checkpoint != checkpoint {
+		return fmt.Errorf("unable to commit checkpoint %d, expected %d", checkpoint, meta.Checkpoint)
+	}
 	s.checkpoint = checkpoint
-	s.checkpointValueListLength = I(len(s.values))
-	s.checkpointFreeListLength = len(s.freeList)
-	return os.Rename(filepath.Join(s.directory, "prepare"), filepath.Join(s.directory, "commit"))
+	s.checkpointValueListLength = I(meta.NumValues)
+	s.checkpointFreeListLength = meta.FreeListLength
+	return os.Rename(prepareFile, commitFile)
 }
 
 func (s *inMemoryStock[I, V]) Abort(commit utils.Checkpoint) error {
 	s.checkpointValueListLength = s.backupCheckpointValueListLength
 	s.checkpointFreeListLength = s.backupCheckpointFreeListLength
-	return os.RemoveAll(filepath.Join(s.directory, "prepare"))
+	prepareFile := filepath.Join(s.directory, "prepare.json")
+	return os.Remove(prepareFile)
 }
 
 func (s *inMemoryStock[I, V]) Restore(checkpoint utils.Checkpoint) error {
-	// Replace the current main directory with the last commit directory.
-	mainDir := filepath.Join(s.directory, "main")
-	commitDir := filepath.Join(s.directory, "commit")
-	err := errors.Join(
-		s.Close(),
-		os.RemoveAll(mainDir),
-		os.Rename(commitDir, mainDir),
-	)
-	if err != nil {
-		return err
-	}
-	// reload the stock from disk
-	reload, err := OpenStock[I, V](s.encoder, s.directory)
-	if err != nil {
-		return err
-	}
-	*s = *reload.(*inMemoryStock[I, V])
+	s.values = s.values[:s.checkpointValueListLength]
+	s.freeList = s.freeList[:s.checkpointFreeListLength]
 	return nil
 }
 
@@ -356,4 +351,30 @@ type metadata struct {
 	LastCheckpoint                utils.Checkpoint
 	LastCheckpointValueListLength int
 	LastCheckpointFreeListLength  int
+}
+
+type checkpointData struct {
+	Checkpoint     utils.Checkpoint
+	NumValues      int
+	FreeListLength int
+}
+
+func readCheckpointMetaData(path string) (checkpointData, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return checkpointData{}, err
+	}
+	var meta checkpointData
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return checkpointData{}, err
+	}
+	return meta, nil
+}
+
+func writeCheckpointMetaData(path string, data checkpointData) error {
+	meta, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, meta, 0600)
 }
