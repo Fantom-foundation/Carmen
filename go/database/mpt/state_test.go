@@ -623,9 +623,9 @@ func TestState_writeCodes_WriteFailures(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		osfile := utils.NewMockOsFile(ctrl)
 
-		osfile.EXPECT().Write(gomock.Any()).AnyTimes().DoAndReturn(func([]byte) (int, error) {
+		osfile.EXPECT().Write(gomock.Any()).AnyTimes().DoAndReturn(func(data []byte) (int, error) {
 			count++
-			return 1, nil
+			return len(data), nil
 		})
 		if err := writeCodesTo(codes, osfile); err != nil {
 			t.Fatalf("cannot execute writeCodesTo: %s", err)
