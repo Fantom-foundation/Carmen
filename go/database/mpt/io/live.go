@@ -58,7 +58,7 @@ const (
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
 // state of the LiveDB.
-func Export(ctx context.Context, directory string, out io.Writer, _ uint64) error {
+func Export(ctx context.Context, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -77,7 +77,7 @@ func Export(ctx context.Context, directory string, out io.Writer, _ uint64) erro
 	return exportLive(ctx, db, out)
 }
 
-func ExportFromArchive(ctx context.Context, directory string, out io.Writer, block uint64) error {
+func ExportFromArchive(ctx context.Context, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -94,7 +94,8 @@ func ExportFromArchive(ctx context.Context, directory string, out io.Writer, blo
 
 	defer archive.Close()
 
-	return exportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+	block := ctx.Value("block")
+	return exportLive(ctx, exportableArchiveTrie{trie: archive, block: block.(uint64)}, out)
 }
 
 // exportLive exports given db into out.

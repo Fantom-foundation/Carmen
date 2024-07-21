@@ -31,7 +31,7 @@ type exportableArchiveTrie struct {
 }
 
 func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
-	return e.trie.VisitTrie(visitor, e.block)
+	return e.trie.VisitTrie(e.block, visitor)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {

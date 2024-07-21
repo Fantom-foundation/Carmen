@@ -209,7 +209,7 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 
 	// Export database to buffer.
 	var buffer bytes.Buffer
-	if err := Export(context.Background(), sourceDir, &buffer, 0); err != nil {
+	if err := Export(context.Background(), sourceDir, &buffer); err != nil {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 
@@ -291,7 +291,8 @@ func TestIO_ExportLiveFromArchive(t *testing.T) {
 		t.Fatalf("failed to create archive: %v", err)
 	}
 	_ = fillTestBlocksIntoArchive(t, source)
-	exportedBlockHeight := uint64(2)
+	const exportedBlockHeight = uint64(2)
+	ctx := context.WithValue(context.Background(), "block", exportedBlockHeight)
 	hash, err := source.GetHash(exportedBlockHeight)
 	if err != nil {
 		t.Fatalf("cannot get hash: %v", err)
@@ -303,7 +304,7 @@ func TestIO_ExportLiveFromArchive(t *testing.T) {
 
 	// Export live database from archive.
 	buffer := new(bytes.Buffer)
-	if err := ExportFromArchive(context.Background(), sourceDir, buffer, exportedBlockHeight); err != nil {
+	if err := ExportFromArchive(ctx, sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 

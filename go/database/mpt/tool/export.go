@@ -13,6 +13,7 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -37,15 +38,15 @@ var ExportCmd = cli.Command{
 	},
 }
 
-func doExport(context *cli.Context) error {
-	if context.Args().Len() != 2 {
+func doExport(cliCtx *cli.Context) error {
+	if cliCtx.Args().Len() != 2 {
 		return fmt.Errorf("missing state directory and/or target file parameter")
 	}
-	dir := context.Args().Get(0)
-	trg := context.Args().Get(1)
+	dir := cliCtx.Args().Get(0)
+	trg := cliCtx.Args().Get(1)
 
 	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
+	cpuProfileFileName := cliCtx.String(cpuProfileFlag.Name)
 	if strings.TrimSpace(cpuProfileFileName) != "" {
 		if err := startCpuProfiler(cpuProfileFileName); err != nil {
 			return err
@@ -53,25 +54,21 @@ func doExport(context *cli.Context) error {
 		defer stopCpuProfiler()
 	}
 
-	blkNumber := context.Uint64(targetBlockFlag.Name)
-
 	// check the type of target database
 	mptInfo, err := io.CheckMptDirectoryAndGetInfo(dir)
 	if err != nil {
 		return err
 	}
 
-	hasGivenBlock := blkNumber > 0
-
-	export := io.ExportArchive
-	if hasGivenBlock && mptInfo.Mode == mpt.Immutable {
-		// Exporting live genesis from Archive
-		export = io.ExportFromArchive
-	} else if !hasGivenBlock && mptInfo.Mode != mpt.Immutable {
-		// Exporting live genesis
-		export = io.Export
-	} else if hasGivenBlock && mptInfo.Mode != mpt.Immutable {
-		return errors.New("cannot export live genesis file for given block from live-db; either pass archive or do not pass block")
+	export := io.Export
+	if mptInfo.Mode == mpt.Immutable {
+		if cliCtx.IsSet(targetBlockFlag.Name) {
+			blkNumber := cliCtx.Uint64(targetBlockFlag.Name)
+			cliCtx.Context = context.WithValue(cliCtx.Context, "block", blkNumber)
+			export = io.ExportFromArchive
+		} else {
+			export = io.ExportArchive
+		}
 	}
 
 	start := time.Now()
@@ -84,10 +81,10 @@ func doExport(context *cli.Context) error {
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
 
-	ctx := interrupt.CancelOnInterrupt(context.Context)
+	ctx := interrupt.CancelOnInterrupt(cliCtx.Context)
 
 	if err = errors.Join(
-		export(ctx, dir, out, blkNumber),
+		export(ctx, dir, out),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),

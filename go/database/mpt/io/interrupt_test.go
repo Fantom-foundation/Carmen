@@ -25,7 +25,7 @@ import (
 func TestExport_CanBeInterrupted(t *testing.T) {
 	type testFuncs struct {
 		// export is the tested export func
-		export func(context.Context, string, io.Writer, uint64) error
+		export func(context.Context, string, io.Writer) error
 		// createDB is an init of the database
 		createDB func(t *testing.T, sourceDir string)
 		// check that the interrupted did not corrupt the db by re-opening it
@@ -56,20 +56,22 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			sourceDir := t.TempDir()
 			tf.createDB(t, sourceDir)
 
+			ctx := context.WithValue(context.Background(), "block", uint64(3))
+
 			countWriter := &interruptSendingWriter{signalInterrupt: false}
 			// first find number of writes
-			if err := tf.export(context.Background(), sourceDir, countWriter, 3); err != nil {
+			if err := tf.export(ctx, sourceDir, countWriter); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
 			// save max count and reset number of writes
 			maxCount := countWriter.numOfWrites
 
-			ctx := interrupt.CancelOnInterrupt(context.Background())
+			ctx = interrupt.CancelOnInterrupt(ctx)
 
 			writer := &interruptSendingWriter{}
 			writer.signalInterrupt = true
-			err := tf.export(ctx, sourceDir, writer, 3)
+			err := tf.export(ctx, sourceDir, writer)
 			if got, want := err, interrupt.ErrCanceled; !errors.Is(got, want) {
 				t.Errorf("unexpected error: got: %v, want: %v", got, want)
 			}

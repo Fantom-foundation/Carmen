@@ -328,15 +328,17 @@ func (a *ArchiveTrie) Flush() error {
 	)
 }
 
-func (a *ArchiveTrie) VisitTrie(visitor NodeVisitor, block uint64) error {
+func (a *ArchiveTrie) VisitTrie(block uint64, visitor NodeVisitor) error {
 	a.rootsMutex.Lock()
-	defer a.rootsMutex.Unlock()
 	if uint64(a.roots.length()) < block {
+		a.rootsMutex.Unlock()
 		return fmt.Errorf("block %d is not present", block)
+
 	}
 
-	root := a.roots.get(block)
-	return a.forest.VisitTrie(&root.NodeRef, visitor)
+	ref := a.roots.get(block).NodeRef
+	a.rootsMutex.Unlock()
+	return a.forest.VisitTrie(&ref, visitor)
 }
 
 func (a *ArchiveTrie) Close() error {
