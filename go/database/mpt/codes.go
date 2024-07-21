@@ -72,7 +72,7 @@ func (c *codes) Flush() error {
 		return nil
 	}
 	err := writeCodes(c.codes, c.file)
-	if err != nil {
+	if err == nil {
 		c.dirty = false
 	}
 	return err
