@@ -768,7 +768,7 @@ func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 
 	// Add some codes to be flushed.
 	for i := 0; i < numAccounts; i++ {
-		state.code[common.Hash{byte(i >> 8), byte(i)}] = make([]byte, 100)
+		state.codes.codes[common.Hash{byte(i >> 8), byte(i)}] = make([]byte, 100)
 	}
 
 	if err = state.Flush(); err != nil {
@@ -792,7 +792,7 @@ func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 				}
 				handle.Release()
 			})
-			state.codeDirty = true
+			state.codes.dirty = true
 		}
 		if err = state.Flush(); err != nil {
 			b.Fatalf("failed to flush state: %v", err)
