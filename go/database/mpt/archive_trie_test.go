@@ -514,48 +514,39 @@ func TestArchiveTrie_Add_UpdateFailsHashing(t *testing.T) {
 }
 
 func TestArchive_RootsGrowSubLinearly(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
-			if err != nil {
-				t.Fatalf("failed to create empty archive, err %v", err)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "roots.dat")
+	roots, err := loadRoots(file, dir)
+	if err != nil {
+		t.Fatalf("failed to create empty root list: %v", err)
+	}
+
+	// Golang slices grow by the factor of 2 when they are small,
+	// while they grow slower when they become huge.
+	// The slice 'archive.roots' contains millions of elements
+	// stored as GiBs in memory.
+	// This test verifies that the slices grow slower for huge arrays
+	// to ensure that memory consumption is not doubled every time
+	// the slice grows.
+	// This feature cannot be customized, i.e., this test verifies
+	// that the described assumption will hold in future versions
+	// of golang and/or runtime configurations.
+
+	const size = 100_000
+	const threshold = 10_000
+	const factor = 1.3
+
+	var prevCap int
+	for i := 0; i < size; i++ {
+		roots.append(Root{})
+
+		if i > threshold {
+			if got, want := cap(roots.roots), int(factor*float64(prevCap)); got >= want {
+				t.Fatalf("array grows too fast: %d >= %d", got, want)
 			}
-			defer func() {
-				if err := archive.Close(); err != nil {
-					t.Fatalf("cannot close archive: %v", err)
-				}
-			}()
+		}
 
-			// Golang slices grow by the factor of 2 when they are small,
-			// while they grow slower when they become huge.
-			// The slice 'archive.roots' contains millions of elements
-			// stored as GiBs in memory.
-			// This test verifies that the slices grow slower for huge arrays
-			// to ensure that memory consumption is not doubled every time
-			// the slice grows.
-			// This feature cannot be customized, i.e., this test verifies
-			// that the described assumption will hold in future versions
-			// of golang and/or runtime configurations.
-
-			const size = 100_000
-			const threshold = 10_000
-			const factor = 1.3
-
-			var prevCap int
-			for i := 0; i < size; i++ {
-				if err := archive.Add(uint64(i), common.Update{}, nil); err != nil {
-					t.Fatalf("failed to add block 1; %s", err)
-				}
-
-				if i > threshold {
-					if got, want := cap(archive.roots.roots), int(factor*float64(prevCap)); got >= want {
-						t.Fatalf("array grows too fast: %d >= %d", got, want)
-					}
-				}
-
-				prevCap = cap(archive.roots.roots)
-			}
-		})
+		prevCap = cap(roots.roots)
 	}
 }
 
@@ -1222,8 +1213,9 @@ func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
 }
 
 func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
-	original, err := loadRoots(file)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "roots.dat")
+	original, err := loadRoots(file, dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1241,7 +1233,7 @@ func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 		t.Fatalf("failed to store roots: %v", err)
 	}
 
-	restored, err := loadRoots(file)
+	restored, err := loadRoots(file, dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1259,8 +1251,9 @@ func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 }
 
 func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
-	list, err := loadRoots(file)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "roots.dat")
+	list, err := loadRoots(file, dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1282,7 +1275,7 @@ func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
 	}
 
 	// Loading the second file should only produce 2 roots.
-	restored, err := loadRoots(list.filename)
+	restored, err := loadRoots(list.filename, dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1292,8 +1285,9 @@ func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
 }
 
 func TestArchiveTrie_IncrementalRootListUpdates(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
-	list, err := loadRoots(file)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "roots.dat")
+	list, err := loadRoots(file, dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1312,7 +1306,7 @@ func TestArchiveTrie_IncrementalRootListUpdates(t *testing.T) {
 			t.Fatalf("failed to store roots: %v", err)
 		}
 
-		restored, err := loadRoots(file)
+		restored, err := loadRoots(file, dir)
 		if err != nil {
 			t.Fatalf("failed to reload roots: %v", err)
 		}
@@ -1324,7 +1318,8 @@ func TestArchiveTrie_IncrementalRootListUpdates(t *testing.T) {
 }
 
 func TestArchiveTrie_DirectlyStoredRootsCanBeRestored(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
+	dir := t.TempDir()
+	file := filepath.Join(dir, "roots.dat")
 	roots := []Root{
 		{NewNodeReference(ValueId(12)), common.Hash{12}},
 		{NewNodeReference(ValueId(14)), common.Hash{14}},
@@ -1333,7 +1328,7 @@ func TestArchiveTrie_DirectlyStoredRootsCanBeRestored(t *testing.T) {
 	if err := StoreRoots(file, roots); err != nil {
 		t.Fatalf("failed to store roots: %v", err)
 	}
-	restored, err := loadRoots(file)
+	restored, err := loadRoots(file, dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1343,8 +1338,9 @@ func TestArchiveTrie_DirectlyStoredRootsCanBeRestored(t *testing.T) {
 }
 
 func TestArchiveTrie_FileAccessErrorWhenStoringRootsIsDetected(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
-	list, err := loadRoots(file)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "roots.dat")
+	list, err := loadRoots(file, dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1360,6 +1356,50 @@ func TestArchiveTrie_FileAccessErrorWhenStoringRootsIsDetected(t *testing.T) {
 	list.append(Root{})
 	if err := list.storeRoots(); err == nil {
 		t.Errorf("expected an error when storing roots into non-accessible file")
+	}
+}
+
+func TestRootList_CanParticipateToCheckpointOperations(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "roots.dat")
+
+	roots, err := loadRoots(file, dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(2))})
+
+	if want, got := 2, roots.length(); want != got {
+		t.Fatalf("invalid number of roots, wanted %d, got %d", want, got)
+	}
+
+	coordinator, err := utils.NewCheckpointCoordinator(t.TempDir(), roots)
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+
+	_, err = coordinator.CreateCheckpoint()
+	if err != nil {
+		t.Fatalf("failed to create checkpoint: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(3))})
+	if err := roots.storeRoots(); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+
+	if want, got := 3, roots.length(); want != got {
+		t.Fatalf("invalid number of roots, wanted %d, got %d", want, got)
+	}
+
+	if err := coordinator.Restore(); err != nil {
+		t.Fatalf("failed to restore roots: %v", err)
+	}
+
+	if want, got := 2, roots.length(); want != got {
+		t.Fatalf("invalid number of roots, wanted %d, got %d", want, got)
 	}
 }
 
@@ -1773,28 +1813,28 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 		return nil
 	}
 
-	tests := map[string]func(*ArchiveTrie) error{
-		"clean_close": func(archive *ArchiveTrie) error {
+	tests := map[string]func(string, *ArchiveTrie) error{
+		"clean_close": func(_ string, archive *ArchiveTrie) error {
 			return archive.Close()
 		},
-		"clean_close_with_extra_blocks": func(archive *ArchiveTrie) error {
+		"clean_close_with_extra_blocks": func(_ string, archive *ArchiveTrie) error {
 			return errors.Join(
 				addBlocks(archive, 92, 98),
 				archive.Close(),
 			)
 		},
-		"no_close": func(archive *ArchiveTrie) error {
+		"no_close": func(directory string, archive *ArchiveTrie) error {
 			// We do not flush the Archive state, we just remove the
 			// directory lock to allow another instance to open the archive.
 			return errors.Join(
-				markClean(archive.directory),
+				markClean(directory),
 				archive.head.(*MptState).lock.Release(),
 			)
 		},
-		"no_close_with_extra_blocks": func(archive *ArchiveTrie) error {
+		"no_close_with_extra_blocks": func(directory string, archive *ArchiveTrie) error {
 			return errors.Join(
 				addBlocks(archive, 92, 98),
-				markClean(archive.directory),
+				markClean(directory),
 				archive.head.(*MptState).lock.Release(),
 			)
 		},
@@ -1825,7 +1865,7 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
 				}
 
-				if err := test(archive); err != nil {
+				if err := test(dir, archive); err != nil {
 					t.Fatalf("failed to close archive: %v", err)
 				}
 			}

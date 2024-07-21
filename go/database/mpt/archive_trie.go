@@ -39,7 +39,7 @@ type ArchiveTrie struct {
 	head         LiveState // the current head-state
 	forest       Database  // global forest with all versions of LiveState
 	nodeSource   NodeSource
-	roots        rootList   // the roots of individual blocks indexed by block height
+	roots        *rootList  // the roots of individual blocks indexed by block height
 	rootsMutex   sync.Mutex // protecting access to the roots list
 	rootFile     string     // the file storing the list of roots
 	addMutex     sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
@@ -48,8 +48,6 @@ type ArchiveTrie struct {
 
 	// Check-point support for DB healing.
 	checkpointCoordinator utils.CheckpointCoordinator
-	checkpointMetadata    checkpointMetadata
-	directory             string // TODO: remove this field
 }
 
 func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheConfig) (*ArchiveTrie, error) {
@@ -57,12 +55,9 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 	if err != nil {
 		return nil, err
 	}
-	rootfile := filepath.Join(directory, "roots.dat")
-	roots, err := loadRoots(rootfile)
-	if err != nil {
-		return nil, err
-	}
-	checkpoint, err := loadCheckPointMetaData(directory)
+	rootsFile := filepath.Join(directory, "roots.dat")
+	rootsDir := filepath.Join(directory, "roots")
+	roots, err := loadRoots(rootsFile, rootsDir)
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +83,8 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		forest.branches,
 		forest.extensions,
 		forest.values,
+		roots,
 		// TODO: add support for the following
-		//  - roots
 		//  - codes
 		//  - metadata
 	)
@@ -102,10 +97,8 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		forest:                forest,
 		nodeSource:            forest,
 		roots:                 roots,
-		rootFile:              rootfile,
+		rootFile:              rootsFile,
 		checkpointCoordinator: coordinator,
-		checkpointMetadata:    checkpoint,
-		directory:             directory,
 	}, nil
 }
 
@@ -113,7 +106,9 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 // If the test passes, the data stored in the respective directory
 // can be considered a valid archive database of the given configuration.
 func VerifyArchiveTrie(directory string, config MptConfig, observer VerificationObserver) error {
-	roots, err := loadRoots(directory + "/roots.dat")
+	rootsFile := filepath.Join(directory, "roots.dat")
+	rootsDir := filepath.Join(directory, "roots")
+	roots, err := loadRoots(rootsFile, rootsDir)
 	if err != nil {
 		return err
 	}
@@ -373,8 +368,9 @@ func (a *ArchiveTrie) Close() error {
 }
 
 func (a *ArchiveTrie) GetCheckpointBlock() (uint64, error) {
-	if a.checkpointMetadata.Block != nil {
-		return *a.checkpointMetadata.Block, nil
+	numRoots := a.roots.checkpointNumRoots
+	if numRoots > 0 {
+		return uint64(numRoots - 1), nil
 	}
 	return 0, fmt.Errorf("archive has no checkpoint")
 }
@@ -388,16 +384,6 @@ func (a *ArchiveTrie) CreateCheckpoint() error {
 	// The creation of the checkpoint makes the current
 	// state recoverable in case of a crash.
 	_, err := a.checkpointCoordinator.CreateCheckpoint()
-
-	// TODO: this update should be part of the checkpoint coordinator
-	if err == nil {
-		block := uint64(a.roots.length()) - 1
-		a.checkpointMetadata.Block = &block
-		if err := a.checkpointMetadata.store(a.directory); err != nil {
-			return err
-		}
-	}
-
 	return err
 }
 
@@ -483,8 +469,12 @@ func (a *ArchiveTrie) addError(err error) error {
 // of an archive and its synchronization with an on-disk file copy.
 type rootList struct {
 	roots          []Root
-	filename       string
+	filename       string // < the file storing the list of roots
+	directory      string // < the directory for checkpoint data
 	numRootsInFile int
+
+	checkpoint         utils.Checkpoint
+	checkpointNumRoots int
 }
 
 func (l *rootList) length() int {
@@ -509,26 +499,42 @@ func (l *rootList) truncate(block uint64) error {
 	return os.Truncate(l.filename, int64(length*uint64(NodeIdEncoder{}.GetEncodedSize()+32)))
 }
 
-func loadRoots(filename string) (rootList, error) {
+func loadRoots(filename string, directory string) (*rootList, error) {
+	// Create the directory for commit files if it does not exist.
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, err
+	}
 	// If there is no file, initialize and return an empty list.
 	if _, err := os.Stat(filename); err != nil {
-		return rootList{filename: filename}, nil
+		return &rootList{
+			filename:  filename,
+			directory: directory,
+		}, nil
+	}
+
+	committedCheckpointFile := filepath.Join(directory, "committed.json")
+	checkpointData, err := readRootListCheckpointData(committedCheckpointFile)
+	if err != nil {
+		return nil, err
 	}
 
 	f, err := os.Open(filename)
 	if err != nil {
-		return rootList{}, err
+		return nil, err
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
 	roots, err := loadRootsFrom(reader)
 	if err != nil {
-		return rootList{}, err
+		return nil, err
 	}
-	return rootList{
-		roots:          roots,
-		filename:       filename,
-		numRootsInFile: len(roots),
+	return &rootList{
+		roots:              roots,
+		filename:           filename,
+		directory:          directory,
+		numRootsInFile:     len(roots),
+		checkpoint:         checkpointData.Checkpoint,
+		checkpointNumRoots: checkpointData.NumRoots,
 	}, nil
 }
 
@@ -598,41 +604,76 @@ func storeRootsTo(writer io.Writer, roots []Root) error {
 	return nil
 }
 
-// --- Checkpoint Metadata ---
-
-// TODO: wrap checkpoint metadata into a type supporting the two-phase participation protocol.
-
-type checkpointMetadata struct {
-	Commit utils.Checkpoint
-	Block  *uint64
+func (l *rootList) GuaranteeCheckpoint(checkpoint utils.Checkpoint) error {
+	if l.checkpoint == checkpoint {
+		return nil
+	}
+	if l.checkpoint+1 == checkpoint {
+		pendingFile := filepath.Join(l.directory, "pending.json")
+		if _, err := os.Stat(pendingFile); err != nil {
+			return l.Commit(checkpoint)
+		}
+	}
+	return fmt.Errorf("unable to guarantee checkpoint %v, current checkpoint is %v", checkpoint, l.checkpoint)
 }
 
-func loadCheckPointMetaData(directory string) (checkpointMetadata, error) {
-	filename := filepath.Join(directory, "checkpoint.json")
-
-	// If there is no file, initialize and return default metadata.
-	if _, err := os.Stat(filename); err != nil {
-		return checkpointMetadata{}, nil
-	}
-
-	// If the file exists, parse it and return its content.
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return checkpointMetadata{}, err
-	}
-
-	var meta checkpointMetadata
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return meta, err
-	}
-	return meta, nil
+func (l *rootList) Prepare(checkpoint utils.Checkpoint) error {
+	pendingFile := filepath.Join(l.directory, "pending.json")
+	return writeRootListCheckpointData(pendingFile, rootListCheckpointData{
+		Checkpoint: checkpoint,
+		NumRoots:   l.length(),
+	})
 }
 
-func (m *checkpointMetadata) store(directory string) error {
-	filename := filepath.Join(directory, "checkpoint.json")
-	data, err := json.Marshal(m)
+func (l *rootList) Commit(checkpoint utils.Checkpoint) error {
+	committedFile := filepath.Join(l.directory, "committed.json")
+	pendingFile := filepath.Join(l.directory, "pending.json")
+	meta, err := readRootListCheckpointData(pendingFile)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filename, data, 0600)
+	if meta.Checkpoint != checkpoint {
+		return fmt.Errorf("checkpoint mismatch, prepared %v, committed %v", meta.Checkpoint, checkpoint)
+	}
+	l.checkpoint = checkpoint
+	l.checkpointNumRoots = meta.NumRoots
+	return os.Rename(pendingFile, committedFile)
+}
+
+func (l *rootList) Abort(checkpoint utils.Checkpoint) error {
+	pendingFile := filepath.Join(l.directory, "pending.json")
+	return os.Remove(pendingFile)
+}
+
+func (l *rootList) Restore(checkpoint utils.Checkpoint) error {
+	l.roots = l.roots[:l.checkpointNumRoots]
+	return nil
+}
+
+type rootListCheckpointData struct {
+	Checkpoint utils.Checkpoint
+	NumRoots   int
+}
+
+func readRootListCheckpointData(file string) (rootListCheckpointData, error) {
+	dataBytes, err := os.ReadFile(file)
+	if os.IsNotExist(err) {
+		return rootListCheckpointData{}, nil
+	}
+	if err != nil {
+		return rootListCheckpointData{}, err
+	}
+	var data rootListCheckpointData
+	if err := json.Unmarshal(dataBytes, &data); err != nil {
+		return rootListCheckpointData{}, err
+	}
+	return data, nil
+}
+
+func writeRootListCheckpointData(file string, data rootListCheckpointData) error {
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(file, dataBytes, 0600)
 }
