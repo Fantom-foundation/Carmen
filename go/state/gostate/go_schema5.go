@@ -81,6 +81,14 @@ func getNodeCacheConfig(cacheSize int64) mpt.NodeCacheConfig {
 	capacity := 0
 	if cacheSize > 0 {
 		capacity = int(cacheSize / int64(mpt.EstimatePerNodeMemoryUsage()))
+
+		// If a cache size is given, the resulting capacity should be at least 1.
+		// A capacity of 0 would signal the MPT implementation to use the default
+		// cache size. However, if a cache size is given that is small enough to
+		// not even cover a single node, the minimum MPT cache size should be used.
+		if capacity == 0 {
+			capacity = 1
+		}
 	}
 	return mpt.NodeCacheConfig{
 		Capacity: capacity,
