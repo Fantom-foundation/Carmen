@@ -26,12 +26,15 @@ import (
 
 // inMemoryStock provides an in-memory implementation of the stock.Stock interface.
 type inMemoryStock[I stock.Index, V any] struct {
-	values             []V
-	freeList           []I
-	directory          string
-	encoder            stock.ValueEncoder[V]
-	lastCheckpoint     utils.Checkpoint
-	numCommittedValues I
+	values                          []V
+	freeList                        []I
+	directory                       string
+	encoder                         stock.ValueEncoder[V]
+	checkpoint                      utils.Checkpoint
+	checkpointValueListLength       I
+	checkpointFreeListLength        int
+	backupCheckpointValueListLength I
+	backupCheckpointFreeListLength  int
 }
 
 func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (stock.Stock[I, V], error) {
@@ -133,9 +136,10 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		}
 	}
 
-	// Load last commit.
-	res.lastCheckpoint = meta.LastCheckpoint
-	res.numCommittedValues = I(meta.NumCommittedValues)
+	// Load last checkpoint.
+	res.checkpoint = meta.LastCheckpoint
+	res.checkpointValueListLength = I(meta.LastCheckpointValueListLength)
+	res.checkpointFreeListLength = meta.LastCheckpointFreeListLength
 
 	return res, nil
 }
@@ -146,7 +150,7 @@ func (s *inMemoryStock[I, V]) New() (I, error) {
 
 	// Reuse free index positions or grow list of values.
 	lenFreeList := len(s.freeList)
-	if lenFreeList > 0 {
+	if lenFreeList > s.checkpointFreeListLength {
 		index = s.freeList[lenFreeList-1]
 		s.freeList = s.freeList[0 : lenFreeList-1]
 	} else {
@@ -169,7 +173,7 @@ func (s *inMemoryStock[I, V]) Set(index I, value V) error {
 	if index >= I(len(s.values)) || index < 0 {
 		return fmt.Errorf("index out of range, got %d, range [0,%d)", index, I(len(s.values)))
 	}
-	if index < s.numCommittedValues {
+	if index < s.checkpointValueListLength {
 		return fmt.Errorf("index %d is read-only", index)
 	}
 	s.values[index] = value
@@ -180,7 +184,7 @@ func (s *inMemoryStock[I, V]) Delete(index I) error {
 	if index >= I(len(s.values)) || index < 0 {
 		return nil
 	}
-	if index < s.numCommittedValues {
+	if index < s.checkpointValueListLength {
 		return fmt.Errorf("index %d is read-only", index)
 	}
 	s.freeList = append(s.freeList, index)
@@ -218,13 +222,14 @@ func (s *inMemoryStock[I, V]) writeTo(dir string) error {
 	var index I
 	indexSize := int(unsafe.Sizeof(index))
 	metadata, err := json.Marshal(metadata{
-		Version:            dataFormatVersion,
-		IndexTypeSize:      indexSize,
-		ValueTypeSize:      s.encoder.GetEncodedSize(),
-		ValueListLength:    len(s.values),
-		FreeListLength:     len(s.freeList),
-		LastCheckpoint:     s.lastCheckpoint,
-		NumCommittedValues: int(s.numCommittedValues),
+		Version:                       dataFormatVersion,
+		IndexTypeSize:                 indexSize,
+		ValueTypeSize:                 s.encoder.GetEncodedSize(),
+		ValueListLength:               len(s.values),
+		FreeListLength:                len(s.freeList),
+		LastCheckpoint:                s.checkpoint,
+		LastCheckpointValueListLength: int(s.checkpointValueListLength),
+		LastCheckpointFreeListLength:  int(s.checkpointFreeListLength),
 	})
 	if err != nil {
 		return err
@@ -279,49 +284,58 @@ func (s *inMemoryStock[I, V]) Close() error {
 	return s.Flush()
 }
 
-func (s *inMemoryStock[I, V]) GuaranteeCheckpoint(commit utils.Checkpoint) error {
-	// If the requested commit is a pending commit, this pending
-	// commit needs to be completed.
-	if s.lastCheckpoint+1 == commit {
-		return s.Commit(commit)
-	}
-
-	// If the stock is at the requested commit, everything is fine.
-	if s.lastCheckpoint == commit {
+func (s *inMemoryStock[I, V]) GuaranteeCheckpoint(checkpoint utils.Checkpoint) error {
+	// If requested checkpoint is the stock's current checkpoint, everything is fine.
+	if s.checkpoint == checkpoint {
 		return nil
 	}
 
+	// If the requested checkpoint is pending, it needs to be completed.
+	if s.checkpoint+1 == checkpoint {
+		return s.Commit(checkpoint)
+	}
+
 	// Otherwise, the stock is in an inconsistent state.
-	return fmt.Errorf("unable to guarantee availability of commit %d", commit)
+	return fmt.Errorf("unable to guarantee availability of checkpoint %d", checkpoint)
 }
 
 func (s *inMemoryStock[I, V]) Prepare(commit utils.Checkpoint) error {
+	if err := s.Flush(); err != nil {
+		return err
+	}
+	s.backupCheckpointValueListLength = s.checkpointValueListLength
+	s.backupCheckpointFreeListLength = s.checkpointFreeListLength
+	s.checkpointValueListLength = I(len(s.values))
+	s.checkpointFreeListLength = len(s.freeList)
 	return s.writeTo(filepath.Join(s.directory, "prepare"))
 }
 
 func (s *inMemoryStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
-	err := os.Rename(filepath.Join(s.directory, "prepare"), filepath.Join(s.directory, "commit"))
-	if err != nil {
-		return err
-	}
-	s.lastCheckpoint = checkpoint
-	s.numCommittedValues = I(len(s.values)) // < this might be wrong if there have been updates since the prepare
-	return err
+	s.checkpoint = checkpoint
+	s.checkpointValueListLength = I(len(s.values))
+	s.checkpointFreeListLength = len(s.freeList)
+	return os.Rename(filepath.Join(s.directory, "prepare"), filepath.Join(s.directory, "commit"))
 }
 
 func (s *inMemoryStock[I, V]) Abort(commit utils.Checkpoint) error {
-	return errors.Join(
-		os.RemoveAll(filepath.Join(s.directory, "prepare")),
-		s.Close(),
-		s.reload(),
-	)
+	s.checkpointValueListLength = s.backupCheckpointValueListLength
+	s.checkpointFreeListLength = s.backupCheckpointFreeListLength
+	return os.RemoveAll(filepath.Join(s.directory, "prepare"))
 }
 
 func (s *inMemoryStock[I, V]) Restore(checkpoint utils.Checkpoint) error {
-	panic("not implemented")
-}
-
-func (s *inMemoryStock[I, V]) reload() error {
+	// Replace the current main directory with the last commit directory.
+	mainDir := filepath.Join(s.directory, "main")
+	commitDir := filepath.Join(s.directory, "commit")
+	err := errors.Join(
+		s.Close(),
+		os.RemoveAll(mainDir),
+		os.Rename(commitDir, mainDir),
+	)
+	if err != nil {
+		return err
+	}
+	// reload the stock from disk
 	reload, err := OpenStock[I, V](s.encoder, s.directory)
 	if err != nil {
 		return err
@@ -334,11 +348,12 @@ const dataFormatVersion = 0
 
 // metadata is the helper type to read and write metadata from/to the disk.
 type metadata struct {
-	Version            int
-	IndexTypeSize      int
-	ValueTypeSize      int
-	ValueListLength    int
-	FreeListLength     int
-	LastCheckpoint     utils.Checkpoint
-	NumCommittedValues int
+	Version                       int
+	IndexTypeSize                 int
+	ValueTypeSize                 int
+	ValueListLength               int
+	FreeListLength                int
+	LastCheckpoint                utils.Checkpoint
+	LastCheckpointValueListLength int
+	LastCheckpointFreeListLength  int
 }

@@ -540,45 +540,6 @@ func TestFile_Flush_CannotWriteMetadata(t *testing.T) {
 	}
 }
 
-func TestFile_PrepareClearsFreeList(t *testing.T) {
-	dir := t.TempDir()
-	encoder := stock.IntEncoder{}
-	stock, err := openStock[int, int](encoder, dir)
-	if err != nil {
-		t.Fatalf("failed to open stock: %v", err)
-	}
-
-	id, err := stock.New()
-	if err != nil {
-		t.Fatalf("failed to create item in stock: %v", err)
-	}
-	if err := stock.Delete(id); err != nil {
-		t.Fatalf("failed to delete item: %v", err)
-	}
-
-	if want, got := 1, stock.freelist.Size(); want != got {
-		t.Errorf("unexpected free list size: want %d, got %d", want, got)
-	}
-
-	if err := stock.Prepare(utils.Checkpoint(1)); err != nil {
-		t.Fatalf("failed to prepare commit: %v", err)
-	}
-
-	// Since after the prepare call elements before the to-be-committed
-	// position should no longer be modified, the freelist should be cleared.
-	if want, got := 0, stock.freelist.Size(); want != got {
-		t.Errorf("unexpected free list size: want %d, got %d", want, got)
-	}
-
-	if err := stock.Commit(utils.Checkpoint(1)); err != nil {
-		t.Fatalf("failed to commit: %v", err)
-	}
-
-	if want, got := 0, stock.freelist.Size(); want != got {
-		t.Errorf("unexpected free list size: want %d, got %d", want, got)
-	}
-}
-
 func FuzzFileStock_RandomOps(f *testing.F) {
 	open := func(directory string) (stock.Stock[int, int], error) {
 		return openStock[int, int](stock.IntEncoder{}, directory)
