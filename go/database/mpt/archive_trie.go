@@ -425,6 +425,27 @@ func (a *ArchiveTrie) RestoreCheckpoint() error {
 	)
 }
 
+func (a *ArchiveTrie) RestoreBlockHeight(block uint64) error {
+	currentBlock, _, err := a.GetBlockHeight()
+	if err != nil {
+		return err
+	}
+	if block > currentBlock {
+		return fmt.Errorf("block %d is beyond the current block height at %d", block, currentBlock)
+	}
+	lastBlock, err := a.GetCheckpointBlock()
+	if err != nil {
+		return err
+	}
+	if block > lastBlock {
+		return fmt.Errorf("block %d is beyond the last checkpoint at %d", block, lastBlock)
+	}
+	return errors.Join(
+		a.RestoreCheckpoint(),
+		a.roots.truncate(block),
+	)
+}
+
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
 	if err := a.CheckErrors(); err != nil {
 		return nil, err

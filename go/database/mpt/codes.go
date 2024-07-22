@@ -49,6 +49,13 @@ func openCodes(file string, directory string) (*codes, error) {
 		return nil, err
 	}
 
+	// Create the code file if it does not exist.
+	if _, err := os.Stat(file); os.IsNotExist(err) {
+		if err := os.WriteFile(file, []byte{}, 0600); err != nil {
+			return nil, err
+		}
+	}
+
 	data, size, err := readCodesAndSize(file)
 	if err != nil {
 		return nil, err
