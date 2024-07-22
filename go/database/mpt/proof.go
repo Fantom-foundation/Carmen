@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"slices"
 	"sort"
 	"strings"
@@ -89,6 +90,16 @@ func CreateWitnessProof(nodeSource NodeSource, root *NodeReference, address comm
 	return WitnessProof{proof}, errors.Join(innerError, visitor.err, err)
 }
 
+// MergeProofs merges the input witness proofs and returns the resulting witness proof.
+func MergeProofs(others ...WitnessProof) WitnessProof {
+	res := WitnessProof{make(proofDb)}
+	for _, other := range others {
+		res.Add(other)
+	}
+
+	return res
+}
+
 // Add merges the input witness proof into the current witness proof.
 func (p WitnessProof) Add(other WitnessProof) {
 	for k, v := range other.proofDb {
@@ -101,7 +112,7 @@ func (p WitnessProof) Add(other WitnessProof) {
 // The resulting proof covers proofs for the intersection of the requested properties (account information and slots)
 // and the properties covered by this proof. The second return parameter indicates whether everything that
 // was requested could be covered. If so it is set to true, otherwise it is set to false.
-func (p WitnessProof) Extract(root common.Hash, address common.Address, keys ...common.Key) (WitnessProof, bool) {
+func (p WitnessProof) Extract(root common.Hash, address common.Address, keys ...common.Key) (witness.Proof, bool) {
 	result := proofDb{}
 	visitor := &proofCollectingVisitor{visited: result}
 	found, complete, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
@@ -221,8 +232,58 @@ func (p WitnessProof) AllAddressesEmpty(root common.Hash, from, to common.Addres
 }
 
 // Equals returns true if the two witness proofs are equal.
-func (p WitnessProof) Equals(other WitnessProof) bool {
-	return maps.EqualFunc(p.proofDb, other.proofDb, rlpEncodedNodeEquals)
+func (p WitnessProof) Equals(other witness.Proof) bool {
+	otherWitness, ok := other.(WitnessProof)
+	if !ok {
+		return false
+	}
+	return maps.EqualFunc(p.proofDb, otherWitness.proofDb, rlpEncodedNodeEquals)
+}
+
+// String returns a string representation of the witness proof.
+// The representation contains all nodes sorted by their hash.
+func (p WitnessProof) String() string {
+	// Extract keys and sort them
+	keys := maps.Keys(p.proofDb)
+	cmp := common.HashComparator{}
+	sort.Slice(keys, func(i, j int) bool {
+		return cmp.Compare(&keys[i], &keys[j]) <= 0
+	})
+
+	// Build the string representation
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(fmt.Sprintf("0x%x->0x%x\n", k, p.proofDb[k]))
+	}
+	return b.String()
+}
+
+// GetElements returns serialised elements of the witness proof.
+func (p WitnessProof) GetElements() []string {
+	res := make([]string, 0, len(p.proofDb))
+	for _, v := range p.proofDb {
+		res = append(res, string(v))
+	}
+	return res
+}
+
+func (p WitnessProof) GetStorageElements(root common.Hash, address common.Address, keys ...common.Key) ([]string, common.Hash, bool) {
+	visitor := &proofCollectingVisitor{}
+	found, complete, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
+	if err != nil || !found {
+		return []string{}, common.Hash{}, complete
+	}
+
+	storageRoot := visitor.visitedAccount.storageHash
+	visitor.visited = make(proofDb)
+	for _, key := range keys {
+		_, keyComplete, err := visitWitnessPathTo(p.proofDb, storageRoot, keyToHashedPathNibbles(key), visitor)
+		if err != nil || !keyComplete {
+			complete = false
+		}
+	}
+
+	return WitnessProof{visitor.visited}.GetElements(), storageRoot, complete
 }
 
 // proofExtractionVisitor is a visitor that visits MPT nodes and creates a witness proof.
@@ -305,43 +366,6 @@ func (p *proofExtractionVisitor) Visit(node Node, info NodeInfo) VisitResponse {
 	p.proof[hash] = rlp
 
 	return VisitResponseContinue
-}
-
-// String returns a string representation of the witness proof.
-// The representation contains all nodes sorted by their hash.
-func (p WitnessProof) String() string {
-	// Extract keys and sort them
-	keys := maps.Keys(p.proofDb)
-	cmp := common.HashComparator{}
-	sort.Slice(keys, func(i, j int) bool {
-		return cmp.Compare(&keys[i], &keys[j]) <= 0
-	})
-
-	// Build the string representation
-	var b strings.Builder
-	for _, k := range keys {
-		b.WriteString(fmt.Sprintf("0x%x->0x%x\n", k, p.proofDb[k]))
-	}
-	return b.String()
-}
-
-// GetElements returns serialised elements of the witness proof.
-func (p WitnessProof) GetElements() []string {
-	res := make([]string, 0, len(p.proofDb))
-	for _, v := range p.proofDb {
-		res = append(res, string(v))
-	}
-	return res
-}
-
-// MergeProofs merges the input witness proofs and returns the resulting witness proof.
-func MergeProofs(others ...WitnessProof) WitnessProof {
-	res := WitnessProof{make(proofDb)}
-	for _, other := range others {
-		res.Add(other)
-	}
-
-	return res
 }
 
 // witnessAccountFieldGetter extracts an account field from the witness proof for the input root hash and the address.
