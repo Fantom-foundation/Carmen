@@ -319,6 +319,9 @@ func TestCreateWitnessProof_SourceError_All_Paths(t *testing.T) {
 	injectedErr := errors.New("injected error")
 	address := common.Address{1}
 
+	var value common.Value
+	value[20] = 0x02 // a short value will be embedded
+
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -332,9 +335,19 @@ func TestCreateWitnessProof_SourceError_All_Paths(t *testing.T) {
 						dirtyChildHashes: []int{1},
 						children: Children{
 							addressNibbles[1]: &Extension{
-								path: addressNibbles[2:20],
-								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
-									storage: &Empty{}}},
+								nextHashDirty: true,
+								path:          addressNibbles[2:10],
+								next: &Extension{
+									nextHashDirty: true,
+									path:          addressNibbles[10:20],
+									next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
+										storageHashDirty: true,
+										storage: &Value{
+											key:    common.Key{1},
+											value:  value,
+											length: 1,
+										}}},
+							},
 						}}}}
 
 			root, _ := ctxt.Build(desc)
@@ -627,28 +640,42 @@ func TestWitnessProof_Extract_Can_Extract_Terminal_Nodes_In_Proof(t *testing.T) 
 func TestWitnessProof_Extract_MissingNode_In_Proof(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	address := common.Address{0xAB, 0xCD, 0xEF}
+	address := common.Address{1}
+	key := common.Key{1}
 
 	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
 
-	desc := &Extension{
-		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
+	tests := map[string]struct {
+		desc NodeDesc
+	}{
+		"missing account": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Tag{"D", &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(0x02), CodeHash: common.Hash{0x03}}}}},
+		},
+		"missing storage": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}},
+				storage: &Tag{"D", &Value{
+					key: key, value: common.Value{1}, length: 10},
+				}}},
+		},
 	}
 
-	root, node := ctxt.Build(desc)
-	totalProof := createReferenceProof(t, ctxt, &root, node)
-	rootHash, _ := ctxt.getHashFor(&root)
-	// remove a non-root node from the proof
-	for k := range totalProof.proofDb {
-		if k != rootHash {
-			delete(totalProof.proofDb, k)
-			break
-		}
-	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			root, node := ctxt.Build(test.desc)
+			totalProof := createReferenceProof(t, ctxt, &root, node)
+			deleteProof := createReferenceProofForLabels(t, ctxt, "D")
+			maps.DeleteFunc(totalProof.proofDb, func(hash common.Hash, node rlpEncodedNode) bool {
+				_, exists := deleteProof.proofDb[hash]
+				return exists
+			})
+			rootHash, _ := ctxt.getHashFor(&root)
 
-	if _, exists := totalProof.Extract(rootHash, address); exists {
-		t.Fatalf("proof should not exist")
+			if _, complete := totalProof.Extract(rootHash, address, key); complete {
+				t.Fatalf("proof should not be complete")
+			}
+		})
 	}
 }
 
