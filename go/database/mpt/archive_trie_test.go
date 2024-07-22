@@ -1686,11 +1686,12 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 
 func TestArchiveTrie_VisitTrie(t *testing.T) {
 	for _, config := range allMptConfigs {
-		ctrl := gomock.NewController(t)
-		nodeVisitor := NewMockNodeVisitor(ctrl)
-		nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
 
 		t.Run(config.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			nodeVisitor := NewMockNodeVisitor(ctrl)
+			nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).MinTimes(1)
+
 			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)

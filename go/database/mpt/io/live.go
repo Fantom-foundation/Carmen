@@ -77,6 +77,8 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	return exportLive(ctx, db, out)
 }
 
+// ExportBlockFromArchive exports LiveDB genesis for a single given block from an Archive.
+// Note: block must be <= of Archive block height.
 func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer, block uint64) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {

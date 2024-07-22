@@ -290,63 +290,92 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
-	_ = fillTestBlocksIntoArchive(t, archive)
-	const exportedBlockHeight = uint64(2)
-	hash, err := archive.GetHash(exportedBlockHeight)
-	if err != nil {
-		t.Fatalf("cannot get hash: %v", err)
+	const (
+		exportedBlockHeight = uint64(2)
+		M                   = 10
+		N                   = 3
+	)
+
+	var expectedHashes []common.Hash
+
+	for i := 0; i < M; i++ {
+
+		code := []byte{1, 2, 3}
+		u := uint64(i)
+
+		update := common.Update{}
+		for j := 0; j < N; j++ {
+			newAddr := common.AddressFromNumber(i + j)
+
+			update.CreatedAccounts = append(update.CreatedAccounts, newAddr)
+			update.Balances = append(update.Balances, common.BalanceUpdate{Account: newAddr, Balance: amount.New(u)})
+			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: newAddr, Nonce: common.ToNonce(u)})
+			update.Codes = append(update.Codes, common.CodeUpdate{Account: newAddr, Code: code})
+			update.Slots = append(update.Slots, common.SlotUpdate{Account: newAddr, Key: common.Key{1}, Value: common.Value{1}})
+		}
+
+		if i%2 != 0 {
+			updatedAddr := common.AddressFromNumber(i)
+			update.Balances = append(update.Balances, common.BalanceUpdate{Account: updatedAddr, Balance: amount.New(u)})
+			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: updatedAddr, Nonce: common.ToNonce(u)})
+			update.Codes = append(update.Codes, common.CodeUpdate{Account: updatedAddr, Code: code})
+			update.Slots = append(update.Slots, common.SlotUpdate{Account: updatedAddr, Key: common.Key{1}, Value: common.Value{1}})
+		} else {
+			update.DeletedAccounts = append(update.DeletedAccounts, common.AddressFromNumber(i))
+		}
+
+		err = archive.Add(u, update, nil)
+		if err != nil {
+			t.Fatalf("failed to create block in archive: %v", err)
+		}
+
+		hash, err := archive.GetHash(u)
+		if err != nil {
+			t.Fatalf("cannot get hash: %v", err)
+		}
+
+		expectedHashes = append(expectedHashes, hash)
 	}
 
 	if err := archive.Close(); err != nil {
 		t.Fatalf("failed to close archive archive: %v", err)
 	}
 
-	// Export live database from archive.
-	buffer := new(bytes.Buffer)
-	if err := ExportBlockFromArchive(context.Background(), sourceDir, buffer, exportedBlockHeight); err != nil {
-		t.Fatalf("failed to export Archive: %v", err)
+	for i := 0; i < M; i++ {
+		// Export live database from archive.
+		buffer := new(bytes.Buffer)
+		if err := ExportBlockFromArchive(context.Background(), sourceDir, buffer, uint64(i)); err != nil {
+			t.Fatalf("failed to export Archive: %v", err)
+		}
+
+		// Import live database.
+		targetDir := t.TempDir()
+		if err := ImportLiveDb(targetDir, buffer); err != nil {
+			t.Fatalf("failed to import DB: %v", err)
+		}
+
+		if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+			t.Fatalf("verification of imported DB failed: %v", err)
+		}
+
+		db, err := mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+		if err != nil {
+			t.Fatalf("failed to open recovered DB: %v", err)
+		}
+
+		got, err := db.GetHash()
+		if err != nil {
+			t.Fatalf("cannot get hash: %v", err)
+		}
+		want := expectedHashes[i]
+		if got != want {
+			t.Errorf("restored DB failed to reproduce same hash\nwanted %x\n got %x", want, got)
+		}
+
+		err = db.Close()
+		if err != nil {
+			t.Fatalf("cannot close database: %v", err)
+		}
 	}
 
-	// Import live database.
-	targetDir := t.TempDir()
-	if err := ImportLiveDb(targetDir, buffer); err != nil {
-		t.Fatalf("failed to import DB: %v", err)
-	}
-
-	if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
-		t.Fatalf("verification of imported DB failed: %v", err)
-	}
-
-	db, err := mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
-	if err != nil {
-		t.Fatalf("failed to open recovered DB: %v", err)
-	}
-	defer db.Close()
-
-	existingAcc := common.Address{1}
-	exists, err := db.Exists(existingAcc)
-	if err != nil {
-		t.Fatalf("cannot find whether account exists: %v", err)
-	}
-	if !exists {
-		t.Errorf("restored DB does not contain account %s", existingAcc)
-	}
-
-	nonExistingAcc := common.Address{2}
-	exists, err = db.Exists(nonExistingAcc)
-	if err != nil {
-		t.Fatalf("cannot find whether account exists: %v", err)
-	}
-	if exists {
-		t.Errorf("restored DB contains account %s added after exported block", nonExistingAcc)
-	}
-
-	got, err := db.GetHash()
-	if err != nil {
-		t.Fatalf("cannot get hash: %v", err)
-	}
-
-	if got != hash {
-		t.Errorf("restored DB failed to reproduce same hash\nwanted %x\n got %x", hash, got)
-	}
 }

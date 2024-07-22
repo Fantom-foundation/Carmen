@@ -72,18 +72,19 @@ func doExport(context *cli.Context) error {
 	ctx := interrupt.CancelOnInterrupt(context.Context)
 
 	var exportErr error
-	switch {
-	case mptInfo.Mode == mpt.Immutable && context.IsSet(targetBlockFlag.Name):
-		// Passed Archive and chosen block to export
-		blkNumber := context.Uint64(targetBlockFlag.Name)
-		exportErr = io.ExportBlockFromArchive(ctx, dir, out, blkNumber)
-	case mptInfo.Mode != mpt.Immutable:
+
+	if mptInfo.Mode == mpt.Immutable {
+		if context.IsSet(targetBlockFlag.Name) {
+			// Passed Archive and chosen block to export
+			blkNumber := context.Uint64(targetBlockFlag.Name)
+			exportErr = io.ExportBlockFromArchive(ctx, dir, out, blkNumber)
+		} else {
+			// Passed Archive without chosen block
+			exportErr = io.ExportArchive(ctx, dir, out)
+		}
+	} else {
 		// Passed LiveDB
 		exportErr = io.Export(ctx, dir, out)
-	default:
-		// Passed Archive without chosen block
-		exportErr = io.ExportArchive(ctx, dir, out)
-
 	}
 
 	if err = errors.Join(
