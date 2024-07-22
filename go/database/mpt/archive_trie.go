@@ -83,8 +83,8 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		forest.branches,
 		forest.extensions,
 		forest.values,
-		roots,
 		state.codes,
+		roots,
 	)
 	if err != nil {
 		return nil, errors.Join(err, head.Close())
