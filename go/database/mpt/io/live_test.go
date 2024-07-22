@@ -283,28 +283,27 @@ func TestCheckEmptyDirectory_FailsIfDirectoryContainsADirectory(t *testing.T) {
 	}
 }
 
-func TestIO_ExportLiveFromArchive(t *testing.T) {
+func TestIO_ExportBlockFromArchive(t *testing.T) {
 	// Create a small Archive from which we export LiveDB genesis.
 	sourceDir := t.TempDir()
-	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
-	_ = fillTestBlocksIntoArchive(t, source)
+	_ = fillTestBlocksIntoArchive(t, archive)
 	const exportedBlockHeight = uint64(2)
-	ctx := context.WithValue(context.Background(), "block", exportedBlockHeight)
-	hash, err := source.GetHash(exportedBlockHeight)
+	hash, err := archive.GetHash(exportedBlockHeight)
 	if err != nil {
 		t.Fatalf("cannot get hash: %v", err)
 	}
 
-	if err := source.Close(); err != nil {
-		t.Fatalf("failed to close source archive: %v", err)
+	if err := archive.Close(); err != nil {
+		t.Fatalf("failed to close archive archive: %v", err)
 	}
 
 	// Export live database from archive.
 	buffer := new(bytes.Buffer)
-	if err := ExportFromArchive(ctx, sourceDir, buffer); err != nil {
+	if err := ExportBlockFromArchive(context.Background(), sourceDir, buffer, exportedBlockHeight); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 
@@ -324,23 +323,30 @@ func TestIO_ExportLiveFromArchive(t *testing.T) {
 	}
 	defer db.Close()
 
-	exists, err := db.Exists(common.Address{1})
+	existingAcc := common.Address{1}
+	exists, err := db.Exists(existingAcc)
 	if err != nil {
 		t.Fatalf("cannot find whether account exists: %v", err)
 	}
 	if !exists {
-		t.Fatalf("restored DB does not contain account 1")
+		t.Errorf("restored DB does not contain account %s", existingAcc)
 	}
 
-	exists, err = db.Exists(common.Address{2})
+	nonExistingAcc := common.Address{2}
+	exists, err = db.Exists(nonExistingAcc)
 	if err != nil {
 		t.Fatalf("cannot find whether account exists: %v", err)
 	}
 	if exists {
-		t.Fatal("restored DB contains account 2 added after exported block")
+		t.Errorf("restored DB contains account %s added after exported block", nonExistingAcc)
 	}
 
-	if got, err := db.GetHash(); err != nil || got != hash {
-		t.Fatalf("restored DB failed to reproduce same hash\nwanted %x\n   got %x\n   err %v", hash, got, err)
+	got, err := db.GetHash()
+	if err != nil {
+		t.Fatalf("cannot get hash: %v", err)
+	}
+
+	if got != hash {
+		t.Errorf("restored DB failed to reproduce same hash\nwanted %x\n got %x", hash, got)
 	}
 }

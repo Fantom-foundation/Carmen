@@ -84,10 +84,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 
 	// Write out codes.
 	codes := archive.GetCodes()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve codes: %v", err)
-	}
-	if err := writeCodes(codes, out); err != nil {
+	if err = writeCodes(codes, out); err != nil {
 		return err
 	}
 

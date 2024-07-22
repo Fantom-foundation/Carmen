@@ -32,6 +32,10 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 		check func(t *testing.T, sourceDir string)
 	}
 
+	exportBlockFromArchive := func(ctx context.Context, dir string, out io.Writer) error {
+		return ExportBlockFromArchive(ctx, dir, out, 3)
+	}
+
 	tests := map[string]testFuncs{
 		"live": {
 			export:   Export,
@@ -44,7 +48,7 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			check:    checkCanOpenArchive,
 		},
 		"live-from-archive": {
-			export:   ExportFromArchive,
+			export:   exportBlockFromArchive,
 			createDB: createTestArchive,
 			check:    checkCanOpenArchive,
 		},
@@ -56,18 +60,16 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			sourceDir := t.TempDir()
 			tf.createDB(t, sourceDir)
 
-			ctx := context.WithValue(context.Background(), "block", uint64(3))
-
 			countWriter := &interruptSendingWriter{signalInterrupt: false}
 			// first find number of writes
-			if err := tf.export(ctx, sourceDir, countWriter); err != nil {
+			if err := tf.export(context.Background(), sourceDir, countWriter); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
 			// save max count and reset number of writes
 			maxCount := countWriter.numOfWrites
 
-			ctx = interrupt.CancelOnInterrupt(ctx)
+			ctx := interrupt.CancelOnInterrupt(context.Background())
 
 			writer := &interruptSendingWriter{}
 			writer.signalInterrupt = true

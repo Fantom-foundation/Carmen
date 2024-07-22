@@ -15,7 +15,8 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
-type exportable interface {
+// mptStateVisitor is a wrapper around Trie which determines functions necessary to export a LiveDB genesis.
+type mptStateVisitor interface {
 	// Visit allows for travertines the whole trie under the input root.
 	Visit(visitor mpt.NodeVisitor) error
 	// GetHash returns hash of the current Trie.

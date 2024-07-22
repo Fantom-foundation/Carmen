@@ -65,7 +65,7 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	}
 
 	if info.Config.Name != mpt.S5LiveConfig.Name {
-		return fmt.Errorf("can only support exportLive of LiveDB instances, found %v in directory", info.Mode)
+		return fmt.Errorf("can only support export of LiveDB instances, found %v in directory", info.Mode)
 	}
 
 	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.NodeCacheConfig{})
@@ -77,7 +77,7 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	return exportLive(ctx, db, out)
 }
 
-func ExportFromArchive(ctx context.Context, directory string, out io.Writer) error {
+func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer, block uint64) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -93,13 +93,11 @@ func ExportFromArchive(ctx context.Context, directory string, out io.Writer) err
 	}
 
 	defer archive.Close()
-
-	block := ctx.Value("block")
-	return exportLive(ctx, exportableArchiveTrie{trie: archive, block: block.(uint64)}, out)
+	return exportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
 }
 
 // exportLive exports given db into out.
-func exportLive(ctx context.Context, db exportable, out io.Writer) error {
+func exportLive(ctx context.Context, db mptStateVisitor, out io.Writer) error {
 	// Start with the magic number.
 	if _, err := out.Write(stateMagicNumber); err != nil {
 		return err
@@ -327,7 +325,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 
 // getReferencedCodes returns a map of codes referenced by accounts in the
 // given database. The map is indexed by the code hash.
-func getReferencedCodes(db exportable) (map[common.Hash][]byte, error) {
+func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
 	codes := make(map[common.Hash][]byte)
 	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		if n, ok := node.(*mpt.AccountNode); ok {

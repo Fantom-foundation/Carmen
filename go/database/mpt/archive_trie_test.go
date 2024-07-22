@@ -681,10 +681,7 @@ func TestArchiveTrie_GetCodes(t *testing.T) {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
 
-			codes, err := archive.GetCodes()
-			if err != nil {
-				t.Fatalf("failed to fetch codes from archive: %v", err)
-			}
+			codes := archive.GetCodes()
 			if len(codes) != 0 {
 				t.Errorf("unexpected number of codes in archive, expected 0, got %d", len(codes))
 			}
@@ -703,10 +700,7 @@ func TestArchiveTrie_GetCodes(t *testing.T) {
 				t.Fatalf("cannot apply update: %s", err)
 			}
 
-			codes, err = archive.GetCodes()
-			if err != nil {
-				t.Fatalf("failed to fetch codes from archive: %v", err)
-			}
+			codes = archive.GetCodes()
 			if len(codes) != 2 {
 				t.Errorf("unexpected number of codes in archive, wanted 2, got %d", len(codes))
 			}
@@ -1686,6 +1680,41 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 			if err := archive.Close(); !errors.Is(err, injectedErr) {
 				t.Errorf("check should fail")
 			}
+		})
+	}
+}
+
+func TestArchiveTrie_VisitTrie(t *testing.T) {
+	for _, config := range allMptConfigs {
+		ctrl := gomock.NewController(t)
+		nodeVisitor := NewMockNodeVisitor(ctrl)
+		nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
+
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			if err != nil {
+				t.Fatalf("failed to open empty archive: %v", err)
+			}
+			defer archive.Close()
+
+			err = archive.Add(2, common.Update{
+				CreatedAccounts: []common.Address{{1}, {2}},
+				Nonces: []common.NonceUpdate{
+					{Account: common.Address{1}, Nonce: common.ToNonce(1)},
+					{Account: common.Address{2}, Nonce: common.ToNonce(2)},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{1}, Key: common.Key{1}, Value: common.Value{3}},
+					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
+					{Account: common.Address{1}, Key: common.Key{3}, Value: common.Value{1}},
+				},
+			}, nil)
+
+			err = archive.VisitTrie(2, nodeVisitor)
+			if err != nil {
+				return
+			}
+
 		})
 	}
 }

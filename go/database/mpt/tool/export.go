@@ -13,7 +13,6 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -38,15 +37,15 @@ var ExportCmd = cli.Command{
 	},
 }
 
-func doExport(cliCtx *cli.Context) error {
-	if cliCtx.Args().Len() != 2 {
+func doExport(context *cli.Context) error {
+	if context.Args().Len() != 2 {
 		return fmt.Errorf("missing state directory and/or target file parameter")
 	}
-	dir := cliCtx.Args().Get(0)
-	trg := cliCtx.Args().Get(1)
+	dir := context.Args().Get(0)
+	trg := context.Args().Get(1)
 
 	// Start profiling ...
-	cpuProfileFileName := cliCtx.String(cpuProfileFlag.Name)
+	cpuProfileFileName := context.String(cpuProfileFlag.Name)
 	if strings.TrimSpace(cpuProfileFileName) != "" {
 		if err := startCpuProfiler(cpuProfileFileName); err != nil {
 			return err
@@ -60,17 +59,6 @@ func doExport(cliCtx *cli.Context) error {
 		return err
 	}
 
-	export := io.Export
-	if mptInfo.Mode == mpt.Immutable {
-		if cliCtx.IsSet(targetBlockFlag.Name) {
-			blkNumber := cliCtx.Uint64(targetBlockFlag.Name)
-			cliCtx.Context = context.WithValue(cliCtx.Context, "block", blkNumber)
-			export = io.ExportFromArchive
-		} else {
-			export = io.ExportArchive
-		}
-	}
-
 	start := time.Now()
 	logFromStart(start, "export started")
 
@@ -81,10 +69,25 @@ func doExport(cliCtx *cli.Context) error {
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
 
-	ctx := interrupt.CancelOnInterrupt(cliCtx.Context)
+	ctx := interrupt.CancelOnInterrupt(context.Context)
+
+	var exportErr error
+	switch {
+	case mptInfo.Mode == mpt.Immutable && context.IsSet(targetBlockFlag.Name):
+		// Passed Archive and chosen block to export
+		blkNumber := context.Uint64(targetBlockFlag.Name)
+		exportErr = io.ExportBlockFromArchive(ctx, dir, out, blkNumber)
+	case mptInfo.Mode != mpt.Immutable:
+		// Passed LiveDB
+		exportErr = io.Export(ctx, dir, out)
+	default:
+		// Passed Archive without chosen block
+		exportErr = io.ExportArchive(ctx, dir, out)
+
+	}
 
 	if err = errors.Join(
-		export(ctx, dir, out),
+		exportErr,
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),
