@@ -117,3 +117,68 @@ func TestCodes_CheckpointsCanBeRestored(t *testing.T) {
 		t.Fatalf("expected file to be same size after restore")
 	}
 }
+
+func TestCodes_CheckpointsCanBeAborted(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "codes.dat")
+	codes, err := openCodes(file, dir)
+	if err != nil {
+		t.Fatalf("failed to open codes: %v", err)
+	}
+
+	codes.add([]byte("code1"))
+	codes.add([]byte("code2"))
+
+	checkpoint := utils.Checkpoint(1)
+	if err := codes.Prepare(checkpoint); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+
+	if err := codes.Abort(checkpoint); err != nil {
+		t.Fatalf("failed to commit checkpoint: %v", err)
+	}
+
+	if want, got := 2, len(codes.codes); want != got {
+		t.Fatalf("expected codes to have %d entries, got %d", want, got)
+	}
+
+	checkpoint = utils.Checkpoint(0)
+	if err := codes.Restore(checkpoint); err != nil {
+		t.Fatalf("failed to restore checkpoint: %v", err)
+	}
+
+	if want, got := 0, len(codes.codes); want != got {
+		t.Fatalf("expected codes to have %d entries, got %d", want, got)
+	}
+}
+
+func TestCodes_CanBeHandledByCheckpointCoordinator(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "codes.dat")
+	codes, err := openCodes(file, dir)
+	if err != nil {
+		t.Fatalf("failed to open codes: %v", err)
+	}
+
+	coordinator, err := utils.NewCheckpointCoordinator(t.TempDir(), codes)
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+
+	codes.add([]byte("code1"))
+
+	if _, err := coordinator.CreateCheckpoint(); err != nil {
+		t.Fatalf("failed to create checkpoint: %v", err)
+	}
+
+	codes.add([]byte("code2"))
+
+	if err := coordinator.Restore(); err != nil {
+		t.Fatalf("failed to restore checkpoint: %v", err)
+	}
+
+	if want, got := 1, len(codes.codes); want != got {
+		t.Fatalf("expected codes to have %d entries, got %d", want, got)
+	}
+
+}
