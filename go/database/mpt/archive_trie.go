@@ -408,7 +408,39 @@ func (a *ArchiveTrie) CreateCheckpoint() error {
 	return err
 }
 
-func RestoreCheckpoint(directory string, config MptConfig) error {
+func (a *ArchiveTrie) restoreCheckpoint() error {
+	lastBlock, err := a.GetCheckpointBlock()
+	if err != nil {
+		return err
+	}
+	return errors.Join(
+		a.roots.truncate(lastBlock),
+		a.checkpointCoordinator.Restore(),
+	)
+}
+
+func (a *ArchiveTrie) restoreBlockHeight(block uint64) error {
+	currentBlock, _, err := a.GetBlockHeight()
+	if err != nil {
+		return err
+	}
+	if block > currentBlock {
+		return fmt.Errorf("block %d is beyond the current block height at %d", block, currentBlock)
+	}
+	lastBlock, err := a.GetCheckpointBlock()
+	if err != nil {
+		return err
+	}
+	if block > lastBlock {
+		return fmt.Errorf("block %d is beyond the last checkpoint at %d", block, lastBlock)
+	}
+	return errors.Join(
+		a.restoreCheckpoint(),
+		a.roots.truncate(block),
+	)
+}
+
+func RestoreBlockHeight(directory string, config MptConfig, block uint64) error {
 	// If needed, remove the dirty flags from the directory. This
 	// indicates a potential corrupted archive state due to a non-clean
 	// archive shutdown -- which is what this restoration is supposed to fix.
@@ -425,7 +457,7 @@ func RestoreCheckpoint(directory string, config MptConfig) error {
 	archive, err := OpenArchiveTrie(directory, config, NodeCacheConfig{Capacity: 1}, ArchiveConfig{})
 	if err == nil {
 		err = errors.Join(
-			archive.RestoreCheckpoint(),
+			archive.restoreBlockHeight(block),
 			archive.Close(),
 		)
 	}
@@ -435,38 +467,6 @@ func RestoreCheckpoint(directory string, config MptConfig) error {
 		err = errors.Join(err, markDirty(directory))
 	}
 	return err
-}
-
-func (a *ArchiveTrie) RestoreCheckpoint() error {
-	lastBlock, err := a.GetCheckpointBlock()
-	if err != nil {
-		return err
-	}
-	return errors.Join(
-		a.roots.truncate(lastBlock),
-		a.checkpointCoordinator.Restore(),
-	)
-}
-
-func (a *ArchiveTrie) RestoreBlockHeight(block uint64) error {
-	currentBlock, _, err := a.GetBlockHeight()
-	if err != nil {
-		return err
-	}
-	if block > currentBlock {
-		return fmt.Errorf("block %d is beyond the current block height at %d", block, currentBlock)
-	}
-	lastBlock, err := a.GetCheckpointBlock()
-	if err != nil {
-		return err
-	}
-	if block > lastBlock {
-		return fmt.Errorf("block %d is beyond the last checkpoint at %d", block, lastBlock)
-	}
-	return errors.Join(
-		a.RestoreCheckpoint(),
-		a.roots.truncate(block),
-	)
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {

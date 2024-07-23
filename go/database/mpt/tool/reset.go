@@ -11,7 +11,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -63,19 +62,10 @@ func reset(context *cli.Context) error {
 		return fmt.Errorf("reset is only supported for archives")
 	}
 
-	fmt.Printf("Resetting archive to block %d ...\n", block)
-	return resetArchive(dir, info.Config, uint64(block))
-}
-
-func resetArchive(dir string, config mpt.MptConfig, block uint64) error {
-	archive, err := mpt.OpenArchiveTrie(dir, config, mpt.NodeCacheConfig{
-		Capacity: 10,
-	}, mpt.ArchiveConfig{})
-	if err != nil {
-		return fmt.Errorf("failed to open archive: %w", err)
+	fmt.Printf("Resetting archive in %s to block %d ...\n", dir, block)
+	err = mpt.RestoreBlockHeight(dir, info.Config, uint64(block))
+	if err == nil {
+		fmt.Printf("Archive successfully reset to block %d\n", block)
 	}
-	return errors.Join(
-		archive.RestoreBlockHeight(block),
-		archive.Close(),
-	)
+	return err
 }
