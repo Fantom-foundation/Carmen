@@ -67,7 +67,7 @@ func TestIO_ExportAndImportAsArchive(t *testing.T) {
 		t.Fatalf("verification of imported DB failed: %v", err)
 	}
 
-	db, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	db, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to open recovered DB: %v", err)
 	}

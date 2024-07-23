@@ -78,7 +78,7 @@ func info(context *cli.Context) error {
 			return fmt.Errorf("error closing forest: %v", err)
 		}
 	} else {
-		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config, mpt.NodeCacheConfig{})
+		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)
 			return nil

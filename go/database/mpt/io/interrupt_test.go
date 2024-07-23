@@ -89,7 +89,7 @@ func createTestLive(t *testing.T, sourceDir string) {
 
 func createTestArchive(t *testing.T, sourceDir string) {
 	t.Helper()
-	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -113,7 +113,7 @@ func checkCanOpenLiveDB(t *testing.T, sourceDir string) {
 
 // checkCanOpenLiveDB makes sure Archive is not corrupted and can be opened (and closed)
 func checkCanOpenArchive(t *testing.T, sourceDir string) {
-	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{})
+	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to open archive: %v", err)
 	}

@@ -70,7 +70,7 @@ func reset(context *cli.Context) error {
 func resetArchive(dir string, config mpt.MptConfig, block uint64) error {
 	archive, err := mpt.OpenArchiveTrie(dir, config, mpt.NodeCacheConfig{
 		Capacity: 10,
-	})
+	}, mpt.ArchiveConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to open archive: %w", err)
 	}

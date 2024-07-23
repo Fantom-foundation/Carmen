@@ -43,7 +43,7 @@ import (
 func TestArchiveTrie_OpenAndClose(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -56,11 +56,11 @@ func TestArchiveTrie_OpenAndClose(t *testing.T) {
 
 func TestArchiveTrie_CanOnlyBeOpenedOnce(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to open test archive: %v", err)
 	}
-	if _, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
+	if _, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{}); err == nil {
 		t.Fatalf("archive should not be accessible by more than one instance")
 	}
 	if err := archive.Close(); err != nil {
@@ -71,7 +71,7 @@ func TestArchiveTrie_CanOnlyBeOpenedOnce(t *testing.T) {
 func TestArchiveTrie_CanBeReOpened(t *testing.T) {
 	dir := t.TempDir()
 	for i := 0; i < 5; i++ {
-		archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+		archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 		if err != nil {
 			t.Fatalf("failed to open test archive: %v", err)
 		}
@@ -83,7 +83,7 @@ func TestArchiveTrie_CanBeReOpened(t *testing.T) {
 
 func TestArchiveTrie_Open_Fails_Wrong_Roots(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("cannot init archive trie: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestArchiveTrie_Open_Fails_Wrong_Roots(t *testing.T) {
 		t.Fatalf("cannot update roots: %v", err)
 	}
 
-	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{}); err == nil {
 		_ = archive.Close()
 		t.Errorf("openning archive should not succeed")
 	}
@@ -104,7 +104,7 @@ func TestArchiveTrie_Open_Fails_Wrong_Roots(t *testing.T) {
 
 func TestArchiveTrie_Open_Fails_Too_Short_Roots(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("cannot init archive trie: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestArchiveTrie_Open_Fails_Too_Short_Roots(t *testing.T) {
 		t.Fatalf("cannot update roots: %v", err)
 	}
 
-	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{}); err == nil {
 		_ = archive.Close()
 		t.Errorf("opening archive should not succeed")
 	}
@@ -125,7 +125,7 @@ func TestArchiveTrie_Open_Fails_Too_Short_Roots(t *testing.T) {
 
 func TestArchiveTrie_Open_Fails_CannotOpen_Roots(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("cannot init archive trie: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestArchiveTrie_Open_Fails_CannotOpen_Roots(t *testing.T) {
 		t.Fatalf("cannot chmod roots file: %v", err)
 	}
 
-	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{}); err == nil {
 		_ = archive.Close()
 		t.Errorf("opening archive should not succeed")
 	}
@@ -146,7 +146,7 @@ func TestArchiveTrie_Open_Fails_CannotOpen_Roots(t *testing.T) {
 
 func TestArchiveTrie_Open_Fails_Wrong_ForestMeta(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("cannot init archive trie: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestArchiveTrie_Open_Fails_Wrong_ForestMeta(t *testing.T) {
 		t.Fatalf("cannot update meta: %v", err)
 	}
 
-	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{}); err == nil {
 		_ = archive.Close()
 		t.Errorf("openning archive should not succeed")
 	}
@@ -167,7 +167,7 @@ func TestArchiveTrie_Open_Fails_Wrong_ForestMeta(t *testing.T) {
 
 func TestArchiveTrie_Open_Fails_Wrong_TrieMeta(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("cannot init archive trie: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestArchiveTrie_Open_Fails_Wrong_TrieMeta(t *testing.T) {
 		t.Fatalf("cannot update meta: %v", err)
 	}
 
-	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{}); err == nil {
 		_ = archive.Close()
 		t.Errorf("openning archive should not succeed")
 	}
@@ -188,7 +188,7 @@ func TestArchiveTrie_Open_Fails_Wrong_TrieMeta(t *testing.T) {
 
 func TestArchiveTrie_Open_Fails_Wrong_Codes(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("cannot init archive trie: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestArchiveTrie_Open_Fails_Wrong_Codes(t *testing.T) {
 		t.Fatalf("cannot update codes: %v", err)
 	}
 
-	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{}); err == nil {
 		_ = archive.Close()
 		t.Errorf("openning archive should not succeed")
 	}
@@ -210,7 +210,7 @@ func TestArchiveTrie_Open_Fails_Wrong_Codes(t *testing.T) {
 func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -248,7 +248,7 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -292,7 +292,7 @@ func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 
 func TestArchiveTrie_VerifyArchive_Failure_Meta(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("cannot init archive trie: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 			}
 
 			archiveDir := t.TempDir()
-			archive, err := OpenArchiveTrie(archiveDir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(archiveDir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -412,7 +412,7 @@ func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -463,7 +463,7 @@ func TestArchiveTrie_Add_DuplicatedBlock(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -488,7 +488,7 @@ func TestArchiveTrie_Add_UpdateFailsHashing(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -555,7 +555,7 @@ func TestArchiveTrie_Add_LiveStateFailsHashing(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -582,7 +582,7 @@ func TestArchiveTrie_Add_LiveStateFailsCreateAccount(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -609,7 +609,7 @@ func TestArchiveTrie_Add_FreezingFails(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to open archive, err %v", err)
 			}
@@ -637,7 +637,7 @@ func TestArchiveTrie_GettingView_Block_OutOfRange(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -666,7 +666,7 @@ func TestArchiveTrie_GetCodes(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -720,7 +720,7 @@ func TestArchiveTrie_GetHash(t *testing.T) {
 			dir := t.TempDir()
 
 			{
-				archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+				archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 				if err != nil {
 					t.Fatalf("failed to create empty archive, err %v", err)
 				}
@@ -736,7 +736,7 @@ func TestArchiveTrie_GetHash(t *testing.T) {
 				}
 			}
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -761,7 +761,7 @@ func TestArchiveTrie_CannotGet_AccountHash(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -775,7 +775,7 @@ func TestArchiveTrie_CannotGet_AccountHash(t *testing.T) {
 func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 	for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
 		t.Run(config.Name, func(t *testing.T) {
-			arch, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			arch, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			defer func() {
 				if err := arch.Close(); err != nil {
 					t.Fatalf("failed to close archive; %s", err)
@@ -837,7 +837,7 @@ func TestArchiveTrie_GetDiffProducesValidResults(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -936,7 +936,7 @@ func TestArchiveTrie_GetDiffDetectsInvalidInput(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -987,7 +987,7 @@ func TestArchiveTrie_GetDiffForBlockProducesValidResults(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -1047,7 +1047,7 @@ func TestArchiveTrie_GetDiffForBlockDetectsEmptyArchive(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -1065,7 +1065,7 @@ func TestArchiveTrie_GetMemoryFootprint(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -1085,7 +1085,7 @@ func TestArchiveTrie_Dump(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -1105,7 +1105,7 @@ func TestArchiveTrie_VerificationOfArchiveWithMissingFileFails(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -1145,7 +1145,7 @@ func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -1406,7 +1406,7 @@ func TestRootList_CanParticipateToCheckpointOperations(t *testing.T) {
 func TestArchiveTrie_RecreateAccount_ClearStorage(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -1457,7 +1457,7 @@ func TestArchiveTrie_RecreateAccount_ClearStorage(t *testing.T) {
 
 func TestArchiveTrie_QueryLoadTest(t *testing.T) {
 	// Goal: stress-test an archive with a limited node cache.
-	archive, err := OpenArchiveTrie(t.TempDir(), S5ArchiveConfig, NodeCacheConfig{Capacity: 30_000})
+	archive, err := OpenArchiveTrie(t.TempDir(), S5ArchiveConfig, NodeCacheConfig{Capacity: 30_000}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -1591,7 +1591,7 @@ func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
 			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr).MaxTimes(1)
 			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr).MaxTimes(1)
 
-			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("cannot open archive: %v", err)
 			}
@@ -1676,7 +1676,7 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 			db.EXPECT().Freeze(gomock.Any()).AnyTimes()
 			db.EXPECT().CheckAll(gomock.Any()).AnyTimes()
 
-			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("cannot open archive: %v", err)
 			}
@@ -1753,7 +1753,7 @@ var archiveGetters = map[string]func(archive archive.Archive) error{
 }
 
 func BenchmarkArchiveFlush_Roots(b *testing.B) {
-	archive, err := OpenArchiveTrie(b.TempDir(), S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+	archive, err := OpenArchiveTrie(b.TempDir(), S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 	if err != nil {
 		b.Fatalf("cannot open archive: %v", err)
 	}
@@ -1771,7 +1771,7 @@ func TestArchive_CreateExampleArchive(t *testing.T) {
 	if err := os.RemoveAll(dir); err != nil {
 		t.Fatalf("cannot remove directory: %v", err)
 	}
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("cannot open archive: %v", err)
 	}
@@ -1847,7 +1847,15 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 			fmt.Printf("running test %s\n", name)
 			// Create an archive and fill it with blocks.
 			{
-				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				archive, err := OpenArchiveTrie(
+					dir, S5ArchiveConfig,
+					NodeCacheConfig{
+						Capacity: 1000,
+					},
+					ArchiveConfig{
+						CheckpointInterval: 10,
+					},
+				)
 				if err != nil {
 					t.Fatalf("cannot open archive: %v", err)
 				}
@@ -1877,7 +1885,7 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 
 			// Reset archive to checkpoint.
 			{
-				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 				if err != nil {
 					t.Fatalf("cannot open archive: %v", err)
 				}
@@ -1915,7 +1923,7 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 
 			// Check that restored archive can be opened again.
 			{
-				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 				if err != nil {
 					t.Fatalf("cannot open archive: %v", err)
 				}
@@ -2007,7 +2015,7 @@ func TestArchive_ArchiveRecoveryEndToEndTest(t *testing.T) {
 			fmt.Printf("running test %s\n", name)
 			// Create an archive and fill it with blocks.
 			{
-				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 				if err != nil {
 					t.Fatalf("cannot open archive: %v", err)
 				}
@@ -2040,7 +2048,7 @@ func TestArchive_ArchiveRecoveryEndToEndTest(t *testing.T) {
 
 			// Check that restored archive can be opened again.
 			{
-				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 				if err != nil {
 					t.Fatalf("cannot open archive: %v", err)
 				}

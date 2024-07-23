@@ -41,7 +41,7 @@ var stateFactories = map[string]func(string) (io.Closer, error){
 		return OpenGoFileState(dir, S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	},
 	"archive": func(dir string) (io.Closer, error) {
-		return OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+		return OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	},
 	"verify": func(dir string) (io.Closer, error) { return openVerificationNodeSource(dir, S5LiveConfig) },
 }

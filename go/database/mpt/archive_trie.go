@@ -48,9 +48,21 @@ type ArchiveTrie struct {
 
 	// Check-point support for DB healing.
 	checkpointCoordinator utils.CheckpointCoordinator
+	checkpointInterval    int
 }
 
-func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheConfig) (*ArchiveTrie, error) {
+// ArchiveConfig is the configuration for the archive trie.
+type ArchiveConfig struct {
+	// The number of blocks after which a checkpoint is created.
+	CheckpointInterval int
+}
+
+func OpenArchiveTrie(
+	directory string,
+	config MptConfig,
+	cacheConfig NodeCacheConfig,
+	archiveConfig ArchiveConfig,
+) (*ArchiveTrie, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
@@ -90,6 +102,11 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		return nil, errors.Join(err, head.Close())
 	}
 
+	checkpointInterval := archiveConfig.CheckpointInterval
+	if checkpointInterval <= 0 {
+		checkpointInterval = 10_000
+	}
+
 	return &ArchiveTrie{
 		head:                  state,
 		forest:                forest,
@@ -97,6 +114,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		roots:                 roots,
 		rootFile:              rootsFile,
 		checkpointCoordinator: coordinator,
+		checkpointInterval:    checkpointInterval,
 	}, nil
 }
 
@@ -127,7 +145,8 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	defer a.addMutex.Unlock()
 
 	a.rootsMutex.Lock()
-	if uint64(a.roots.length()) > block {
+	previousBlockLength := a.roots.length()
+	if uint64(previousBlockLength) > block {
 		a.rootsMutex.Unlock()
 		return fmt.Errorf("block %d already present", block)
 	}
@@ -180,10 +199,14 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	a.roots.append(Root{a.head.Root(), hash})
 	a.rootsMutex.Unlock()
 
-	// Create a new checkpoint.
-	if block%10 == 0 {
-		if err := a.CreateCheckpoint(); err != nil {
-			return err
+	// Create a new checkpoint if we crossed an interval boundary.
+	if previousBlockLength > 0 {
+		oldCheckpointInterval := (previousBlockLength - 1) / a.checkpointInterval
+		newCheckpointInterval := int(block) / a.checkpointInterval
+		if oldCheckpointInterval != newCheckpointInterval {
+			if err := a.CreateCheckpoint(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -399,7 +422,7 @@ func RestoreCheckpoint(directory string, config MptConfig) error {
 		}
 	}
 
-	archive, err := OpenArchiveTrie(directory, config, NodeCacheConfig{Capacity: 1})
+	archive, err := OpenArchiveTrie(directory, config, NodeCacheConfig{Capacity: 1}, ArchiveConfig{})
 	if err == nil {
 		err = errors.Join(
 			archive.RestoreCheckpoint(),
