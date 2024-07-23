@@ -91,7 +91,7 @@ func VerifyArchiveTrie(ctx context.Context, directory string, config MptConfig, 
 	if roots.length() == 0 {
 		return nil
 	}
-	return VerifyMptState(ctx, directory, config, roots.roots observer)
+	return VerifyMptState(ctx, directory, config, roots.roots, observer)
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
