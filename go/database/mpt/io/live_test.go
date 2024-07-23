@@ -298,7 +298,7 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 	var expectedHashes []common.Hash
 
 	for i := 0; i < M; i++ {
-		code := []byte{1, 2, 3}
+		code := []byte{1, 2, 3, byte(i)}
 		u := uint64(i)
 		update := common.Update{}
 		for j := 0; j < N; j++ {

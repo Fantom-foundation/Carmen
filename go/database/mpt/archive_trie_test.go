@@ -1686,7 +1686,6 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 
 func TestArchiveTrie_VisitTrie_CorrectDataIsVisited(t *testing.T) {
 	for _, config := range allMptConfigs {
-
 		t.Run(config.Name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
@@ -1727,13 +1726,12 @@ func TestArchiveTrie_VisitTrie_CorrectDataIsVisited(t *testing.T) {
 			// reset visitor
 			nodeVisitor = NewMockNodeVisitor(ctrl)
 			nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(func(node Node, info NodeInfo) {
-				switch node.(type) {
+				switch n := node.(type) {
 				case *AccountNode:
 					found = true
-					n := node.(*AccountNode)
 					a := n.Address()
 					if a != addr {
-						t.Fatalf("unexpected address node, got: %v, want: %v", a, addr)
+						t.Fatalf("unexpected address node, got: %s, want: %s", a, addr)
 					}
 				}
 			}).MinTimes(1)
