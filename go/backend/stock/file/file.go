@@ -100,8 +100,8 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 			}
 		}},
 		lastCheckpoint:               committed.Checkpoint,
-		numValuesCoveredByCheckpoint: I(committed.NumValues),
-		freeListSizeOfCheckpoint:     int(committed.FreeListSize),
+		numValuesCoveredByCheckpoint: I(committed.ValueListLength),
+		freeListSizeOfCheckpoint:     int(committed.FreeListLength),
 	}, nil
 }
 
@@ -419,9 +419,10 @@ func (s *fileStock[I, V]) Prepare(checkpoint utils.Checkpoint) error {
 
 	pendingFile := filepath.Join(s.directory, "pending.json")
 	return writeCheckpointMetaData(pendingFile, checkpointMetaData{
-		Checkpoint:   checkpoint,
-		NumValues:    uint64(s.numValuesCoveredByCheckpoint),
-		FreeListSize: uint64(s.freeListSizeOfCheckpoint),
+		Checkpoint:      checkpoint,
+		ValueListLength: uint64(s.numValueSlots),
+		NumValuesInFile: uint64(s.numValuesInFile),
+		FreeListLength:  uint64(s.freelist.Size()),
 	})
 }
 
@@ -447,8 +448,8 @@ func (s *fileStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
 	}
 
 	s.lastCheckpoint = checkpoint
-	s.numValuesCoveredByCheckpoint = I(meta.NumValues)
-	s.freeListSizeOfCheckpoint = int(meta.FreeListSize)
+	s.numValuesCoveredByCheckpoint = I(meta.ValueListLength)
+	s.freeListSizeOfCheckpoint = int(meta.FreeListLength)
 	return nil
 }
 
@@ -471,8 +472,8 @@ func (s *fileStock[I, V]) Abort(checkpoint utils.Checkpoint) error {
 		}
 		meta = checkpointMetaData{}
 	}
-	s.numValuesCoveredByCheckpoint = I(meta.NumValues)
-	s.freeListSizeOfCheckpoint = int(meta.FreeListSize)
+	s.numValuesCoveredByCheckpoint = I(meta.ValueListLength)
+	s.freeListSizeOfCheckpoint = int(meta.FreeListLength)
 	return nil
 }
 
@@ -499,9 +500,10 @@ func (s *fileStock[I, V]) Restore(checkpoint utils.Checkpoint) error {
 	if meta.Checkpoint != checkpoint {
 		return fmt.Errorf("inconsistent data in checkpoint metadata, expected checkpoint %d, got %d", checkpoint, meta.Checkpoint)
 	}
-	s.numValueSlots = I(meta.NumValues)
+	s.numValueSlots = I(meta.ValueListLength)
+	s.numValuesInFile = int64(meta.NumValuesInFile)
 	s.numValuesCoveredByCheckpoint = s.numValueSlots
-	s.freeListSizeOfCheckpoint = int(meta.FreeListSize)
+	s.freeListSizeOfCheckpoint = int(meta.FreeListLength)
 
 	for s.freelist.Size() > s.freeListSizeOfCheckpoint {
 		if _, err := s.freelist.Pop(); err != nil {
@@ -544,9 +546,10 @@ func isDirectory(path string) bool {
 }
 
 type checkpointMetaData struct {
-	Checkpoint   utils.Checkpoint
-	NumValues    uint64
-	FreeListSize uint64
+	Checkpoint      utils.Checkpoint
+	ValueListLength uint64
+	NumValuesInFile uint64
+	FreeListLength  uint64
 }
 
 func readCheckpointMetaData(file string) (checkpointMetaData, error) {
