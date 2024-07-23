@@ -54,6 +54,38 @@ const (
 	EthereumHash = HashType(0)
 )
 
+// mptStateVisitor is an interface for Tries that allows for visiting the Trie nodes
+// and furthermore getting its properties such as a root hash and contract codes.
+type mptStateVisitor interface {
+	// Visit allows for traverse the whole trie.
+	Visit(visitor mpt.NodeVisitor) error
+	// GetHash returns the hash of the represented Trie.
+	GetHash() (common.Hash, error)
+	// GetCodeForHash returns byte code for given hash.
+	GetCodeForHash(common.Hash) []byte
+}
+
+type exportableArchiveTrie struct {
+	trie  *mpt.ArchiveTrie
+	block uint64
+	codes map[common.Hash][]byte
+}
+
+func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
+	return e.trie.VisitTrie(e.block, visitor)
+}
+
+func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
+	return e.trie.GetHash(e.block)
+}
+
+func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
+	if e.codes == nil || len(e.codes) == 0 {
+		e.codes = e.trie.GetCodes()
+	}
+	return e.codes[hash]
+}
+
 // Export opens a LiveDB instance retained in the given directory and writes
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
@@ -86,7 +118,7 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 	}
 
 	if info.Config.Name != mpt.S5ArchiveConfig.Name {
-		return fmt.Errorf("can only support exportLive of S5 Archive instances, found %v in directory", info.Config.Name)
+		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
 	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{})

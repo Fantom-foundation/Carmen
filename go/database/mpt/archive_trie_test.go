@@ -1684,13 +1684,11 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 	}
 }
 
-func TestArchiveTrie_VisitTrie(t *testing.T) {
+func TestArchiveTrie_VisitTrie_CorrectDataIsVisited(t *testing.T) {
 	for _, config := range allMptConfigs {
 
 		t.Run(config.Name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			nodeVisitor := NewMockNodeVisitor(ctrl)
-			nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).MinTimes(1)
 
 			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
@@ -1698,22 +1696,89 @@ func TestArchiveTrie_VisitTrie(t *testing.T) {
 			}
 			defer archive.Close()
 
-			err = archive.Add(2, common.Update{
-				CreatedAccounts: []common.Address{{1}, {2}},
+			addr := common.Address{1}
+
+			err = archive.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr},
 				Nonces: []common.NonceUpdate{
-					{Account: common.Address{1}, Nonce: common.ToNonce(1)},
-					{Account: common.Address{2}, Nonce: common.ToNonce(2)},
-				},
-				Slots: []common.SlotUpdate{
-					{Account: common.Address{1}, Key: common.Key{1}, Value: common.Value{3}},
-					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
-					{Account: common.Address{1}, Key: common.Key{3}, Value: common.Value{1}},
+					{Account: addr, Nonce: common.ToNonce(1)},
 				},
 			}, nil)
 
-			err = archive.VisitTrie(2, nodeVisitor)
+			var found bool
+			nodeVisitor := NewMockNodeVisitor(ctrl)
+			nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(func(node Node, info NodeInfo) {
+				switch node.(type) {
+				case EmptyNode:
+					found = true
+				}
+			}).MinTimes(1)
+
+			err = archive.VisitTrie(0, nodeVisitor)
 			if err != nil {
-				return
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !found {
+				t.Error("empty block must have empty node")
+			}
+			found = false
+
+			// reset visitor
+			nodeVisitor = NewMockNodeVisitor(ctrl)
+			nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(func(node Node, info NodeInfo) {
+				switch node.(type) {
+				case *AccountNode:
+					found = true
+					n := node.(*AccountNode)
+					a := n.Address()
+					if a != addr {
+						t.Fatalf("unexpected address node, got: %v, want: %v", a, addr)
+					}
+				}
+			}).MinTimes(1)
+
+			err = archive.VisitTrie(1, nodeVisitor)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !found {
+				t.Error("account node was not found")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_VisitTrie_InvalidBlock(t *testing.T) {
+	for _, config := range allMptConfigs {
+
+		t.Run(config.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			nodeVisitor := NewMockNodeVisitor(ctrl)
+
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			if err != nil {
+				t.Fatalf("failed to open empty archive: %v", err)
+			}
+			defer archive.Close()
+
+			addr := common.Address{1}
+
+			err = archive.Add(0, common.Update{
+				CreatedAccounts: []common.Address{addr},
+				Nonces: []common.NonceUpdate{
+					{Account: addr, Nonce: common.ToNonce(1)},
+				},
+			}, nil)
+
+			err = archive.VisitTrie(1, nodeVisitor)
+			if err == nil {
+				t.Fatal("error is expected")
+			}
+
+			if got, want := err.Error(), fmt.Sprintf("invalid block: %d >= %d", 1, 1); !strings.EqualFold(got, want) {
+				t.Errorf("unexpected error, got: %v, want: %v", got, want)
 			}
 
 		})

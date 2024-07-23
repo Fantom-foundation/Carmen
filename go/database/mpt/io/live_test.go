@@ -291,39 +291,25 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 		t.Fatalf("failed to create archive: %v", err)
 	}
 	const (
-		exportedBlockHeight = uint64(2)
-		M                   = 10
-		N                   = 3
+		M = 10
+		N = 3
 	)
 
 	var expectedHashes []common.Hash
 
 	for i := 0; i < M; i++ {
-
 		code := []byte{1, 2, 3}
 		u := uint64(i)
-
 		update := common.Update{}
 		for j := 0; j < N; j++ {
-			newAddr := common.AddressFromNumber(i + j)
+			newAddr := common.AddressFromNumber(j)
 
 			update.CreatedAccounts = append(update.CreatedAccounts, newAddr)
-			update.Balances = append(update.Balances, common.BalanceUpdate{Account: newAddr, Balance: amount.New(u)})
-			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: newAddr, Nonce: common.ToNonce(u)})
+			update.Balances = append(update.Balances, common.BalanceUpdate{Account: newAddr, Balance: amount.New(u + 1)})
+			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: newAddr, Nonce: common.ToNonce(u + 1)})
 			update.Codes = append(update.Codes, common.CodeUpdate{Account: newAddr, Code: code})
-			update.Slots = append(update.Slots, common.SlotUpdate{Account: newAddr, Key: common.Key{1}, Value: common.Value{1}})
+			update.Slots = append(update.Slots, common.SlotUpdate{Account: newAddr, Key: common.Key{byte(j)}, Value: common.Value{byte(i)}})
 		}
-
-		if i%2 != 0 {
-			updatedAddr := common.AddressFromNumber(i)
-			update.Balances = append(update.Balances, common.BalanceUpdate{Account: updatedAddr, Balance: amount.New(u)})
-			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: updatedAddr, Nonce: common.ToNonce(u)})
-			update.Codes = append(update.Codes, common.CodeUpdate{Account: updatedAddr, Code: code})
-			update.Slots = append(update.Slots, common.SlotUpdate{Account: updatedAddr, Key: common.Key{1}, Value: common.Value{1}})
-		} else {
-			update.DeletedAccounts = append(update.DeletedAccounts, common.AddressFromNumber(i))
-		}
-
 		err = archive.Add(u, update, nil)
 		if err != nil {
 			t.Fatalf("failed to create block in archive: %v", err)
