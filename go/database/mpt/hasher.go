@@ -165,7 +165,8 @@ func (h directHasher) hash(
 
 		hasher.Write([]byte{'A'})
 		hasher.Write(node.address[:])
-		hasher.Write(node.info.Balance[:])
+		b := node.info.Balance.Bytes32()
+		hasher.Write(b[:])
 		hasher.Write(node.info.Nonce[:])
 		hasher.Write(node.info.CodeHash[:])
 		hasher.Write(node.storageHash[:])
@@ -348,56 +349,9 @@ func (h ethHasher) updateHashesInternal(
 			// At this point the hashes of all children are up-to-date.
 			// They can now be transferred to the parents.
 			node := cur.handle.Get()
-			switch cur := node.(type) {
-			case *BranchNode:
-				for i := 0; i < len(cur.children); i++ {
-					if !cur.children[i].Id().IsEmpty() && cur.isChildHashDirty(byte(i)) {
-						handle, e := manager.getViewAccess(&cur.children[i])
-						if e != nil {
-							err = e
-							break
-						}
-						hash, dirty := handle.Get().GetHash()
-						if dirty {
-							panic("FATAL: detected dirty child of branch node\n")
-						}
-						cur.hashes[i] = hash
-						cur.setEmbedded(byte(i), embedded[cur.children[i].Id()])
-						handle.Release()
-					}
-				}
-				cur.clearChildHashDirtyFlags()
-			case *ExtensionNode:
-				if cur.nextHashDirty {
-					handle, e := manager.getViewAccess(&cur.next)
-					if e != nil {
-						err = e
-						break
-					}
-					hash, dirty := handle.Get().GetHash()
-					if dirty {
-						panic("FATAL: detected dirty child of extension node\n")
-					}
-					cur.nextIsEmbedded = embedded[cur.next.Id()]
-					cur.nextHash = hash
-					handle.Release()
-					cur.nextHashDirty = false
-				}
-			case *AccountNode:
-				if cur.storageHashDirty && !cur.storage.Id().IsEmpty() {
-					handle, e := manager.getViewAccess(&cur.storage)
-					if e != nil {
-						err = e
-						break
-					}
-					hash, dirty := handle.Get().GetHash()
-					if dirty {
-						panic("FATAL: detected dirty child of account node\n")
-					}
-					cur.storageHash = hash
-					handle.Release()
-					cur.storageHashDirty = false
-				}
+			if e := updateChildrenHashes(manager, node, embedded); e != nil {
+				err = e
+				break
 			}
 
 			// Test whether this node is to be embedded.
@@ -460,12 +414,64 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 
 	// The hash for embedded nodes is the node representation.
 	if len(data) < 32 {
-		var hash common.Hash
-		copy(hash[:], data)
-		return hash, nil
+		return common.Hash{}, nil
 	}
 
 	return common.Keccak256(data), nil
+}
+
+// updateChildrenHashes refreshes the hashes of all children of the given node.
+func updateChildrenHashes(manager NodeSource, node Node, embedded map[NodeId]bool) error {
+	switch cur := node.(type) {
+	case *BranchNode:
+		for i := 0; i < len(cur.children); i++ {
+			if !cur.children[i].Id().IsEmpty() && cur.isChildHashDirty(byte(i)) {
+				handle, e := manager.getViewAccess(&cur.children[i])
+				if e != nil {
+					return e
+				}
+				hash, dirty := handle.Get().GetHash()
+				if dirty {
+					panic("FATAL: detected dirty child of branch node\n")
+				}
+				cur.hashes[i] = hash
+				cur.setEmbedded(byte(i), embedded[cur.children[i].Id()])
+				handle.Release()
+			}
+		}
+		cur.clearChildHashDirtyFlags()
+	case *ExtensionNode:
+		if cur.nextHashDirty {
+			handle, e := manager.getViewAccess(&cur.next)
+			if e != nil {
+				return e
+			}
+			hash, dirty := handle.Get().GetHash()
+			if dirty {
+				panic("FATAL: detected dirty child of extension node\n")
+			}
+			cur.nextIsEmbedded = embedded[cur.next.Id()]
+			cur.nextHash = hash
+			handle.Release()
+			cur.nextHashDirty = false
+		}
+	case *AccountNode:
+		if cur.storageHashDirty && !cur.storage.Id().IsEmpty() {
+			handle, e := manager.getViewAccess(&cur.storage)
+			if e != nil {
+				return e
+			}
+			hash, dirty := handle.Get().GetHash()
+			if dirty {
+				panic("FATAL: detected dirty child of account node\n")
+			}
+			cur.storageHash = hash
+			handle.Release()
+			cur.storageHashDirty = false
+		}
+	}
+
+	return nil
 }
 
 // encodeToRlp computes the RLP encoding of the given node. If needed, additional nodes are
@@ -630,7 +636,7 @@ func encodeAccountToRlp(
 	items := *ptr
 
 	items[0] = rlp.Uint64{Value: node.info.Nonce.ToUint64()}
-	items[1] = rlp.BigInt{Value: node.info.Balance.ToBigInt()}
+	items[1] = rlp.BigInt{Value: node.info.Balance.ToBig()}
 	if storageRoot.Id().IsEmpty() {
 		items[2] = rlp.Hash{Hash: &EmptyNodeEthereumHash}
 	} else {
@@ -747,6 +753,17 @@ func getEncodedPartialPathSize(numNibbles int) int {
 // marked dirty, this information is updated. Thus, calls to this function may
 // cause updates to the state of some nodes.
 func (h ethHasher) isEmbedded(
+	node Node,
+	source NodeSource,
+) (bool, error) {
+	return isNodeEmbedded(node, source)
+}
+
+// isNodeEmbedded determines whether the given node is an embedded node or not.
+// If information required for determining the embedded-state of the node is
+// marked dirty, this information is updated. Thus, calls to this function may
+// cause updates to the state of some nodes.
+func isNodeEmbedded(
 	node Node,
 	source NodeSource,
 ) (bool, error) {

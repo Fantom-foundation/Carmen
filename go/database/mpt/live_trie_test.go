@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -29,7 +30,7 @@ import (
 func TestLiveTrie_EmptyTrieIsConsistent(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -51,7 +52,7 @@ func TestLiveTrie_Cannot_Open_Memory(t *testing.T) {
 				t.Fatalf("cannot update meta: %v", err)
 			}
 
-			if _, err := OpenInMemoryLiveTrie(dir, config, 1024); err == nil {
+			if _, err := OpenInMemoryLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}); err == nil {
 				t.Errorf("opening trie should fail")
 			}
 
@@ -68,7 +69,7 @@ func TestLiveTrie_Cannot_Open_File(t *testing.T) {
 				t.Fatalf("cannot update meta: %v", err)
 			}
 
-			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
+			if _, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}); err == nil {
 				t.Errorf("opening trie should fail")
 			}
 
@@ -85,7 +86,7 @@ func TestLiveTrie_Cannot_MakeTrie_CorruptMeta(t *testing.T) {
 				t.Fatalf("cannot update meta: %v", err)
 			}
 
-			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
+			if _, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}); err == nil {
 				t.Errorf("opening trie should fail")
 			}
 
@@ -102,7 +103,7 @@ func TestLiveTrie_Cannot_MakeTrie_CannotReadMeta(t *testing.T) {
 				t.Fatalf("cannot update meta: %v", err)
 			}
 
-			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
+			if _, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}); err == nil {
 				t.Errorf("opening trie should fail")
 			}
 
@@ -149,7 +150,7 @@ func TestLiveTrie_Fail_Read_Data(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			mpt, err := OpenFileLiveTrie(dir, config, 1024)
+			mpt, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("cannot open trie: %s", err)
 			}
@@ -194,7 +195,7 @@ func TestLiveTrie_Cannot_Flush_Metadata(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			mpt, err := OpenFileLiveTrie(dir, config, 1024)
+			mpt, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("opening trie should not fail: %s", err)
 			}
@@ -216,7 +217,7 @@ func TestLiveTrie_Cannot_Flush_Hashes(t *testing.T) {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
 
-			mpt, err := OpenFileLiveTrie(dir, config, 1024)
+			mpt, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("opening trie should not fail: %s", err)
 			}
@@ -238,7 +239,7 @@ func TestLiveTrie_Cannot_Flush_Hashes(t *testing.T) {
 func TestLiveTrie_NonExistingAccountsHaveEmptyInfo(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -259,7 +260,7 @@ func TestLiveTrie_NonExistingAccountsHaveEmptyInfo(t *testing.T) {
 func TestLiveTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -272,7 +273,7 @@ func TestLiveTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 			addr := common.Address{1}
 			info := AccountInfo{
 				Nonce:    common.Nonce{1},
-				Balance:  common.Balance{2},
+				Balance:  amount.New(2),
 				CodeHash: common.Hash{3},
 			}
 
@@ -300,7 +301,7 @@ func TestLiveTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 func TestLiveTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -344,7 +345,7 @@ func TestLiveTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
 func TestLiveTrie_NonExistingValueHasZeroValue(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -372,7 +373,7 @@ func TestLiveTrie_NonExistingValueHasZeroValue(t *testing.T) {
 func TestLiveTrie_ValuesCanBeSetAndRetrieved(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -407,11 +408,11 @@ func TestLiveTrie_ValuesCanBeSetAndRetrieved(t *testing.T) {
 func TestLiveTrie_SameContentProducesSameHash(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			trie1, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie1, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			trie2, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie2, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -467,7 +468,7 @@ func TestLiveTrie_SameContentProducesSameHash(t *testing.T) {
 func TestLiveTrie_ChangeInTrieSubstructureUpdatesHash(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -504,7 +505,7 @@ func TestLiveTrie_InsertLotsOfData(t *testing.T) {
 			t.Parallel()
 			const N = 30
 
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024*1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024 * 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -567,7 +568,7 @@ func TestLiveTrie_InsertLotsOfValues(t *testing.T) {
 			t.Parallel()
 			const N = 500
 
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -655,7 +656,7 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 			t.Parallel()
 			const N = 200000
 
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024*1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024 * 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -772,7 +773,7 @@ func TestLiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			trie, err := OpenFileLiveTrie(dir, config, 1024)
+			trie, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to create empty trie, err %v", err)
 			}
@@ -809,7 +810,7 @@ func TestLiveTrie_VerificationOfLiveTrieWithMissingFileFails(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			trie, err := OpenFileLiveTrie(dir, config, 1024)
+			trie, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to create empty trie, err %v", err)
 			}
@@ -850,7 +851,7 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			trie, err := OpenFileLiveTrie(dir, config, 1024)
+			trie, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to create empty trie, err %v", err)
 			}
@@ -894,6 +895,28 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	}
 }
 
+func TestLiveTrie_HasEmptyStorage(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			addr := common.Address{0x1}
+			ctrl := gomock.NewController(t)
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().HasEmptyStorage(gomock.Any(), addr)
+
+			mpt, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
+			if err != nil {
+				t.Fatalf("failed to open live trie: %v", err)
+			}
+			mpt.forest = db
+
+			mpt.HasEmptyStorage(addr)
+		})
+	}
+
+}
+
 func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 	accounts := getTestAddresses(100)
 	keys := getTestKeys(100)
@@ -932,7 +955,7 @@ func BenchmarkValueInsertionInMemoryTrie(b *testing.B) {
 	for _, config := range allMptConfigs {
 		b.Run(config.Name, func(b *testing.B) {
 			b.StopTimer()
-			trie, err := OpenInMemoryLiveTrie(b.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(b.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				b.Fatalf("failed to open trie: %v", err)
 			}
@@ -948,7 +971,7 @@ func BenchmarkValueInsertionInFileTrie(b *testing.B) {
 	for _, config := range allMptConfigs {
 		b.Run(config.Name, func(b *testing.B) {
 			b.StopTimer()
-			trie, err := OpenFileLiveTrie(b.TempDir(), config, 1024)
+			trie, err := OpenFileLiveTrie(b.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				b.Fatalf("failed to open trie: %v", err)
 			}

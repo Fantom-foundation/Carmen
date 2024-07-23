@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
@@ -67,7 +68,7 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of LiveDB instances, found %v in directory", info.Mode)
 	}
 
-	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.DefaultMptStateCapacity)
+	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.NodeCacheConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to open LiveDB: %v", err)
 	}
@@ -181,7 +182,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	}
 
 	// Create a state.
-	db, err := mpt.OpenGoFileState(directory, config, mpt.DefaultMptStateCapacity)
+	db, err := mpt.OpenGoFileState(directory, config, mpt.NodeCacheConfig{})
 	if err != nil {
 		return root, hash, fmt.Errorf("failed to create empty state: %v", err)
 	}
@@ -191,9 +192,9 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 
 	var (
 		addr    common.Address
+		balance [amount.BytesLength]byte
 		key     common.Key
 		value   common.Value
-		balance common.Balance
 		nonce   common.Nonce
 	)
 
@@ -242,7 +243,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 			if _, err := io.ReadFull(in, balance[:]); err != nil {
 				return root, hash, err
 			}
-			if err := db.SetBalance(addr, balance); err != nil {
+			if err := db.SetBalance(addr, amount.NewFromBytes(balance[:]...)); err != nil {
 				return root, hash, err
 			}
 			if _, err := io.ReadFull(in, nonce[:]); err != nil {
@@ -342,7 +343,8 @@ func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 			e.err = err
 			return mpt.VisitResponseAbort
 		}
-		if _, err := e.out.Write(info.Balance[:]); err != nil {
+		b := info.Balance.Bytes32()
+		if _, err := e.out.Write(b[:]); err != nil {
 			e.err = err
 			return mpt.VisitResponseAbort
 		}

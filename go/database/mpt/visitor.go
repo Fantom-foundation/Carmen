@@ -14,6 +14,7 @@ package mpt
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"strings"
 )
 
@@ -37,8 +38,9 @@ type NodeVisitor interface {
 }
 
 type NodeInfo struct {
-	Id    NodeId // the ID of the visited node
-	Depth *int   // the nesting level of the visited node, only set for tree visits
+	Id       NodeId          // the ID of the visited node
+	Depth    *int            // the nesting level of the visited node, only set for tree visits
+	Embedded tribool.Tribool // true if this node is embedded in another node, tracked in visitPathTo
 }
 
 type VisitResponse int

@@ -14,6 +14,7 @@ import (
 	"fmt"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 
 	"io"
@@ -164,7 +165,7 @@ func newGoMemoryState(params state.Parameters) (state.State, error) {
 	if err != nil {
 		return nil, err
 	}
-	balancesStore, err := storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	balancesStore, err := storemem.NewStore[uint32, amount.Amount](common.AmountSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +310,7 @@ func newGoFileState(params state.Parameters) (state.State, error) {
 	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
+	balancesStore, err := pagedfile.NewStore[uint32, amount.Amount](balancesStorePath, common.AmountSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +491,7 @@ func newGoCachedFileState(params state.Parameters) (state.State, error) {
 	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
+	balancesStore, err := pagedfile.NewStore[uint32, amount.Amount](balancesStorePath, common.AmountSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -542,7 +543,7 @@ func newGoCachedFileState(params state.Parameters) (state.State, error) {
 			cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
-			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, amount.Amount](balancesStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
 			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
@@ -565,7 +566,7 @@ func newGoCachedFileState(params state.Parameters) (state.State, error) {
 			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
-			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, amount.Amount](balancesStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
 			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
@@ -595,7 +596,7 @@ func newGoCachedFileState(params state.Parameters) (state.State, error) {
 			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
-			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, amount.Amount](balancesStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Reincarnation](reincarnationsStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.SlotReincValue](valuesStore, CacheCapacity),
 			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
@@ -639,7 +640,7 @@ func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) 
 		return nil, err
 	}
 	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, backend.BalanceStoreKey, HashTreeFactor)
-	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, backend.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
+	balancesStore, err := ldbstore.NewStore[uint32, amount.Amount](db, backend.BalanceStoreKey, common.AmountSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -768,7 +769,7 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 		return nil, err
 	}
 	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, backend.BalanceStoreKey, HashTreeFactor)
-	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, backend.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
+	balancesStore, err := ldbstore.NewStore[uint32, amount.Amount](db, backend.BalanceStoreKey, common.AmountSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -804,7 +805,7 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 			cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
-			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, amount.Amount](balancesStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
 			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
@@ -827,7 +828,7 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
-			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, amount.Amount](balancesStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
 			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
@@ -853,7 +854,7 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
-			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, amount.Amount](balancesStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.Reincarnation](reincarnationsStore, CacheCapacity),
 			cachedStore.NewStore[uint32, common.SlotReincValue](valuesStore, CacheCapacity),
 			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
@@ -937,7 +938,7 @@ func openArchive(params state.Parameters) (archive archive.Archive, cleanup func
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig, mpt.DefaultMptStateCapacity)
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig, getNodeCacheConfig(params.ArchiveCache))
 		return arch, nil, err
 
 	case state.S5Archive:
@@ -945,7 +946,7 @@ func openArchive(params state.Parameters) (archive archive.Archive, cleanup func
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, mptStateCapacity(params.ArchiveCache))
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, getNodeCacheConfig(params.ArchiveCache))
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)

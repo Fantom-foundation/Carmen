@@ -845,6 +845,374 @@ func TestDatabase_CloseDB_Unfinished_Queries(t *testing.T) {
 	}
 }
 
+func TestDatabase_GetProof(t *testing.T) {
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	codeHashes := make(map[Address]Hash)
+
+	// init data
+	const numBlocks = 100
+	const numAccounts = 11
+	const numKeys = 12
+	for i := 0; i < numBlocks; i++ {
+		if err := db.AddBlock(uint64(i), func(context HeadBlockContext) error {
+			for j := 0; j < numAccounts; j++ {
+				if err := context.RunTransaction(func(tc TransactionContext) error {
+					addr := Address{byte(j)}
+					tc.CreateAccount(addr)
+					tc.SetCode(addr, []byte{byte(j)})
+					codeHashes[addr] = Hash(common.Keccak256([]byte{byte(j)}))
+					tc.SetNonce(addr, uint64(i<<8+j+1))
+					tc.AddBalance(addr, NewAmount(uint64(i<<8+j+1)))
+					for k := 0; k < numKeys; k++ {
+						key := Key{byte(k)}
+						tc.SetState(addr, key, Value{byte(i), byte(j), byte(k)})
+					}
+					return nil
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("cannot add block: %v", err)
+		}
+	}
+
+	if err := db.Flush(); err != nil {
+		t.Fatalf("cannot flush db: %v", err)
+	}
+
+	// collect all roots
+	roots := make([]Hash, 0, numBlocks)
+	for i := 0; i < numBlocks; i++ {
+		if err := db.QueryHistoricState(uint64(i), func(context QueryContext) {
+			roots = append(roots, context.GetStateHash())
+		}); err != nil {
+			t.Fatalf("cannot query state: %v", err)
+		}
+	}
+
+	sums := make(map[Address]Amount)
+
+	// proof properties
+	for i := 0; i < numBlocks; i++ {
+		block, err := db.GetHistoricContext(uint64(i))
+		if err != nil {
+			t.Fatalf("cannot get block: %v", err)
+		}
+		// proof each account and all keys of the account
+		for j := 0; j < numAccounts; j++ {
+			addr := Address{byte(j)}
+			keys := make([]Key, 0, numKeys)
+			for k := 0; k < numKeys; k++ {
+				keys = append(keys, Key{byte(k)})
+			}
+			proof, err := block.GetProof(addr, keys...)
+			if err != nil {
+				t.Errorf("cannot get proof: %v", err)
+			}
+			if !proof.IsValid() {
+				t.Errorf("proof is not valid")
+			}
+
+			balance, complete, err := proof.GetBalance(roots[i], addr)
+			if err != nil {
+				t.Errorf("cannot get balance: %v", err)
+			}
+
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+
+			preBalance, exists := sums[addr]
+			if !exists {
+				preBalance = NewAmount()
+			}
+
+			if got, want := balance, NewAmount(preBalance.Uint64()+uint64(i<<8+j+1)); got != want {
+				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+			}
+			sums[addr] = balance
+
+			nonce, complete, err := proof.GetNonce(roots[i], addr)
+			if err != nil {
+				t.Errorf("cannot get nonce: %v", err)
+			}
+
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+
+			if got, want := nonce, uint64(i<<8+j+1); got != want {
+				t.Errorf("unexpected nonce, wanted %v, got %v", want, got)
+			}
+
+			codeHash, complete, err := proof.GetCodeHash(roots[i], addr)
+			if err != nil {
+				t.Errorf("cannot get nonce: %v", err)
+			}
+
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+
+			if got, want := codeHash, codeHashes[addr]; got != want {
+				t.Errorf("unexpected codeHash, wanted %v, got %v", want, got)
+			}
+
+			/// proof keys
+			for k := 0; k < numKeys; k++ {
+				key := Key{byte(k)}
+				value, complete, err := proof.GetState(roots[i], addr, key)
+				if err != nil {
+					t.Errorf("cannot get state: %v", err)
+				}
+				if !complete {
+					t.Errorf("proof is not complete")
+				}
+				if got, want := value, (Value{byte(i), byte(j), byte(k)}); got != want {
+					t.Errorf("unexpected value, wanted %v, got %v", want, got)
+				}
+			}
+		}
+		if err := block.Close(); err != nil {
+			t.Fatalf("cannot close block: %v", err)
+		}
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("db cannot be closed: %v", err)
+	}
+}
+
+func TestDatabase_GetProof_Serialise_Deserialize(t *testing.T) {
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	// init data
+	const numBlocks = 100
+	const numAccounts = 11
+	const numKeys = 12
+	for i := 0; i < numBlocks; i++ {
+		if err := db.AddBlock(uint64(i), func(context HeadBlockContext) error {
+			for j := 0; j < numAccounts; j++ {
+				if err := context.RunTransaction(func(tc TransactionContext) error {
+					addr := Address{byte(j)}
+					tc.CreateAccount(addr)
+					tc.SetNonce(addr, uint64(i<<8+j+1))
+					for k := 0; k < numKeys; k++ {
+						key := Key{byte(k)}
+						tc.SetState(addr, key, Value{byte(i), byte(j), byte(k)})
+					}
+					return nil
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("cannot add block: %v", err)
+		}
+	}
+
+	if err := db.Flush(); err != nil {
+		t.Fatalf("cannot flush db: %v", err)
+	}
+
+	// collect all roots
+	roots := make([]Hash, 0, numBlocks)
+	for i := 0; i < numBlocks; i++ {
+		if err := db.QueryHistoricState(uint64(i), func(context QueryContext) {
+			roots = append(roots, context.GetStateHash())
+		}); err != nil {
+			t.Fatalf("cannot query state: %v", err)
+		}
+	}
+
+	// proof properties
+	serialized := make([]string, 0, 1024)
+	for i := 0; i < numBlocks; i++ {
+		block, err := db.GetHistoricContext(uint64(i))
+		if err != nil {
+			t.Fatalf("cannot get block: %v", err)
+		}
+		// proof each account and all keys of the account
+		for j := 0; j < numAccounts; j++ {
+			addr := Address{byte(j)}
+			keys := make([]Key, 0, numKeys)
+			for k := 0; k < numKeys; k++ {
+				keys = append(keys, Key{byte(k)})
+			}
+			proof, err := block.GetProof(addr, keys...)
+			if err != nil {
+				t.Errorf("cannot get proof: %v", err)
+			}
+			serialized = append(serialized, proof.GetElements()...)
+		}
+		if err := block.Close(); err != nil {
+			t.Fatalf("cannot close block: %v", err)
+		}
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("db cannot be closed: %v", err)
+	}
+
+	recovered := CreateWitnessProofFromNodes(serialized...)
+	for i := 0; i < numBlocks; i++ {
+		for j := 0; j < numAccounts; j++ {
+			addr := Address{byte(j)}
+
+			nonce, complete, err := recovered.GetNonce(roots[i], addr)
+			if err != nil {
+				t.Errorf("cannot get nonce: %v", err)
+			}
+
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+
+			if got, want := nonce, uint64(i<<8+j+1); got != want {
+				t.Errorf("unexpected nonce, wanted %v, got %v", want, got)
+			}
+
+			/// proof keys
+			for k := 0; k < numKeys; k++ {
+				key := Key{byte(k)}
+				value, complete, err := recovered.GetState(roots[i], addr, key)
+				if err != nil {
+					t.Errorf("cannot get state: %v", err)
+				}
+				if !complete {
+					t.Errorf("proof is not complete")
+				}
+				if got, want := value, (Value{byte(i), byte(j), byte(k)}); got != want {
+					t.Errorf("unexpected value, wanted %v, got %v", want, got)
+				}
+			}
+		}
+	}
+}
+
+func TestDatabase_CloseDB_Unfinished_Proof_CannotCloseDb(t *testing.T) {
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	if err := db.AddBlock(1, func(context HeadBlockContext) error {
+		if err := context.RunTransaction(func(tc TransactionContext) error {
+			addr := Address{1}
+			tc.CreateAccount(addr)
+			tc.SetNonce(addr, uint64(1))
+			return nil
+		}); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("cannot add block: %v", err)
+	}
+
+	if err := db.Flush(); err != nil {
+		t.Fatalf("cannot flush db: %v", err)
+	}
+
+	block, err := db.GetHistoricContext(1)
+	if err != nil {
+		t.Fatalf("cannot get block: %v", err)
+	}
+
+	// attempts to close db must fail
+	if err := db.Close(); !errors.Is(err, errBlockContextRunning) {
+		t.Errorf("closing db should fail: %v", err)
+	}
+
+	_, err = block.GetProof(Address{1})
+	if err != nil {
+		t.Fatalf("cannot get proof: %v", err)
+	}
+
+	// attempts to close db must fail
+	if err := db.Close(); !errors.Is(err, errBlockContextRunning) {
+		t.Errorf("closing db should fail: %v", err)
+	}
+
+	if err := block.Close(); err != nil {
+		t.Fatalf("cannot close block: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("cannot close db: %v", err)
+	}
+}
+
+func TestDatabase_ClosedBlock_CannotGetProof(t *testing.T) {
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	if err := db.AddBlock(1, func(context HeadBlockContext) error {
+		if err := context.RunTransaction(func(tc TransactionContext) error {
+			addr := Address{1}
+			tc.CreateAccount(addr)
+			tc.SetNonce(addr, uint64(1))
+			return nil
+		}); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("cannot add block: %v", err)
+	}
+
+	if err := db.Flush(); err != nil {
+		t.Fatalf("cannot flush db: %v", err)
+	}
+
+	block, err := db.GetHistoricContext(1)
+	if err != nil {
+		t.Fatalf("cannot get block: %v", err)
+	}
+
+	if err := block.Close(); err != nil {
+		t.Fatalf("cannot close block: %v", err)
+	}
+
+	if _, err := block.GetProof(Address{}); err == nil {
+		t.Errorf("getting proof from closed block should fail")
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("cannot close db: %v", err)
+	}
+}
+
+func TestDatabase_GetProof_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := state.NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injectedError")
+	state.EXPECT().CreateWitnessProof(gomock.Any(), gomock.Any()).Return(nil, injectedError)
+	block := archiveBlockContext{
+		commonContext: commonContext{
+			db: &database{},
+		},
+		archiveState: state,
+	}
+
+	if _, err := block.GetProof(Address{}); !errors.Is(err, injectedError) {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestDatabase_BeginBlock_Parallel(t *testing.T) {
 	const loops = 100
 
@@ -1639,4 +2007,17 @@ func TestDatabase_ArchiveCanBeAccessedAsync(t *testing.T) {
 	}()
 
 	wg.Wait()
+}
+
+func TestDatabase_GetMemoryFootprint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := state.NewMockState(ctrl)
+
+	state.EXPECT().GetMemoryFootprint()
+
+	db := &database{
+		db: state,
+	}
+
+	db.GetMemoryFootprint()
 }

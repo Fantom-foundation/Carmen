@@ -12,7 +12,10 @@ package archive
 
 import (
 	"encoding/binary"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+
 	"hash"
 	"sort"
 )
@@ -23,7 +26,7 @@ type AccountUpdate struct {
 	created    bool
 	deleted    bool
 	hasBalance bool
-	balance    common.Balance
+	balance    amount.Amount
 	hasNonce   bool
 	nonce      common.Nonce
 	hasCode    bool
@@ -122,7 +125,8 @@ func (au *AccountUpdate) GetHash(hasher hash.Hash) common.Hash {
 	}
 	hasher.Write([]byte{stateChange})
 	if au.hasBalance {
-		hasher.Write(au.balance[:])
+		b := au.balance.Bytes32()
+		hasher.Write(b[:])
 	}
 	if au.hasNonce {
 		hasher.Write(au.nonce[:])

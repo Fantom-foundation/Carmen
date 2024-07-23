@@ -13,7 +13,9 @@ package mpt
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
 )
 
@@ -136,13 +138,10 @@ func decodeAccountFromRlp(path Path, items rlp.List) (Node, error) {
 		return nil, fmt.Errorf("invalid balance type: got: %T, wanted: String", items.Items[1])
 	}
 	balance := balanceStr.BigInt()
-	balanceInt, err := common.ToBalance(balance)
+	balanceAmount, err := amount.NewFromBigInt(balance)
 	if err != nil {
 		return nil, fmt.Errorf("invalid balance: %v", err)
 	}
-
-	var address common.Address
-	copy(address[:], path.GetPackedNibbles()) // it does not cover full key as it is not available in RLP.
 
 	storageHashStr, ok := items.Items[2].(rlp.String)
 	if !ok {
@@ -165,15 +164,14 @@ func decodeAccountFromRlp(path Path, items rlp.List) (Node, error) {
 	var codeHash common.Hash
 	copy(codeHash[:], codeHashStr.Str)
 
-	return &AccountNode{
-		address:     address,
+	return &decodedAccountNode{AccountNode{
 		storageHash: storageHash,
 		pathLength:  byte(path.Length()),
 		info: AccountInfo{
 			Nonce:    common.ToNonce(nonce),
-			Balance:  balanceInt,
+			Balance:  balanceAmount,
 			CodeHash: codeHash,
-		}}, nil
+		}}, path}, nil
 }
 
 // decodeBranchNodeFromRlp decodes a branch node from RLP-encoded data.
@@ -203,7 +201,11 @@ func decodeEmbeddedOrHashedNode(payload rlp.Item) (node common.Hash, embedded bo
 		if len(item.Str) > common.HashSize {
 			return common.Hash{}, false, fmt.Errorf("node hash is too long: got: %v, wanted: <= 32", len(item.Str))
 		}
-		copy(hash[:], item.Str)
+		if len(item.Str) == 0 {
+			hash = EmptyNodeEthereumHash
+		} else {
+			copy(hash[:], item.Str)
+		}
 	case rlp.List: // embedded node is a two item list of a value node.
 		arr := make([]byte, 0, common.HashSize)
 		if n := copy(hash[:], rlp.EncodeInto(arr, item)); n > 0 && n < common.HashSize {
@@ -256,4 +258,12 @@ func compactPathToNibbles(path []byte) []Nibble {
 	}
 
 	return res[2-odd:]
+}
+
+// decodedAccountNode is an extension of the  account node with the path.
+// It is used for storing hashed path. which is part of the address
+// potentially up to 32bytes long, i.e. exceeding plain 20bytes long address.
+type decodedAccountNode struct {
+	AccountNode
+	suffix Path
 }

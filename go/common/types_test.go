@@ -12,74 +12,8 @@ package common
 
 import (
 	"fmt"
-	"math/big"
 	"testing"
 )
-
-func TestBalance_MaxBalanceIsMaximum(t *testing.T) {
-	balance := GetMaxBalance()
-	for i := range balance {
-		if balance[i] != 255 {
-			t.Errorf("invalid maximum, expected 255, got %d", balance[i])
-		}
-	}
-	asInt := balance.ToBigInt()
-	if asInt.Cmp(maxBalance) != 0 {
-		t.Errorf("maximum constants invalid, expected %v, got %v", asInt, maxBalance)
-	}
-}
-
-var balance_value_pairs = []struct {
-	i *big.Int
-	b Balance
-}{
-	{big.NewInt(0), Balance{}},
-	{big.NewInt(1), Balance{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}},
-	{big.NewInt(2), Balance{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2}},
-	{big.NewInt(256), Balance{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0}},
-	{big.NewInt(1 << 32), Balance{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0}},
-	{maxBalance, GetMaxBalance()},
-}
-
-func TestBigIntToBalance_NilConversion(t *testing.T) {
-	if _, err := ToBalance(nil); err == nil {
-		t.Errorf("converting nil value should fail")
-	}
-}
-
-func TestBigIntToBalanceConversion(t *testing.T) {
-	for _, pair := range balance_value_pairs {
-		balance, err := ToBalance(pair.i)
-		if err != nil {
-			t.Errorf("Failed to convert %v to balance: %v", pair.i, err)
-		}
-		if balance != pair.b {
-			t.Errorf("Incorrect conversion of numeric value %v into balance - wanted %v, got %v", pair.i, pair.b, balance)
-		}
-	}
-}
-
-func TestBalanceToBigIntConversion(t *testing.T) {
-	for _, pair := range balance_value_pairs {
-		val := pair.b.ToBigInt()
-		if val.Cmp(pair.i) != 0 {
-			t.Errorf("Incorrect conversion of balance %v into numeric value - wanted %v, got %v", pair.b, pair.i, val)
-		}
-	}
-}
-
-func TestNegativeValuesCanNotBeConvertedToBalances(t *testing.T) {
-	if _, err := ToBalance(big.NewInt(-1)); err == nil {
-		t.Errorf("Converting negative values should have raised an error.")
-	}
-}
-
-func TestTooLargeValuesCanNotBeConvertedToBalances(t *testing.T) {
-	too_large := (&big.Int{}).Add(maxBalance, one)
-	if _, err := ToBalance(too_large); err == nil {
-		t.Errorf("Converting values exceeding the maximum blance value have raised an error.")
-	}
-}
 
 var nonce_value_pairs = []struct {
 	i uint64

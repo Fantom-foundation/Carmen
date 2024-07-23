@@ -14,7 +14,12 @@ package archive
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 )
+
+// ErrWitnessProofNotSupported is returned when the archive does not support witness proofs.
+const ErrWitnessProofNotSupported = common.ConstError("witness proof not supported")
 
 // An Archive retains a history of state mutations in a blockchain on a
 // block-level granularity. The history is recorded by adding per-block updates.
@@ -35,7 +40,7 @@ type Archive interface {
 	Exists(block uint64, account common.Address) (exists bool, err error)
 
 	// GetBalance allows to fetch a historic balance values for a given account.
-	GetBalance(block uint64, account common.Address) (balance common.Balance, err error)
+	GetBalance(block uint64, account common.Address) (balance amount.Amount, err error)
 
 	// GetCode allows to fetch a historic code values for a given account.
 	GetCode(block uint64, account common.Address) (code []byte, err error)
@@ -51,6 +56,9 @@ type Archive interface {
 
 	// GetHash provides a hash of the state at the given block height.
 	GetHash(block uint64) (hash common.Hash, err error)
+
+	// CreateWitnessProof creates a witness proof for the given account and keys.
+	CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error)
 
 	// MemoryFootprintProvider provides the size of the store in memory in bytes.
 	common.MemoryFootprintProvider

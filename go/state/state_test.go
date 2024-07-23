@@ -15,7 +15,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"math/big"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 	"golang.org/x/crypto/sha3"
@@ -46,9 +46,9 @@ var (
 	val2 = common.Value{0x02}
 	val3 = common.Value{0x03}
 
-	balance1 = common.Balance{0x01}
-	balance2 = common.Balance{0x02}
-	balance3 = common.Balance{0x03}
+	balance1 = amount.New(1)
+	balance2 = amount.New(2)
+	balance3 = amount.New(3)
 
 	nonce1 = common.Nonce{0x01}
 	nonce2 = common.Nonce{0x02}
@@ -277,7 +277,7 @@ func TestLargeStateHashes(t *testing.T) {
 			if i%21 == 0 {
 				update.DeletedAccounts = append(update.DeletedAccounts, address)
 			}
-			update.Balances = append(update.Balances, common.BalanceUpdate{Account: address, Balance: common.Balance{byte(i)}})
+			update.Balances = append(update.Balances, common.BalanceUpdate{Account: address, Balance: amount.New(uint64(i))})
 			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: address, Nonce: common.Nonce{byte(i + 1)}})
 			update.Codes = append(update.Codes, common.CodeUpdate{Account: address, Code: []byte{byte(i), byte(i * 2), byte(i*3 + 2)}})
 		}
@@ -513,8 +513,8 @@ func TestArchive(t *testing.T) {
 			}
 			defer s.Close()
 
-			balance12, _ := common.ToBalance(big.NewInt(0x12))
-			balance34, _ := common.ToBalance(big.NewInt(0x34))
+			balance12 := amount.New(0x12)
+			balance34 := amount.New(0x34)
 
 			if err := s.Apply(1, common.Update{
 				CreatedAccounts: []common.Address{address1},
@@ -570,10 +570,10 @@ func TestArchive(t *testing.T) {
 				t.Errorf("invalid account state at block 2: %t, %v", as, err)
 			}
 			if balance, err := state1.GetBalance(address1); err != nil || balance != balance12 {
-				t.Errorf("invalid balance at block 1: %v, %v", balance.ToBigInt(), err)
+				t.Errorf("invalid balance at block 1: %v, %v", balance, err)
 			}
 			if balance, err := state2.GetBalance(address1); err != nil || balance != balance34 {
-				t.Errorf("invalid balance at block 2: %v, %v", balance.ToBigInt(), err)
+				t.Errorf("invalid balance at block 2: %v, %v", balance, err)
 			}
 			if code, err := state1.GetCode(address1); err != nil || code != nil {
 				t.Errorf("invalid code at block 1: %v, %v", code, err)
@@ -734,7 +734,7 @@ func TestPersistentState(t *testing.T) {
 func fillStateForSnapshotting(state state.State) {
 	state.Apply(12, common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: common.Balance{12}}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: amount.New(12)}},
 		Nonces:          []common.NonceUpdate{{Account: address2, Nonce: common.Nonce{14}}},
 		Codes:           []common.CodeUpdate{{Account: address3, Code: []byte{0, 8, 15}}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},
@@ -776,11 +776,11 @@ func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
 				return
 			}
 
-			if got, err := recovered.GetBalance(address1); err != nil || got != (common.Balance{12}) {
+			if got, err := recovered.GetBalance(address1); err != nil || got != amount.New(12) {
 				if err != nil {
 					t.Errorf("failed to fetch balance for account %v: %v", address1, err)
 				} else {
-					t.Errorf("failed to recover balance for account %v - wanted %v, got %v", address1, (common.Balance{12}), got)
+					t.Errorf("failed to recover balance for account %v - wanted %v, got %v", address1, amount.New(12), got)
 				}
 			}
 

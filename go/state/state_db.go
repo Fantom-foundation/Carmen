@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 //go:generate mockgen -source state_db.go -destination state_db_mock.go -package state
@@ -34,13 +35,15 @@ type VmStateDB interface {
 	Exist(common.Address) bool
 	Empty(common.Address) bool
 
+	CreateContract(common.Address)
 	Suicide(common.Address) bool
+	SuicideNewContract(common.Address) bool
 	HasSuicided(common.Address) bool
 
 	// Balance
-	GetBalance(common.Address) *big.Int
-	AddBalance(common.Address, *big.Int)
-	SubBalance(common.Address, *big.Int)
+	GetBalance(common.Address) amount.Amount
+	AddBalance(common.Address, amount.Amount)
+	SubBalance(common.Address, amount.Amount)
 
 	// Nonce
 	GetNonce(common.Address) uint64
@@ -168,7 +171,7 @@ type NonCommittableStateDB interface {
 // Deprecated: external users should switch to the carmen package as the new top-level API
 type BulkLoad interface {
 	CreateAccount(common.Address)
-	SetBalance(common.Address, *big.Int)
+	SetBalance(common.Address, amount.Amount)
 	SetNonce(common.Address, uint64)
 	SetState(common.Address, common.Key, common.Value)
 	SetCode(common.Address, []byte)
@@ -203,6 +206,10 @@ type stateDB struct {
 
 	// Tracks the clearing state of individual accounts.
 	clearedAccounts map[common.Address]accountClearingState
+
+	// A set of contracts created during the current transaction. This is used
+	// to mark eligible accounts to be self-destructed according to EIP-6780.
+	createdContracts map[common.Address]struct{}
 
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
@@ -323,9 +330,9 @@ func (s accountClearingState) String() string {
 // balanceVale maintains a balance during a transaction.
 type balanceValue struct {
 	// The committed balance of an account, missing if never fetched.
-	original *big.Int
+	original *amount.Amount
 	// The current value of the account balance visible to the state DB users.
-	current big.Int
+	current amount.Amount
 }
 
 // nonceValue maintains a nonce during a transaction.
@@ -450,6 +457,7 @@ func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges
 		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
 		clearedAccounts:   make(map[common.Address]accountClearingState),
+		createdContracts:  make(map[common.Address]struct{}),
 		emptyCandidates:   make([]common.Address, 0, 100),
 		canApplyChanges:   canApplyChanges,
 	}
@@ -534,6 +542,17 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	})
 }
 
+func (s *stateDB) CreateContract(addr common.Address) {
+	if _, exists := s.createdContracts[addr]; exists {
+		return
+	}
+	s.createAccountIfNotExists(addr)
+	s.createdContracts[addr] = struct{}{}
+	s.undo = append(s.undo, func() {
+		delete(s.createdContracts, addr)
+	})
+}
+
 func (s *stateDB) createAccountIfNotExists(addr common.Address) bool {
 	if s.Exist(addr) {
 		return false
@@ -580,6 +599,19 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 	return true
 }
 
+// SuicideNewContract marks the given contract account as suicided.
+// If called in the same transaction scope after CreateContract, works
+// the same as Suicide, otherwise has no effect.
+func (s *stateDB) SuicideNewContract(addr common.Address) bool {
+	// If called in the same tx, behave as previously
+	if _, exists := s.createdContracts[addr]; exists {
+		return s.Suicide(addr)
+	}
+
+	// Otherwise do nothing
+	return false
+}
+
 func (s *stateDB) HasSuicided(addr common.Address) bool {
 	state := s.accounts[addr]
 	return state != nil && state.current == accountSelfDestructed
@@ -587,7 +619,7 @@ func (s *stateDB) HasSuicided(addr common.Address) bool {
 
 func (s *stateDB) Empty(addr common.Address) bool {
 	// Defined as balance == nonce == code == 0
-	return s.GetBalance(addr).Sign() == 0 && s.GetNonce(addr) == 0 && s.GetCodeSize(addr) == 0
+	return s.GetBalance(addr).IsZero() && s.GetNonce(addr) == 0 && s.GetCodeSize(addr) == 0
 }
 
 func clone(val *big.Int) *big.Int {
@@ -596,76 +628,77 @@ func clone(val *big.Int) *big.Int {
 	return res
 }
 
-func (s *stateDB) GetBalance(addr common.Address) *big.Int {
+func (s *stateDB) GetBalance(addr common.Address) amount.Amount {
 	// Check cache first.
 	if val, exists := s.balances[addr]; exists {
-		return clone(&val.current) // Do not hand out a pointer to the internal copy!
+		return val.current
 	}
 	// Since the value is not present, we need to fetch it from the store.
 	balance, err := s.state.GetBalance(addr)
 	if err != nil {
 		s.errors = append(s.errors, fmt.Errorf("failed to load balance for address %v: %w", addr, err))
-		return new(big.Int) // We need to return something that allows the VM to continue.
+		return amount.New() // We need to return something that allows the VM to continue.
 	}
-	res := balance.ToBigInt()
 	s.balances[addr] = &balanceValue{
-		original: res,
-		current:  *res,
+		original: &balance,
+		current:  balance,
 	}
-	return clone(res) // Do not hand out a pointer to the internal copy!
+	return balance
 }
 
-func (s *stateDB) AddBalance(addr common.Address, diff *big.Int) {
+func (s *stateDB) AddBalance(addr common.Address, diff amount.Amount) {
 	s.createAccountIfNotExists(addr)
 
-	if diff == nil || diff.Sign() == 0 {
+	if diff.IsZero() {
 		s.emptyCandidates = append(s.emptyCandidates, addr)
-		return
-	}
-	if diff.Sign() < 0 {
-		s.SubBalance(addr, diff.Abs(diff))
 		return
 	}
 
 	oldValue := s.GetBalance(addr)
-	newValue := new(big.Int).Add(oldValue, diff)
+	newValue, overflow := amount.AddOverflow(oldValue, diff)
 
-	s.balances[addr].current = *newValue
+	if overflow {
+		s.errors = append(s.errors, fmt.Errorf("failed to add balance for address %v: overflow", addr))
+		return
+	}
+
+	s.balances[addr].current = newValue
 	s.undo = append(s.undo, func() {
-		s.balances[addr].current = *oldValue
+		s.balances[addr].current = oldValue
 	})
 }
 
-func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
+func (s *stateDB) SubBalance(addr common.Address, diff amount.Amount) {
 	s.createAccountIfNotExists(addr)
 
-	if diff == nil || diff.Sign() == 0 {
+	if diff.IsZero() {
 		s.emptyCandidates = append(s.emptyCandidates, addr)
-		return
-	}
-	if diff.Sign() < 0 {
-		s.AddBalance(addr, diff.Abs(diff))
 		return
 	}
 
 	oldValue := s.GetBalance(addr)
-	newValue := new(big.Int).Sub(oldValue, diff)
+	newValue, underflow := amount.SubUnderflow(oldValue, diff)
 
-	if newValue.Sign() == 0 {
+	if underflow {
+		s.errors = append(s.errors, fmt.Errorf("failed to subtract balance for address %v: underflow", addr))
+		return
+	}
+
+	if newValue.IsZero() {
 		s.emptyCandidates = append(s.emptyCandidates, addr)
 	}
 
-	s.balances[addr].current = *newValue
+	s.balances[addr].current = newValue
 	s.undo = append(s.undo, func() {
-		s.balances[addr].current = *oldValue
+		s.balances[addr].current = oldValue
 	})
 }
 
 func (s *stateDB) resetBalance(addr common.Address) {
 	if val, exists := s.balances[addr]; exists {
-		if val.current.Sign() != 0 {
+		if !val.current.IsZero() {
 			oldValue := val.current
-			val.current = *big.NewInt(0)
+			val.current = amount.New()
 			s.undo = append(s.undo, func() {
 				val.current = oldValue
 			})
@@ -673,7 +706,7 @@ func (s *stateDB) resetBalance(addr common.Address) {
 	} else {
 		s.balances[addr] = &balanceValue{
 			original: nil,
-			current:  *big.NewInt(0),
+			current:  amount.New(),
 		}
 		s.undo = append(s.undo, func() {
 			delete(s.balances, addr)
@@ -1189,13 +1222,8 @@ func (s *stateDB) EndBlock(block uint64) {
 		if _, found := nonExistingAccounts[addr]; found {
 			continue
 		}
-		if value.original == nil || value.original.Cmp(&value.current) != 0 {
-			newBalance, err := common.ToBalance(&value.current)
-			if err != nil {
-				s.errors = append(s.errors, fmt.Errorf("unable to convert big.Int balance %v to common.Balance: %w", &value.current, err))
-			} else {
-				update.AppendBalanceUpdate(addr, newBalance)
-			}
+		if value.original == nil || *value.original != value.current {
+			update.AppendBalanceUpdate(addr, value.current)
 		}
 	}
 
@@ -1340,6 +1368,7 @@ func (s *stateDB) resetTransactionContext() {
 	s.undo = s.undo[0:0]
 	s.emptyCandidates = s.emptyCandidates[0:0]
 	s.logs = s.logs[0:0]
+	s.createdContracts = make(map[common.Address]struct{})
 }
 
 func (s *stateDB) ResetBlockContext() {
@@ -1372,13 +1401,8 @@ func (l *bulkLoad) CreateAccount(addr common.Address) {
 	l.update.AppendCreateAccount(addr)
 }
 
-func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
-	newBalance, err := common.ToBalance(value)
-	if err != nil {
-		l.errs = append(l.errs, fmt.Errorf("unable to convert big.Int balance to common.Balance: %w", err))
-		return
-	}
-	l.update.AppendBalanceUpdate(addr, newBalance)
+func (l *bulkLoad) SetBalance(addr common.Address, balance amount.Amount) {
+	l.update.AppendBalanceUpdate(addr, balance)
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {

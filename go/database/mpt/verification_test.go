@@ -27,6 +27,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
 )
 
@@ -179,7 +180,7 @@ func TestVerification_AccountBalanceModificationIsDetected(t *testing.T) {
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.info.Balance[2]++
+			node.info.Balance = amount.Add(node.info.Balance, amount.New(1))
 		})
 
 		if err := verifyFileForest(context.Background(), dir, config, roots, NilVerificationObserver{}); err == nil {
@@ -591,7 +592,7 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	v1[len(v1)-1] = 1
 
 	dir := t.TempDir()
-	forestConfig := ForestConfig{Mode: Mutable, CacheCapacity: 1024}
+	forestConfig := ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}}
 	forest, err := OpenFileForest(dir, S5LiveConfig, forestConfig)
 	if err != nil {
 		t.Fatalf("failed to start empty forest: %v", err)
@@ -645,7 +646,7 @@ func TestVerification_ForestVerificationObserverReportsError(t *testing.T) {
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.info.Balance[2]++
+			node.info.Balance = amount.Add(node.info.Balance, amount.New(1))
 		})
 
 		if err := verifyFileForest(context.Background(), dir, config, roots, observer); err == nil {
@@ -668,7 +669,7 @@ func TestVerification_VerificationObserverReportsError(t *testing.T) {
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.info.Balance[2]++
+			node.info.Balance = amount.Add(node.info.Balance, amount.New(1))
 		})
 
 		if err := VerifyMptState(context.Background(), dir, config, roots, observer); err == nil {
@@ -805,7 +806,7 @@ func modifyNode[N any](t *testing.T, directory string, encoder stock.ValueEncode
 
 func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 
-	forestConfig := ForestConfig{Mode: Immutable, CacheCapacity: 1024}
+	forestConfig := ForestConfig{Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}}
 	forest, err := OpenFileForest(dir, config, forestConfig)
 	if err != nil {
 		return nil, err

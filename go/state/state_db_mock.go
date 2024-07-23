@@ -15,14 +15,15 @@
 //
 //	mockgen -source state_db.go -destination state_db_mock.go -package state
 //
+
 // Package state is a generated GoMock package.
 package state
 
 import (
-	big "math/big"
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
+	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -74,7 +75,7 @@ func (mr *MockVmStateDBMockRecorder) AddAddressToAccessList(arg0 any) *gomock.Ca
 }
 
 // AddBalance mocks base method.
-func (m *MockVmStateDB) AddBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockVmStateDB) AddBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddBalance", arg0, arg1)
 }
@@ -171,6 +172,18 @@ func (mr *MockVmStateDBMockRecorder) CreateAccount(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockVmStateDB)(nil).CreateAccount), arg0)
 }
 
+// CreateContract mocks base method.
+func (m *MockVmStateDB) CreateContract(arg0 common.Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CreateContract", arg0)
+}
+
+// CreateContract indicates an expected call of CreateContract.
+func (mr *MockVmStateDBMockRecorder) CreateContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContract", reflect.TypeOf((*MockVmStateDB)(nil).CreateContract), arg0)
+}
+
 // Empty mocks base method.
 func (m *MockVmStateDB) Empty(arg0 common.Address) bool {
 	m.ctrl.T.Helper()
@@ -212,10 +225,10 @@ func (mr *MockVmStateDBMockRecorder) Exist(arg0 any) *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockVmStateDB) GetBalance(arg0 common.Address) *big.Int {
+func (m *MockVmStateDB) GetBalance(arg0 common.Address) amount.Amount {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(*big.Int)
+	ret0, _ := ret[0].(amount.Amount)
 	return ret0
 }
 
@@ -497,7 +510,7 @@ func (mr *MockVmStateDBMockRecorder) Snapshot() *gomock.Call {
 }
 
 // SubBalance mocks base method.
-func (m *MockVmStateDB) SubBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockVmStateDB) SubBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubBalance", arg0, arg1)
 }
@@ -532,6 +545,20 @@ func (m *MockVmStateDB) Suicide(arg0 common.Address) bool {
 func (mr *MockVmStateDBMockRecorder) Suicide(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suicide", reflect.TypeOf((*MockVmStateDB)(nil).Suicide), arg0)
+}
+
+// SuicideNewContract mocks base method.
+func (m *MockVmStateDB) SuicideNewContract(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SuicideNewContract", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SuicideNewContract indicates an expected call of SuicideNewContract.
+func (mr *MockVmStateDBMockRecorder) SuicideNewContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuicideNewContract", reflect.TypeOf((*MockVmStateDB)(nil).SuicideNewContract), arg0)
 }
 
 // MockStateDB is a mock of StateDB interface.
@@ -582,7 +609,7 @@ func (mr *MockStateDBMockRecorder) AddAddressToAccessList(arg0 any) *gomock.Call
 }
 
 // AddBalance mocks base method.
-func (m *MockStateDB) AddBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockStateDB) AddBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddBalance", arg0, arg1)
 }
@@ -717,6 +744,18 @@ func (mr *MockStateDBMockRecorder) CreateAccount(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockStateDB)(nil).CreateAccount), arg0)
 }
 
+// CreateContract mocks base method.
+func (m *MockStateDB) CreateContract(arg0 common.Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CreateContract", arg0)
+}
+
+// CreateContract indicates an expected call of CreateContract.
+func (mr *MockStateDBMockRecorder) CreateContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContract", reflect.TypeOf((*MockStateDB)(nil).CreateContract), arg0)
+}
+
 // Empty mocks base method.
 func (m *MockStateDB) Empty(arg0 common.Address) bool {
 	m.ctrl.T.Helper()
@@ -827,10 +866,10 @@ func (mr *MockStateDBMockRecorder) GetArchiveStateDB(block any) *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockStateDB) GetBalance(arg0 common.Address) *big.Int {
+func (m *MockStateDB) GetBalance(arg0 common.Address) amount.Amount {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(*big.Int)
+	ret0, _ := ret[0].(amount.Amount)
 	return ret0
 }
 
@@ -1152,7 +1191,7 @@ func (mr *MockStateDBMockRecorder) StartBulkLoad(block any) *gomock.Call {
 }
 
 // SubBalance mocks base method.
-func (m *MockStateDB) SubBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockStateDB) SubBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubBalance", arg0, arg1)
 }
@@ -1187,6 +1226,20 @@ func (m *MockStateDB) Suicide(arg0 common.Address) bool {
 func (mr *MockStateDBMockRecorder) Suicide(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suicide", reflect.TypeOf((*MockStateDB)(nil).Suicide), arg0)
+}
+
+// SuicideNewContract mocks base method.
+func (m *MockStateDB) SuicideNewContract(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SuicideNewContract", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SuicideNewContract indicates an expected call of SuicideNewContract.
+func (mr *MockStateDBMockRecorder) SuicideNewContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuicideNewContract", reflect.TypeOf((*MockStateDB)(nil).SuicideNewContract), arg0)
 }
 
 // MockNonCommittableStateDB is a mock of NonCommittableStateDB interface.
@@ -1237,7 +1290,7 @@ func (mr *MockNonCommittableStateDBMockRecorder) AddAddressToAccessList(arg0 any
 }
 
 // AddBalance mocks base method.
-func (m *MockNonCommittableStateDB) AddBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockNonCommittableStateDB) AddBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddBalance", arg0, arg1)
 }
@@ -1348,6 +1401,18 @@ func (mr *MockNonCommittableStateDBMockRecorder) CreateAccount(arg0 any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockNonCommittableStateDB)(nil).CreateAccount), arg0)
 }
 
+// CreateContract mocks base method.
+func (m *MockNonCommittableStateDB) CreateContract(arg0 common.Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CreateContract", arg0)
+}
+
+// CreateContract indicates an expected call of CreateContract.
+func (mr *MockNonCommittableStateDBMockRecorder) CreateContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContract", reflect.TypeOf((*MockNonCommittableStateDB)(nil).CreateContract), arg0)
+}
+
 // Empty mocks base method.
 func (m *MockNonCommittableStateDB) Empty(arg0 common.Address) bool {
 	m.ctrl.T.Helper()
@@ -1389,10 +1454,10 @@ func (mr *MockNonCommittableStateDBMockRecorder) Exist(arg0 any) *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockNonCommittableStateDB) GetBalance(arg0 common.Address) *big.Int {
+func (m *MockNonCommittableStateDB) GetBalance(arg0 common.Address) amount.Amount {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(*big.Int)
+	ret0, _ := ret[0].(amount.Amount)
 	return ret0
 }
 
@@ -1686,7 +1751,7 @@ func (mr *MockNonCommittableStateDBMockRecorder) Snapshot() *gomock.Call {
 }
 
 // SubBalance mocks base method.
-func (m *MockNonCommittableStateDB) SubBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockNonCommittableStateDB) SubBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubBalance", arg0, arg1)
 }
@@ -1721,6 +1786,20 @@ func (m *MockNonCommittableStateDB) Suicide(arg0 common.Address) bool {
 func (mr *MockNonCommittableStateDBMockRecorder) Suicide(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suicide", reflect.TypeOf((*MockNonCommittableStateDB)(nil).Suicide), arg0)
+}
+
+// SuicideNewContract mocks base method.
+func (m *MockNonCommittableStateDB) SuicideNewContract(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SuicideNewContract", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SuicideNewContract indicates an expected call of SuicideNewContract.
+func (mr *MockNonCommittableStateDBMockRecorder) SuicideNewContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuicideNewContract", reflect.TypeOf((*MockNonCommittableStateDB)(nil).SuicideNewContract), arg0)
 }
 
 // MockBulkLoad is a mock of BulkLoad interface.
@@ -1773,7 +1852,7 @@ func (mr *MockBulkLoadMockRecorder) CreateAccount(arg0 any) *gomock.Call {
 }
 
 // SetBalance mocks base method.
-func (m *MockBulkLoad) SetBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockBulkLoad) SetBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetBalance", arg0, arg1)
 }

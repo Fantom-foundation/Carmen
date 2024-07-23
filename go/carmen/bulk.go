@@ -31,7 +31,7 @@ func (l *bulkLoad) CreateAccount(address Address) {
 
 func (l *bulkLoad) SetBalance(address Address, balance Amount) {
 	if l.db != nil {
-		l.nested.SetBalance(common.Address(address), balance.ToBig())
+		l.nested.SetBalance(common.Address(address), balance)
 	}
 }
 

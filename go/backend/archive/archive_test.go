@@ -12,11 +12,13 @@ package archive_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -30,6 +32,11 @@ type archiveFactory struct {
 	getArchive func(tempDir string) archive.Archive
 	customHash bool
 }
+
+var (
+	balance1 = amount.New(0x12<<56, 0, 0, 0)
+	balance2 = amount.New(0x34<<56, 0, 0, 0)
+)
 
 func getArchiveFactories(tb testing.TB) []archiveFactory {
 	return []archiveFactory{
@@ -60,7 +67,7 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 		{
 			label: "S4",
 			getArchive: func(tempDir string) archive.Archive {
-				archive, err := mpt.OpenArchiveTrie(tempDir, mpt.S4ArchiveConfig, mpt.DefaultMptStateCapacity)
+				archive, err := mpt.OpenArchiveTrie(tempDir, mpt.S4ArchiveConfig, mpt.NodeCacheConfig{})
 				if err != nil {
 					tb.Fatalf("failed to open S4 archive: %v", err)
 				}
@@ -71,7 +78,7 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 		{
 			label: "S5",
 			getArchive: func(tempDir string) archive.Archive {
-				archive, err := mpt.OpenArchiveTrie(tempDir, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
+				archive, err := mpt.OpenArchiveTrie(tempDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{})
 				if err != nil {
 					tb.Fatalf("failed to open S5 archive: %v", err)
 				}
@@ -109,7 +116,7 @@ func TestAddGet(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance1},
 				},
 				Codes:  nil,
 				Nonces: nil,
@@ -122,7 +129,7 @@ func TestAddGet(t *testing.T) {
 
 			if err := a.Add(5, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x34}},
+					{Account: addr1, Balance: balance2},
 				},
 				Codes: []common.CodeUpdate{
 					{Account: addr1, Code: []byte{0x12, 0x23}},
@@ -140,14 +147,14 @@ func TestAddGet(t *testing.T) {
 				t.Fatalf("failed to add block 7; %v", err)
 			}
 
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 1: %x; %v", balance, err)
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance != balance1 {
+				t.Errorf("unexpected balance at block 1: %v; %v", balance, err)
 			}
-			if balance, err := a.GetBalance(3, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 3: %x; %v", balance, err)
+			if balance, err := a.GetBalance(3, addr1); err != nil || balance != balance1 {
+				t.Errorf("unexpected balance at block 3: %v; %v", balance, err)
 			}
-			if balance, err := a.GetBalance(5, addr1); err != nil || balance != (common.Balance{0x34}) {
-				t.Errorf("unexpected balance at block 5: %x; %v", balance, err)
+			if balance, err := a.GetBalance(5, addr1); err != nil || balance != balance2 {
+				t.Errorf("unexpected balance at block 5: %v; %v", balance, err)
 			}
 
 			if code, err := a.GetCode(3, addr1); err != nil || code != nil {
@@ -199,7 +206,7 @@ func TestAccountDeleteCreate(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance1},
 				},
 				Codes: []common.CodeUpdate{
 					{Account: addr1, Code: []byte{0x12, 0x23}},
@@ -261,6 +268,68 @@ func TestAccountDeleteCreate(t *testing.T) {
 	}
 }
 
+func TestArchive_CreateWitnessProof(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer func() {
+				if err := a.Close(); err != nil {
+					t.Fatalf("failed to close archive; %s", err)
+				}
+			}()
+
+			if err := a.Add(1, common.Update{
+				CreatedAccounts: []common.Address{{1}},
+				Balances: []common.BalanceUpdate{
+					{Account: common.Address{1}, Balance: amount.New(12)},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
+				},
+			}, nil); err != nil {
+				t.Fatalf("failed to add block: %v", err)
+			}
+
+			proof, err := a.CreateWitnessProof(1, common.Address{1}, common.Key{2})
+			if err != nil {
+				if errors.Is(err, archive.ErrWitnessProofNotSupported) {
+					t.Skip(err)
+				}
+				t.Fatalf("failed to create witness proof; %s", err)
+			}
+
+			if !proof.IsValid() {
+				t.Errorf("invalid proof")
+			}
+
+			hash, err := a.GetHash(1)
+			if err != nil {
+				t.Fatalf("failed to get hash; %s", err)
+			}
+			balance, complete, err := proof.GetBalance(hash, common.Address{1})
+			if err != nil {
+				t.Fatalf("failed to get balance; %s", err)
+			}
+			if !complete {
+				t.Errorf("balance proof is incomplete")
+			}
+			if got, want := balance, amount.New(12); got != want {
+				t.Errorf("unexpected balance; got: %x, want: %x", got, want)
+			}
+			value, complete, err := proof.GetState(hash, common.Address{1}, common.Key{2})
+			if err != nil {
+				t.Fatalf("failed to get state; %s", err)
+			}
+			if !complete {
+				t.Errorf("state proof is incomplete")
+			}
+			if got, want := value, (common.Value{3}); got != want {
+				t.Errorf("unexpected value; got: %x, want: %x", got, want)
+			}
+		})
+	}
+}
+
 func TestAccountStatusOnly(t *testing.T) {
 	for _, factory := range getArchiveFactories(t) {
 		t.Run(factory.label, func(t *testing.T) {
@@ -295,7 +364,7 @@ func TestBalanceOnly(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance1},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -303,7 +372,7 @@ func TestBalanceOnly(t *testing.T) {
 
 			if err := a.Add(200, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x34}},
+					{Account: addr1, Balance: balance2},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 200; %s", err)
@@ -313,12 +382,12 @@ func TestBalanceOnly(t *testing.T) {
 				t.Fatalf("failed to add block 400; %s", err)
 			}
 
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 1: %x; %s", balance, err)
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance != balance1 {
+				t.Errorf("unexpected balance at block 1: %v; %s", balance, err)
 			}
 
-			if balance, err := a.GetBalance(300, addr1); err != nil || balance != (common.Balance{0x34}) {
-				t.Errorf("unexpected balance at block 3: %x; %s", balance, err)
+			if balance, err := a.GetBalance(300, addr1); err != nil || balance != balance2 {
+				t.Errorf("unexpected balance at block 3: %v; %s", balance, err)
 			}
 		})
 	}
@@ -469,7 +538,7 @@ func TestZeroBlock(t *testing.T) {
 			if err := a.Add(0, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x11}},
+					{Account: addr1, Balance: balance1},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 0; %s", err)
@@ -477,7 +546,7 @@ func TestZeroBlock(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance2},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -489,11 +558,11 @@ func TestZeroBlock(t *testing.T) {
 			if exists, err := a.Exists(1, addr1); err != nil || !exists {
 				t.Errorf("unexpected account status at block 1: %t; %s", exists, err)
 			}
-			if balance, err := a.GetBalance(0, addr1); err != nil || balance != (common.Balance{0x11}) {
-				t.Errorf("unexpected balance at block 0: %x; %s", balance, err)
+			if balance, err := a.GetBalance(0, addr1); err != nil || balance != balance1 {
+				t.Errorf("unexpected balance at block 0: %v; %s", balance, err)
 			}
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 1: %x; %s", balance, err)
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance != balance2 {
+				t.Errorf("unexpected balance at block 1: %v; %s", balance, err)
 			}
 		})
 	}
@@ -517,7 +586,7 @@ func TestTwinProtection(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance1},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -525,7 +594,7 @@ func TestTwinProtection(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x34}},
+					{Account: addr1, Balance: balance2},
 				},
 			}, nil); err == nil {
 				t.Errorf("second adding of block 1 should have failed but it succeed")

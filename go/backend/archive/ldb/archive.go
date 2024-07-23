@@ -13,7 +13,11 @@ package ldb
 import (
 	"crypto/sha256"
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
+
 	"sync"
 	"unsafe"
 
@@ -160,7 +164,8 @@ func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 	for _, balanceUpdate := range update.Balances {
 		var accountK accountBlockKey
 		accountK.set(backend.BalanceArchiveKey, balanceUpdate.Account, block)
-		a.batch.Put(accountK[:], balanceUpdate.Balance[:])
+		b := balanceUpdate.Balance.Bytes32()
+		a.batch.Put(accountK[:], b[:])
 	}
 
 	for _, codeUpdate := range update.Codes {
@@ -239,7 +244,7 @@ func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err
 	return exists, err
 }
 
-func (a *Archive) GetBalance(block uint64, account common.Address) (balance common.Balance, err error) {
+func (a *Archive) GetBalance(block uint64, account common.Address) (balance amount.Amount, err error) {
 	var key accountBlockKey
 	key.set(backend.BalanceArchiveKey, account, block)
 	keyRange := key.getRange()
@@ -247,10 +252,10 @@ func (a *Archive) GetBalance(block uint64, account common.Address) (balance comm
 	defer it.Release()
 
 	if it.Next() {
-		copy(balance[:], it.Value())
+		balance = amount.NewFromBytes(it.Value()[:]...)
 		return balance, nil
 	}
-	return common.Balance{}, it.Error()
+	return amount.New(), it.Error()
 }
 
 func (a *Archive) GetCode(block uint64, account common.Address) (code []byte, err error) {
@@ -332,6 +337,10 @@ func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash com
 		return hash, nil
 	}
 	return common.Hash{}, it.Error()
+}
+
+func (a *Archive) CreateWitnessProof(_ uint64, _ common.Address, _ ...common.Key) (witness.Proof, error) {
+	return nil, archive.ErrWitnessProofNotSupported
 }
 
 // GetMemoryFootprint provides the size of the archive in memory in bytes

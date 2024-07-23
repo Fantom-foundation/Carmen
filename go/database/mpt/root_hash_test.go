@@ -14,20 +14,20 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"strings"
 	"testing"
 
 	_ "embed"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 // The reference hashes in this file have been generated using Geth's MPT.
 
 func TestS5RootHash_EmptyTrie(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -43,11 +43,11 @@ func TestS5RootHash_EmptyTrie(t *testing.T) {
 
 func TestS5RootHash_SingleAccount(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{1}, balance)
 	hash, err := state.GetHash()
@@ -63,11 +63,11 @@ func TestS5RootHash_SingleAccount(t *testing.T) {
 
 func TestS5RootHash_SingleAccountWithSingleValue(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{1}, balance)
 	state.SetStorage(common.Address{1}, common.Key{1}, common.Value{2})
@@ -84,11 +84,11 @@ func TestS5RootHash_SingleAccountWithSingleValue(t *testing.T) {
 
 func TestS5RootHash_TwoAccounts(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{2}, balance)
 	hash, err := state.GetHash()
@@ -104,11 +104,11 @@ func TestS5RootHash_TwoAccounts(t *testing.T) {
 
 func TestS5RootHash_TwoAccountsWithValues(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.trie.SetValue(common.Address{1}, common.Key{1}, common.Value{0, 0, 1})
 	state.trie.SetValue(common.Address{1}, common.Key{2}, common.Value{2})
@@ -136,11 +136,11 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithEvenLength(t *testing.T) {
 		t.Fatalf("invalid setup, addresses do not have common prefix")
 	}
 
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(addr1, common.ToNonce(10))
 	state.SetBalance(addr2, balance)
 	hash, err := state.GetHash()
@@ -163,11 +163,11 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithOddLength(t *testing.T) {
 		t.Fatalf("invalid setup, addresses do not have single prefix bit prefix")
 	}
 
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(addr1, common.ToNonce(10))
 	state.SetBalance(addr2, balance)
 	hash, err := state.GetHash()
@@ -196,7 +196,7 @@ func TestS5RootHash_AddressAndKeys(t *testing.T) {
 
 	const N = 100
 
-	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestS5RootHash_Values(t *testing.T) {
 		return res
 	}
 
-	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestHashing_S5EmbeddedValuesAreHandledCorrectly(t *testing.T) {
 		// To prepare the stage for the issue, a branch node with two embedded
 		// values is created.
 		directory := t.TempDir()
-		state, err := OpenGoMemoryState(directory, config, 1024)
+		state, err := OpenGoMemoryState(directory, config, NodeCacheConfig{Capacity: 1024})
 		if err != nil {
 			t.Fatalf("failed to open trie: %v", err)
 		}
@@ -376,7 +376,7 @@ func TestHashing_S5EmbeddedValuesAreHandledCorrectly(t *testing.T) {
 		// The error causing issue #769 is caused by loading nodes from disk not
 		// including embedded information and not correctly recomputing those when
 		// computing hashes.
-		state, err = OpenGoMemoryState(directory, config, 1024)
+		state, err = OpenGoMemoryState(directory, config, NodeCacheConfig{Capacity: 1024})
 		if err != nil {
 			t.Fatalf("failed to open trie: %v", err)
 		}

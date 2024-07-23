@@ -17,6 +17,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
 )
@@ -43,7 +44,7 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 		},
 		"balance": {
 			func(archive *archive.MockArchive, injectedErr error) {
-				archive.EXPECT().GetBalance(gomock.Any(), gomock.Any()).Return(common.Balance{}, injectedErr)
+				archive.EXPECT().GetBalance(gomock.Any(), gomock.Any()).Return(amount.New(), injectedErr)
 			},
 			func(stateArchive state.State) error {
 				_, err := stateArchive.GetBalance(common.Address{})
@@ -92,6 +93,15 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 			},
 			func(stateArchive state.State) error {
 				_, _, err := stateArchive.GetArchiveBlockHeight()
+				return err
+			},
+		},
+		"witnessProof": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().CreateWitnessProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.CreateWitnessProof(common.Address{}, common.Key{})
 				return err
 			},
 		},

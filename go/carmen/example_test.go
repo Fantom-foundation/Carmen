@@ -16,6 +16,7 @@ import (
 	"os"
 
 	"github.com/Fantom-foundation/Carmen/go/carmen"
+	"golang.org/x/exp/maps"
 )
 
 func ExampleDatabase_AddBlock() {
@@ -281,4 +282,159 @@ func ExampleDatabase_GetHistoricContext() {
 	}
 
 	// Output: Balance of [1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] is 100
+}
+
+func ExampleHistoricBlockContext_GetProof() {
+	dir, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temporary directory: %v", err)
+	}
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// ------- Prepare the database -------
+
+	const N = 10
+	// Add N blocks with one address and storage slot each
+	for i := 0; i < N; i++ {
+		if err := db.AddBlock(uint64(i), func(context carmen.HeadBlockContext) error {
+			if err := context.RunTransaction(func(context carmen.TransactionContext) error {
+				context.CreateAccount(carmen.Address{byte(i)})
+				context.AddBalance(carmen.Address{byte(i)}, carmen.NewAmount(uint64(i)))
+				context.SetState(carmen.Address{byte(i)}, carmen.Key{byte(i)}, carmen.Value{byte(i)})
+				return nil
+			}); err != nil {
+				log.Fatalf("cannot create transaction: %v", err)
+			}
+			return nil
+		}); err != nil {
+			log.Fatalf("cannot add block: %v", err)
+		}
+	}
+
+	// block wait until the archive is in sync
+	if err := db.Flush(); err != nil {
+		log.Fatalf("cannot flush: %v", err)
+	}
+
+	// ------- Query witness proofs for each block -------
+
+	completeProof := make(map[string]struct{}, 1024)
+	// proof each address and key from each block, and merge all in one proof
+	for i := 0; i < N; i++ {
+		if err := db.QueryBlock(uint64(i), func(ctxt carmen.HistoricBlockContext) error {
+			proof, err := ctxt.GetProof(carmen.Address{byte(i)}, carmen.Key{byte(i)})
+			if err != nil {
+				log.Fatalf("cannot create witness proof: %v", err)
+			}
+
+			// proof can be extracted and merged with other proofs
+			for _, e := range proof.GetElements() {
+				completeProof[e] = struct{}{}
+			}
+
+			return nil
+		}); err != nil {
+			log.Fatalf("cannot query block: %v", err)
+		}
+	}
+
+	rootHashes := make([]carmen.Hash, N)
+	for i := 0; i < N; i++ {
+		if err := db.QueryHistoricState(uint64(i), func(ctxt carmen.QueryContext) {
+			rootHashes[i] = ctxt.GetStateHash()
+		}); err != nil {
+			log.Fatalf("cannot query block: %v", err)
+		}
+	}
+
+	// ------- Close the database - no more needed -------
+	if err := db.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		log.Fatalf("cannot remove dir: %v", err)
+	}
+
+	// ------- WitnessProof can be deserialized  -------
+
+	recoveredProof := carmen.CreateWitnessProofFromNodes(maps.Keys(completeProof)...)
+
+	// ------- Properties can be proven offline  -------
+	for i := 0; i < N; i++ {
+		{
+			// query account balance
+			balance, complete, err := recoveredProof.GetBalance(rootHashes[i], carmen.Address{byte(i)})
+			if err != nil {
+				log.Fatalf("cannot get balance: %v", err)
+			}
+			if !complete {
+				log.Fatalf("proof is incomplete")
+			}
+			fmt.Printf("Balance of address 0x%x at block: %d is 0x%x\n", carmen.Address{byte(i)}, i, balance)
+		}
+		{
+			// query storage slot
+			value, complete, err := recoveredProof.GetState(rootHashes[i], carmen.Address{byte(i)}, carmen.Key{byte(i)})
+			if err != nil {
+				log.Fatalf("cannot get state: %v", err)
+			}
+			if !complete {
+				log.Fatalf("proof is incomplete")
+			}
+			fmt.Printf("Storage slot value of key 0x%x at block: %d and address: 0x%x is 0x%x\n", carmen.Key{byte(i)}, i, carmen.Address{byte(i)}, value)
+		}
+	}
+
+	// Output: Balance of address 0x0000000000000000000000000000000000000000 at block: 0 is 0x30
+	//Storage slot value of key 0x0000000000000000000000000000000000000000000000000000000000000000 at block: 0 and address: 0x0000000000000000000000000000000000000000 is 0x0000000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0100000000000000000000000000000000000000 at block: 1 is 0x31
+	//Storage slot value of key 0x0100000000000000000000000000000000000000000000000000000000000000 at block: 1 and address: 0x0100000000000000000000000000000000000000 is 0x0100000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0200000000000000000000000000000000000000 at block: 2 is 0x32
+	//Storage slot value of key 0x0200000000000000000000000000000000000000000000000000000000000000 at block: 2 and address: 0x0200000000000000000000000000000000000000 is 0x0200000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0300000000000000000000000000000000000000 at block: 3 is 0x33
+	//Storage slot value of key 0x0300000000000000000000000000000000000000000000000000000000000000 at block: 3 and address: 0x0300000000000000000000000000000000000000 is 0x0300000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0400000000000000000000000000000000000000 at block: 4 is 0x34
+	//Storage slot value of key 0x0400000000000000000000000000000000000000000000000000000000000000 at block: 4 and address: 0x0400000000000000000000000000000000000000 is 0x0400000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0500000000000000000000000000000000000000 at block: 5 is 0x35
+	//Storage slot value of key 0x0500000000000000000000000000000000000000000000000000000000000000 at block: 5 and address: 0x0500000000000000000000000000000000000000 is 0x0500000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0600000000000000000000000000000000000000 at block: 6 is 0x36
+	//Storage slot value of key 0x0600000000000000000000000000000000000000000000000000000000000000 at block: 6 and address: 0x0600000000000000000000000000000000000000 is 0x0600000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0700000000000000000000000000000000000000 at block: 7 is 0x37
+	//Storage slot value of key 0x0700000000000000000000000000000000000000000000000000000000000000 at block: 7 and address: 0x0700000000000000000000000000000000000000 is 0x0700000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0800000000000000000000000000000000000000 at block: 8 is 0x38
+	//Storage slot value of key 0x0800000000000000000000000000000000000000000000000000000000000000 at block: 8 and address: 0x0800000000000000000000000000000000000000 is 0x0800000000000000000000000000000000000000000000000000000000000000
+	//Balance of address 0x0900000000000000000000000000000000000000 at block: 9 is 0x39
+	//Storage slot value of key 0x0900000000000000000000000000000000000000000000000000000000000000 at block: 9 and address: 0x0900000000000000000000000000000000000000 is 0x0900000000000000000000000000000000000000000000000000000000000000
+}
+
+func ExampleDatabase_GetMemoryFootprint() {
+	dir, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temporary directory: %v", err)
+	}
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// block wait until the archive is in sync
+	if err := db.Flush(); err != nil {
+		log.Fatalf("cannot flush: %v", err)
+	}
+
+	fp := db.GetMemoryFootprint()
+
+	fmt.Printf("Database currently uses %v B", fp.Total())
+	fmt.Printf("Memory breakdown:\n%s", fp)
+
+	if err := db.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+
+	if err := os.RemoveAll(dir); err != nil {
+		log.Fatalf("cannot remove dir: %v", err)
+	}
 }

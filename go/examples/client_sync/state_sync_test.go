@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 type blockGenerator struct {
@@ -31,7 +32,7 @@ func (g *blockGenerator) GetNextBlockUpdateMessage() Message {
 
 	update := common.Update{}
 	update.AppendCreateAccount(common.Address{a, b, c, d})
-	update.AppendBalanceUpdate(common.Address{a, b, c, d}, common.Balance{12})
+	update.AppendBalanceUpdate(common.Address{a, b, c, d}, amount.New(12))
 	update.AppendNonceUpdate(common.Address{a, b, c, d}, common.Nonce{14})
 	update.AppendCodeUpdate(common.Address{a, b, c, d}, []byte{a, b, c})
 	update.AppendSlotUpdate(common.Address{a, b, c, d}, common.Key{a, b}, common.Value{c, d})

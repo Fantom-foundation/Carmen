@@ -21,6 +21,7 @@ import (
 	"path"
 	"sort"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
@@ -66,7 +67,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
-	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.DefaultMptStateCapacity)
+	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{})
 	if err != nil {
 		return err
 	}
@@ -151,7 +152,8 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 				if _, err := out.Write([]byte{'B'}); err != nil {
 					return err
 				}
-				if _, err := out.Write((*accountDiff.Balance)[:]); err != nil {
+				b := accountDiff.Balance.Bytes32()
+				if _, err := out.Write(b[:]); err != nil {
 					return err
 				}
 			}
@@ -239,7 +241,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}
 
 	// Create a live-DB updated in parallel for faster hash computation.
-	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.DefaultMptStateCapacity)
+	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.NodeCacheConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to create auxiliary live DB: %w", err)
 	}
@@ -251,7 +253,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}()
 
 	// Create an empty archive.
-	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
+	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to create empty state: %w", err)
 	}
@@ -308,11 +310,11 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 			context.deleteAccount()
 
 		case 'B':
-			balance := common.Balance{}
+			var balance [amount.BytesLength]byte
 			if _, err := io.ReadFull(in, balance[:]); err != nil {
 				return err
 			}
-			context.setBalance(balance)
+			context.setBalance(amount.NewFromBytes(balance[:]...))
 
 		case 'N':
 			nonce := common.Nonce{}
@@ -392,7 +394,7 @@ func (c *importContext) deleteAccount() {
 	c.currentUpdate.AppendDeleteAccount(c.currentAccount)
 }
 
-func (c *importContext) setBalance(balance common.Balance) {
+func (c *importContext) setBalance(balance amount.Amount) {
 	c.currentUpdate.AppendBalanceUpdate(c.currentAccount, balance)
 }
 

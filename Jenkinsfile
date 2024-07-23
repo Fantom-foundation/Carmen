@@ -36,6 +36,12 @@ pipeline {
             }
         }
 
+        stage('Check C++ sources formatting') {
+            steps {
+                sh 'find cpp/ -iname *.h -o -iname *.cc | xargs clang-format --dry-run -Werror '
+            }
+        }
+
         stage('Build C++ libraries') {
             steps {
                 sh 'git submodule update --init --recursive'
@@ -55,9 +61,9 @@ pipeline {
             }
         }
 
-        stage('Check C++ sources formatting') {
+        stage('Run Mpt Go Stress Test') {
             steps {
-                sh 'find cpp/ -iname *.h -o -iname *.cc | xargs clang-format --dry-run -Werror '
+                sh 'cd go && go run ./database/mpt/tool stress-test --num-blocks 2000'
             }
         }
 

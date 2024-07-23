@@ -22,6 +22,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -42,7 +43,7 @@ type GoSchema3 struct {
 	slotIndex           index.Index[common.SlotIdxKey[uint32], uint32]
 	accountsStore       store.Store[uint32, common.AccountState]
 	noncesStore         store.Store[uint32, common.Nonce]
-	balancesStore       store.Store[uint32, common.Balance]
+	balancesStore       store.Store[uint32, amount.Amount]
 	reincarnationsStore store.Store[uint32, common.Reincarnation]
 	valuesStore         store.Store[uint32, common.SlotReincValue]
 	codesDepot          depot.Depot[uint32]
@@ -97,18 +98,18 @@ func (s *GoSchema3) clearAccount(addressIdx uint32) error {
 	return s.reincarnationsStore.Set(addressIdx, reincarnation+1)
 }
 
-func (s *GoSchema3) GetBalance(address common.Address) (balance common.Balance, err error) {
+func (s *GoSchema3) GetBalance(address common.Address) (balance amount.Amount, err error) {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		if err == index.ErrNotFound {
-			return common.Balance{}, nil
+			return amount.New(), nil
 		}
 		return
 	}
 	return s.balancesStore.Get(idx)
 }
 
-func (s *GoSchema3) SetBalance(address common.Address, balance common.Balance) (err error) {
+func (s *GoSchema3) SetBalance(address common.Address, balance amount.Amount) (err error) {
 	idx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return

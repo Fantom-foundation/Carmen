@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
@@ -24,7 +25,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 
 	// Create a small Archive to be exported.
 	sourceDir := t.TempDir()
-	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, 1024)
+	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -61,7 +62,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 		t.Fatalf("verification of imported Archive failed: %v", err)
 	}
 
-	target, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, 1024)
+	target, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open recovered Archive: %v", err)
 	}
@@ -90,7 +91,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 
 	// Create a small Archive to be exported.
 	sourceDir := t.TempDir()
-	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, 1024)
+	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -127,7 +128,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 		t.Fatalf("verification of imported LiveDB failed: %v", err)
 	}
 
-	live, err := mpt.OpenFileLiveTrie(path.Join(targetDir, "live"), mpt.S5LiveConfig, 1024)
+	live, err := mpt.OpenFileLiveTrie(path.Join(targetDir, "live"), mpt.S5LiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("cannot open live trie: %v", err)
 	}
@@ -145,7 +146,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 		t.Fatalf("verification of imported Archive failed: %v", err)
 	}
 
-	archive, err := mpt.OpenArchiveTrie(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, 1024)
+	archive, err := mpt.OpenArchiveTrie(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open recovered Archive: %v", err)
 	}
@@ -174,8 +175,8 @@ func fillTestBlocksIntoArchive(t *testing.T, archive *mpt.ArchiveTrie) (blockHei
 
 	addr1 := common.Address{1}
 	addr2 := common.Address{2}
-	balance1 := common.Balance{1}
-	balance2 := common.Balance{2}
+	balance1 := amount.New(1)
+	balance2 := amount.New(2)
 	nonce1 := common.Nonce{1}
 	nonce2 := common.Nonce{2}
 	code1 := []byte{1, 2, 3}

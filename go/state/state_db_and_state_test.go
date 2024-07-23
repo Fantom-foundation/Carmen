@@ -15,12 +15,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
 	_ "github.com/Fantom-foundation/Carmen/go/state/cppstate"
@@ -32,9 +32,8 @@ func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
 	addr2 := common.Address{2}
 	addr3 := common.Address{3}
 
-	max := common.GetMaxBalance()
-	minBalance := big.NewInt(0)
-	maxBalance := max.ToBigInt()
+	minBalance := amount.New()
+	maxBalance := amount.Max()
 
 	for _, config := range initStates() {
 		config := config
@@ -64,13 +63,13 @@ func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
 			db.BeginBlock()
 			db.BeginTransaction()
 
-			if want, got := minBalance, db.GetBalance(addr1); want.Cmp(got) != 0 {
+			if want, got := minBalance, db.GetBalance(addr1); want != got {
 				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 			}
-			if want, got := minBalance, db.GetBalance(addr2); want.Cmp(got) != 0 {
+			if want, got := minBalance, db.GetBalance(addr2); want != got {
 				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 			}
-			if want, got := maxBalance, db.GetBalance(addr3); want.Cmp(got) != 0 {
+			if want, got := maxBalance, db.GetBalance(addr3); want != got {
 				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 			}
 
@@ -84,13 +83,13 @@ func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
 			db.BeginBlock()
 			db.BeginTransaction()
 
-			if want, got := minBalance, db.GetBalance(addr1); want.Cmp(got) != 0 {
+			if want, got := minBalance, db.GetBalance(addr1); want != got {
 				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 			}
-			if want, got := maxBalance, db.GetBalance(addr2); want.Cmp(got) != 0 {
+			if want, got := maxBalance, db.GetBalance(addr2); want != got {
 				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 			}
-			if want, got := minBalance, db.GetBalance(addr3); want.Cmp(got) != 0 {
+			if want, got := minBalance, db.GetBalance(addr3); want != got {
 				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 			}
 
@@ -110,7 +109,7 @@ func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
 			expectations := []struct {
 				block   uint64
 				account common.Address
-				balance *big.Int
+				balance amount.Amount
 			}{
 				{1, addr1, minBalance},
 				{1, addr2, minBalance},
@@ -134,7 +133,7 @@ func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
 					t.Errorf("failed to fetch balance for account %v: %v", expectation.account, err)
 				}
 
-				if got.ToBigInt().Cmp(expectation.balance) != 0 {
+				if got != expectation.balance {
 					t.Errorf("unexpected balance of account %v at block %d: wanted %v, got %v",
 						expectation.account,
 						expectation.block,
@@ -301,10 +300,10 @@ func TestCarmenStateHashIsDeterministicForMultipleAccountModifications(t *testin
 
 func TestCarmenStateHashIsDeterministicForMultipleBalanceUpdates(t *testing.T) {
 	testCarmenStateDbHashAfterModification(t, func(s state.StateDB) {
-		s.AddBalance(address1, big.NewInt(12))
-		s.AddBalance(address2, big.NewInt(14))
-		s.AddBalance(address3, big.NewInt(16))
-		s.SubBalance(address3, big.NewInt(8))
+		s.AddBalance(address1, amount.New(12))
+		s.AddBalance(address2, amount.New(14))
+		s.AddBalance(address3, amount.New(16))
+		s.SubBalance(address3, amount.New(8))
 	})
 }
 
@@ -359,7 +358,7 @@ func TestPersistentStateDB(t *testing.T) {
 
 			// init state DB data
 			stateDb.CreateAccount(address1)
-			stateDb.AddBalance(address1, big.NewInt(153))
+			stateDb.AddBalance(address1, amount.New(153))
 			stateDb.SetNonce(address1, 58)
 			stateDb.SetCode(address1, []byte{1, 2, 3})
 
@@ -375,7 +374,7 @@ func TestPersistentStateDB(t *testing.T) {
 			stateDb.BeginTransaction()
 
 			stateDb.CreateAccount(address2)
-			stateDb.AddBalance(address2, big.NewInt(6789))
+			stateDb.AddBalance(address2, amount.New(6789))
 			stateDb.SetNonce(address2, 91)
 			stateDb.SetCode(address2, []byte{3, 2, 1})
 
@@ -421,10 +420,10 @@ func TestStateDBRead(t *testing.T) {
 		t.Errorf("Unexpected value, val: %v != %v", state, true)
 	}
 
-	if balance := stateDb.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+	if balance := stateDb.GetBalance(address1); balance != amount.New(153) {
 		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
 	}
-	if balance := stateDb.GetBalance(address2); balance.Cmp(big.NewInt(6789)) != 0 {
+	if balance := stateDb.GetBalance(address2); balance != amount.New(6789) {
 		t.Errorf("Unexpected value, val: %v != %v", balance, 6789)
 	}
 
@@ -471,10 +470,10 @@ func TestStateDBRead(t *testing.T) {
 	if state := as1.Exist(address2); state != false {
 		t.Errorf("Unexpected value, val: %v != %v", state, false)
 	}
-	if balance := as1.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+	if balance := as1.GetBalance(address1); balance != amount.New(153) {
 		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
 	}
-	if balance := as1.GetBalance(address2); balance.Cmp(big.NewInt(0)) != 0 {
+	if balance := as1.GetBalance(address2); !balance.IsZero() {
 		t.Errorf("Unexpected value, val: %v != %v", balance, 0)
 	}
 
@@ -488,10 +487,10 @@ func TestStateDBRead(t *testing.T) {
 	if state := as2.Exist(address2); state != true {
 		t.Errorf("Unexpected value, val: %v != %v", state, true)
 	}
-	if balance := as2.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+	if balance := as2.GetBalance(address1); balance != amount.New(153) {
 		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
 	}
-	if balance := as2.GetBalance(address2); balance.Cmp(big.NewInt(6789)) != 0 {
+	if balance := as2.GetBalance(address2); balance != amount.New(6789) {
 		t.Errorf("Unexpected value, val: %v != %v", balance, 6789)
 	}
 	if nonce := as2.GetNonce(address1); nonce != 58 {
@@ -530,17 +529,17 @@ func TestStateDBArchive(t *testing.T) {
 			defer s.Close()
 			stateDb := state.CreateStateDBUsing(s)
 
-			stateDb.AddBalance(address2, big.NewInt(22))
+			stateDb.AddBalance(address2, amount.New(22))
 
 			bl := stateDb.StartBulkLoad(0)
 			bl.CreateAccount(address1)
-			bl.SetBalance(address1, big.NewInt(12))
+			bl.SetBalance(address1, amount.New(12))
 			if err := bl.Close(); err != nil {
 				t.Fatalf("failed to bulk-load StateDB with archive; %s", err)
 			}
 
 			stateDb.BeginBlock()
-			stateDb.AddBalance(address1, big.NewInt(22))
+			stateDb.AddBalance(address1, amount.New(22))
 			stateDb.EndBlock(2)
 
 			if err := stateDb.Flush(); err != nil { // wait until archives are written
@@ -563,10 +562,10 @@ func TestStateDBArchive(t *testing.T) {
 			if exist := state2.Exist(address1); err != nil || exist != true {
 				t.Errorf("invalid account state at block 2: %t", exist)
 			}
-			if balance := state1.GetBalance(address1); balance.Cmp(big.NewInt(12)) != 0 {
+			if balance := state1.GetBalance(address1); balance != amount.New(12) {
 				t.Errorf("invalid balance at block 1: %s", balance)
 			}
-			if balance := state2.GetBalance(address1); balance.Cmp(big.NewInt(34)) != 0 {
+			if balance := state2.GetBalance(address1); balance != amount.New(34) {
 				t.Errorf("invalid balance at block 2: %s", balance)
 			}
 		})
@@ -614,7 +613,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 						}
 						stateDb.BeginTransaction()
 						// Perform a read + update operation.
-						stateDb.AddBalance(address1, big.NewInt(1))
+						stateDb.AddBalance(address1, amount.New(1))
 						stateDb.EndTransaction()
 						if isPrimary {
 							stateDb.(state.StateDB).EndBlock(uint64(block))
@@ -632,7 +631,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("reading the final balance failed")
 			}
-			if got, want := balance.ToBigInt().Int64(), int64(M); got != want {
+			if got, want := balance, amount.New(M); got != want {
 				t.Fatalf("invalid final balance, wanted %d, got %d", want, got)
 			}
 		})

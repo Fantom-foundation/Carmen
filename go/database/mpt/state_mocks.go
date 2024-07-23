@@ -24,6 +24,7 @@ import (
 
 	backend "github.com/Fantom-foundation/Carmen/go/backend"
 	common "github.com/Fantom-foundation/Carmen/go/common"
+	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -204,6 +205,21 @@ func (m *MockDatabase) GetValue(rootRef *NodeReference, addr common.Address, key
 func (mr *MockDatabaseMockRecorder) GetValue(rootRef, addr, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockDatabase)(nil).GetValue), rootRef, addr, key)
+}
+
+// HasEmptyStorage mocks base method.
+func (m *MockDatabase) HasEmptyStorage(rootRef *NodeReference, addr common.Address) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", rootRef, addr)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockDatabaseMockRecorder) HasEmptyStorage(rootRef, addr any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockDatabase)(nil).HasEmptyStorage), rootRef, addr)
 }
 
 // SetAccountInfo mocks base method.
@@ -390,10 +406,10 @@ func (mr *MockLiveStateMockRecorder) Flush() *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockLiveState) GetBalance(address common.Address) (common.Balance, error) {
+func (m *MockLiveState) GetBalance(address common.Address) (amount.Amount, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", address)
-	ret0, _ := ret[0].(common.Balance)
+	ret0, _ := ret[0].(amount.Amount)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -580,7 +596,7 @@ func (mr *MockLiveStateMockRecorder) RunPostRestoreTasks() *gomock.Call {
 }
 
 // SetBalance mocks base method.
-func (m *MockLiveState) SetBalance(address common.Address, balance common.Balance) error {
+func (m *MockLiveState) SetBalance(address common.Address, balance amount.Amount) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetBalance", address, balance)
 	ret0, _ := ret[0].(error)

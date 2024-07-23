@@ -197,13 +197,21 @@ func (b *writeBuffer) emptyBuffer() {
 		// Check whether the given node has not been canceled in the meantime.
 		b.bufferMutex.Lock()
 		node, found := b.buffer[id]
-		b.bufferMutex.Unlock()
 		if !found {
+			b.bufferMutex.Unlock()
 			continue
 		}
 
 		// Write a snapshot of the node to the disk.
 		handle := node.GetWriteHandle() // write access is needed to clear the dirty flag.
+
+		// To prevent the current node from being restored from the buffer
+		// and modified by another goroutine, we need to keep the buffer
+		// lock until we have write access. Otherwise, we might hold
+		// a node that has been modified, yet its hash has not yet been
+		// updated. Such nodes can not be written to the disk.
+		b.bufferMutex.Unlock()
+
 		if handle.Get().IsDirty() {
 			if err := b.sink.Write(id, handle.AsViewHandle()); err != nil {
 				b.errsMutex.Lock()

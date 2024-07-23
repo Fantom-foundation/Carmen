@@ -156,6 +156,10 @@ func (db *database) QueryBlock(block uint64, run func(HistoricBlockContext) erro
 	)
 }
 
+func (db *database) GetMemoryFootprint() MemoryFootprint {
+	return newMemoryFootprint(db.db.GetMemoryFootprint())
+}
+
 func (db *database) GetArchiveBlockHeight() (int64, error) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -210,7 +214,8 @@ func (db *database) GetHistoricContext(block uint64) (HistoricBlockContext, erro
 		commonContext: commonContext{
 			db: db,
 		},
-		state: state.CreateNonCommittableStateDBUsing(s)}, err
+		archiveState: s,
+		state:        state.CreateNonCommittableStateDBUsing(s)}, err
 }
 
 func (db *database) StartBulkLoad(block uint64) (BulkLoad, error) {

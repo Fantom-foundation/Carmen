@@ -28,6 +28,12 @@ func (t *transactionContext) CreateAccount(address Address) {
 	}
 }
 
+func (t *transactionContext) CreateContract(address Address) {
+	if t.state != nil {
+		t.state.CreateContract(common.Address(address))
+	}
+}
+
 func (t *transactionContext) Exist(address Address) bool {
 	if t.state != nil {
 		return t.state.Exist(common.Address(address))
@@ -49,6 +55,13 @@ func (t *transactionContext) SelfDestruct(address Address) bool {
 	return false
 }
 
+func (t *transactionContext) SelfDestruct6780(address Address) bool {
+	if t.state != nil {
+		return t.state.SuicideNewContract(common.Address(address))
+	}
+	return false
+}
+
 func (t *transactionContext) HasSelfDestructed(address Address) bool {
 	if t.state != nil {
 		return t.state.HasSuicided(common.Address(address))
@@ -58,24 +71,20 @@ func (t *transactionContext) HasSelfDestructed(address Address) bool {
 
 func (t *transactionContext) GetBalance(address Address) Amount {
 	if t.state != nil {
-		amount, err := NewAmountFromBigInt(t.state.GetBalance(common.Address(address)))
-		if err != nil {
-			return NewAmount()
-		}
-		return amount
+		return t.state.GetBalance(common.Address(address))
 	}
 	return NewAmount()
 }
 
 func (t *transactionContext) AddBalance(address Address, value Amount) {
 	if t.state != nil {
-		t.state.AddBalance(common.Address(address), value.ToBig())
+		t.state.AddBalance(common.Address(address), value)
 	}
 }
 
 func (t *transactionContext) SubBalance(address Address, value Amount) {
 	if t.state != nil {
-		t.state.SubBalance(common.Address(address), value.ToBig())
+		t.state.SubBalance(common.Address(address), value)
 	}
 }
 

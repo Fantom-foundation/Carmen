@@ -117,6 +117,30 @@ func TestTribool_Default_Is_Unknown(t *testing.T) {
 	}
 }
 
+func TestTribool_Create_From_Bool(t *testing.T) {
+	tests := map[string]struct {
+		val  bool
+		want Tribool
+	}{
+		"true": {
+			val:  true,
+			want: True(),
+		},
+		"false": {
+			val:  false,
+			want: False(),
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got, want := New(tt.val), tt.want; got != want {
+				t.Errorf("unexpected tribool: got: %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 func TestTriboolString(t *testing.T) {
 	tests := []struct {
 		name string

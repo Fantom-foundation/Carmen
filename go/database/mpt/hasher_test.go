@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -436,7 +437,7 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 		(&AccountNode{}),
 		(&AccountNode{storage: NewNodeReference(BranchId(12))}),
 		(&AccountNode{info: AccountInfo{Nonce: common.Nonce{1, 2, 3}}}),
-		(&AccountNode{info: AccountInfo{Balance: common.Balance{1, 2, 3}}}),
+		(&AccountNode{info: AccountInfo{Balance: amount.New(123)}}),
 		(&AccountNode{info: AccountInfo{CodeHash: common.Hash{1, 2, 3, 4}}}),
 	}
 
@@ -583,46 +584,5 @@ func TestEthereumLikeHasher_GetLowerBoundForValueNode(t *testing.T) {
 		if got, want := size, len(encoded); got > want {
 			t.Errorf("invalid lower bound, encoded size %d, bound %d, node %v", want, got, test)
 		}
-	}
-}
-func TestEthereumLikeHasher_EmbeddedNode_Hashes_As_Itself(t *testing.T) {
-	address := common.Address{0xAB, 0xCD, 0xEF}
-	key := common.Key{0x12, 0x34, 0x56, 0x78}
-	var value common.Value
-	value[20] = 0x02
-	value[21] = 0x04
-
-	ctrl := gomock.NewController(t)
-	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
-
-	desc := &Extension{
-		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
-			storage: &Extension{
-				path:         KeyToNibblePath(key, ctxt)[0:40],
-				nextEmbedded: true,
-				next:         &Tag{label: "V", nested: &Value{key: key, length: 24, value: value}},
-			}},
-	}
-
-	ctxt.Build(desc)
-	ref, sharedNode := ctxt.Get("V")
-	got, err := ctxt.getHashFor(&ref)
-	if err != nil {
-		t.Fatalf("failed to get hash for embedded node: %v", err)
-	}
-	handle := sharedNode.GetReadHandle()
-	defer handle.Release()
-	node := handle.Get()
-	rlp, err := encodeToRlp(node, ctxt, []byte{})
-	if err != nil {
-		t.Fatalf("failed to encode node: %v", err)
-	}
-	var want common.Hash
-	copy(want[:], rlp)
-
-	// hash of an embedded node is its RLP encoding
-	if got != want {
-		t.Errorf("unexpected hash: got: %v, wanted: %v", want, got)
 	}
 }

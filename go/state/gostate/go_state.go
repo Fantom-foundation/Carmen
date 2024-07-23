@@ -13,11 +13,13 @@ package gostate
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"runtime"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"golang.org/x/crypto/sha3"
 )
@@ -108,15 +110,16 @@ func (s *GoState) Exists(address common.Address) (bool, error) {
 	return exist, s.stateError
 }
 
-func (s *GoState) GetBalance(address common.Address) (common.Balance, error) {
+func (s *GoState) GetBalance(address common.Address) (amount.Amount, error) {
 	if err := s.stateError; err != nil {
-		return common.Balance{}, err
+		return amount.New(), err
 	}
 
 	balance, err := s.live.GetBalance(address)
 	if err != nil {
 		s.stateError = errors.Join(s.stateError, err)
 	}
+
 	return balance, s.stateError
 }
 
@@ -423,4 +426,8 @@ func (s *GoState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier
 		verifiers = append(verifiers, verifier)
 	}
 	return backend.NewComposedSnapshotVerifier(verifiers, partCounts), nil
+}
+
+func (s *GoState) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
+	panic("not implemented")
 }

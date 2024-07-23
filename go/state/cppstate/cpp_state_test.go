@@ -15,13 +15,14 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
 var (
 	address1 = common.Address{0x01}
 	key1     = common.Key{0x01}
-	balance1 = common.Balance{0x01}
+	balance1 = amount.New(1)
 	nonce1   = common.Nonce{0x01}
 	val1     = common.Value{0x01}
 )
@@ -62,7 +63,7 @@ func TestReadUninitializedBalance(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error fetching balance: %v", err)
 		}
-		if (balance != common.Balance{}) {
+		if !balance.IsZero() {
 			t.Errorf("Initial balance is not zero, got %v", balance)
 		}
 	})
