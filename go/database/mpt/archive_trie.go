@@ -408,17 +408,6 @@ func (a *ArchiveTrie) CreateCheckpoint() error {
 	return err
 }
 
-func (a *ArchiveTrie) restoreCheckpoint() error {
-	lastBlock, err := a.GetCheckpointBlock()
-	if err != nil {
-		return err
-	}
-	return errors.Join(
-		a.roots.truncate(lastBlock),
-		a.checkpointCoordinator.Restore(),
-	)
-}
-
 func (a *ArchiveTrie) restoreBlockHeight(block uint64) error {
 	currentBlock, _, err := a.GetBlockHeight()
 	if err != nil {
@@ -434,8 +423,12 @@ func (a *ArchiveTrie) restoreBlockHeight(block uint64) error {
 	if block > lastBlock {
 		return fmt.Errorf("block %d is beyond the last checkpoint at %d", block, lastBlock)
 	}
+
+	// TODO: this is super ugly and needs to be cleaned up
+	a.head.(*MptState).trie.root = a.roots.get(block).NodeRef
+
 	return errors.Join(
-		a.restoreCheckpoint(),
+		a.checkpointCoordinator.Restore(),
 		a.roots.truncate(block),
 	)
 }
@@ -688,8 +681,7 @@ func (l *rootList) Abort(checkpoint utils.Checkpoint) error {
 }
 
 func (l *rootList) Restore(checkpoint utils.Checkpoint) error {
-	l.roots = l.roots[:l.checkpointNumRoots]
-	return nil
+	return l.truncate(uint64(l.checkpointNumRoots - 1))
 }
 
 type rootListCheckpointData struct {

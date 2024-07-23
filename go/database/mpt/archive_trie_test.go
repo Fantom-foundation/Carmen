@@ -1898,7 +1898,7 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
 				}
 
-				if err := archive.restoreCheckpoint(); err != nil {
+				if err := archive.restoreBlockHeight(90); err != nil {
 					t.Fatalf("failed to restore checkpoint: %v", err)
 				}
 
@@ -2050,6 +2050,7 @@ func TestArchive_ArchiveRecoveryEndToEndTest(t *testing.T) {
 			}
 
 			// Blocks older than the last checkpoint can be restored.
+			lastBlock := uint64(92)
 			for _, block := range []uint64{90, 89, 85, 85, 47} {
 				if err := RestoreBlockHeight(dir, S5ArchiveConfig, block); err != nil {
 					t.Fatalf("failed to restore block height %d: %v", block, err)
@@ -2059,6 +2060,7 @@ func TestArchive_ArchiveRecoveryEndToEndTest(t *testing.T) {
 				if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
 					t.Fatalf("failed to verify archive after reset to block %d: %v", block, err)
 				}
+				lastBlock = block
 			}
 
 			// Check that restored archive can be opened again.
@@ -2072,7 +2074,7 @@ func TestArchive_ArchiveRecoveryEndToEndTest(t *testing.T) {
 				if err != nil {
 					t.Fatalf("cannot get block height: %v", err)
 				}
-				if want, got := uint64(47), block; want != got {
+				if want, got := lastBlock, block; want != got {
 					t.Errorf("unexpected block height, wanted %d, got %d", want, got)
 				}
 
@@ -2086,7 +2088,7 @@ func TestArchive_ArchiveRecoveryEndToEndTest(t *testing.T) {
 				}
 
 				// additional blocks can be added
-				if err := addBlocks(archive /*48 deliberately skipped*/, 49, 52); err != nil {
+				if err := addBlocks(archive, int(lastBlock+2), int(lastBlock+7)); err != nil {
 					t.Fatalf("failed to add blocks: %v", err)
 				}
 
