@@ -455,7 +455,7 @@ func TestWitnessProof_Extract_and_Merge_Proofs(t *testing.T) {
 		if !complete {
 			t.Errorf("proof for %v %v %v not found", rootHash, address1, key1)
 		}
-		if got, want := extractedProofAddress1Key1, address1Key1Proof; !got.Equals(want) {
+		if got, want := extractedProofAddress1Key1, address1Key1Proof; !want.Equals(got) {
 			t.Errorf("unexpected proof: got %v, want %v", got, want)
 		}
 
@@ -463,7 +463,7 @@ func TestWitnessProof_Extract_and_Merge_Proofs(t *testing.T) {
 		if !complete {
 			t.Errorf("proof for %v %v %v not found", rootHash, address1, key1)
 		}
-		if got, want := extractedProofAddress2, address2Proof; !got.Equals(want) {
+		if got, want := extractedProofAddress2, address2Proof; !want.Equals(got) {
 			t.Errorf("unexpected proof: got %v, want %v", got, want)
 		}
 	})
@@ -535,7 +535,7 @@ func TestWitnessProof_Extract_Various_NodeTypes_NotFoundProofs(t *testing.T) {
 			}
 
 			// cannot be proven, but the proof must be still complete
-			if got, want := extractedProof, totalProof; !got.Equals(want) {
+			if got, want := extractedProof, totalProof; !want.Equals(got) {
 				t.Errorf("unexpected proof: got %v, want %v", got, want)
 			}
 		})
@@ -630,7 +630,7 @@ func TestWitnessProof_Extract_Can_Extract_Terminal_Nodes_In_Proof(t *testing.T) 
 			}
 
 			// cannot be proven, but the proof must be still complete
-			if got, want := extractedProof, expectedProof; !got.Equals(want) {
+			if got, want := extractedProof, expectedProof; !want.Equals(got) {
 				t.Errorf("unexpected proof: got %v, want %v", got, want)
 			}
 		})
@@ -753,12 +753,189 @@ func TestWitnessProof_Extract_EmbeddedNode_In_Proof(t *testing.T) {
 			if got, want := complete, true; got != want {
 				t.Errorf("unexpected proof existence: got %v, want %v", got, want)
 			}
-			if got, want := proof, totalProof; !got.Equals(want) {
+			if got, want := proof, totalProof; !want.Equals(got) {
 				t.Errorf("unexpected proof: got %v, want %v", got, want)
 			}
 		})
 	}
+}
 
+func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	address := common.Address{1}
+	key := common.Key{2}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+	addressNibbles := AddressToNibblePath(address, ctxt)
+	keyNibbles := KeyToNibblePath(key, ctxt)
+
+	desc := &Branch{
+		children: Children{
+			addressNibbles[0]: &Branch{
+				children: Children{
+					addressNibbles[1]: &Extension{
+						path: addressNibbles[2:50],
+						next: &Tag{"A", &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
+							storage: &Tag{"B", &Branch{
+								children: Children{
+									keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Value{key: key, length: 24, value: common.Value{0x12}}},
+								}}}}}},
+				}}},
+	}
+
+	root, _ := ctxt.Build(desc)
+
+	proof, err := CreateWitnessProof(ctxt, &root, address, key)
+	if err != nil {
+		t.Fatalf("failed to create proof: %v", err)
+	}
+
+	if !proof.IsValid() {
+		t.Fatalf("proof is not valid")
+	}
+
+	accountProofWant, err := CreateWitnessProof(ctxt, &root, address)
+	if err != nil {
+		t.Fatalf("failed to create account proof: %v", err)
+	}
+
+	// get content of complete proof that is not in the account proof -> it gives the storage proof
+	storageProofWant := WitnessProof{make(proofDb)}
+	for k, v := range proof.proofDb {
+		if _, exists := accountProofWant.proofDb[k]; !exists {
+			storageProofWant.proofDb[k] = v
+		}
+	}
+
+	_, accountNode := ctxt.Get("A")
+	accountHandle := accountNode.GetViewHandle()
+	storageHashWant := accountHandle.Get().(*AccountNode).storageHash
+	accountHandle.Release()
+
+	hash, _ := ctxt.getHashFor(&root)
+
+	accountProof, complete := proof.Extract(hash, address)
+	if !complete {
+		t.Fatalf("proof is not complete")
+	}
+	if !accountProof.IsValid() {
+		t.Fatalf("account proof is not valid")
+	}
+
+	t.Run("Extract storage", func(t *testing.T) {
+		storageElements, storageHash, complete := proof.GetStorageElements(hash, address, key)
+		if !complete {
+			t.Fatalf("proof is not complete")
+		}
+		storageProof := CreateWitnessProofFromNodes(storageElements)
+		if !storageProof.IsValid() {
+			t.Fatalf("storage proof is not valid")
+		}
+		if len(storageProof.proofDb) == 0 {
+			t.Errorf("storage proof is empty")
+		}
+		if _, exists := storageProof.proofDb[storageHash]; !exists {
+			t.Errorf("storage hash not found")
+		}
+
+		if got, want := storageHash, storageHashWant; got != want {
+			t.Errorf("unexpected storage hash: got %v, want %v", got, want)
+		}
+
+		if got, want := accountProof, accountProofWant; !want.Equals(got) {
+			t.Errorf("unexpected account proof: got %v, want %v", got, want)
+		}
+
+		if got, want := storageProof, storageProofWant; !want.Equals(got) {
+			t.Errorf("unexpected storage proof: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("Extract empty storage", func(t *testing.T) {
+		storageElements, storageHash, complete := proof.GetStorageElements(hash, address, common.Key{})
+		if !complete {
+			t.Fatalf("proof is not complete")
+		}
+		storageProof := CreateWitnessProofFromNodes(storageElements)
+
+		if !storageProof.IsValid() {
+			t.Fatalf("storage proof is not valid")
+		}
+
+		if got, want := storageHash, storageHashWant; got != want {
+			t.Errorf("unexpected storage hash: got %v, want %v", got, want)
+		}
+
+		// proof will contain first storage node, then the path diverges,
+		// i.e. only this one node is part of the proof
+		_, storageNode := ctxt.Get("B")
+		storageHandle := storageNode.GetViewHandle()
+		n := storageHandle.Get()
+		rlp, _ := encodeToRlp(n, ctxt, []byte{})
+		wantProof := proofDb{}
+		wantProof[common.Keccak256(rlp)] = rlp
+		storageHandle.Release()
+
+		if got, want := storageProof, (WitnessProof{wantProof}); !want.Equals(got) {
+			t.Errorf("unexpected storage proof: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("Extract empty account", func(t *testing.T) {
+		storageElements, storageHash, complete := proof.GetStorageElements(hash, common.Address{}, common.Key{})
+		if !complete {
+			t.Fatalf("proof is not complete")
+		}
+		storageProof := CreateWitnessProofFromNodes(storageElements)
+		if !storageProof.IsValid() {
+			t.Fatalf("storage proof is not valid")
+		}
+
+		if got, want := storageHash, (common.Hash{}); got != want {
+			t.Errorf("unexpected storage hash: got %v, want %v", got, want)
+		}
+
+		if got, want := storageProof, (WitnessProof{}); !want.Equals(got) {
+			t.Errorf("unexpected storage proof: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("Incomplete proof", func(t *testing.T) {
+		// proof will contain first storage node, then the path diverges,
+		// i.e. only this one node is part of the proof
+		_, storageNode := ctxt.Get("B")
+		storageHandle := storageNode.GetViewHandle()
+		n := storageHandle.Get()
+		rlp, _ := encodeToRlp(n, ctxt, []byte{})
+		storageHandle.Release()
+
+		proofCopy := CreateWitnessProofFromNodes(proof.GetElements())
+		delete(proofCopy.proofDb, common.Keccak256(rlp))
+
+		_, _, complete := proofCopy.GetStorageElements(hash, address, common.Key{})
+		if complete {
+			t.Errorf("proof should not be complete")
+		}
+	})
+
+	t.Run("Corrupted proof", func(t *testing.T) {
+		// proof will contain first storage node, then the path diverges,
+		// i.e. only this one node is part of the proof
+		_, storageNode := ctxt.Get("B")
+		storageHandle := storageNode.GetViewHandle()
+		n := storageHandle.Get()
+		rlp, _ := encodeToRlp(n, ctxt, []byte{})
+		storageHandle.Release()
+
+		proofCopy := CreateWitnessProofFromNodes(proof.GetElements())
+		proofCopy.proofDb[common.Keccak256(rlp)] = []byte{0xAA, 0xBB, 0xCC, 0xDD}
+
+		_, _, complete := proofCopy.GetStorageElements(hash, address, common.Key{})
+		if complete {
+			t.Errorf("proof should not be complete")
+		}
+	})
 }
 
 func TestWitnessProof_Access_Proof_Fields(t *testing.T) {
@@ -1065,6 +1242,24 @@ func TestWitnessProof_String(t *testing.T) {
 	if got, want := fmt.Sprintf("%s", WitnessProof{proof}), str; got != want {
 		t.Errorf("unexpected string: got %v, want %v", got, want)
 	}
+}
+
+func TestProof_Equals(t *testing.T) {
+	proof := CreateWitnessProofFromNodes([]string{"a"})
+
+	if proof.Equals(nil) {
+		t.Errorf("proofs should not be equal")
+	}
+
+	if !proof.Equals(proof) {
+		t.Errorf("proofs should be equal")
+	}
+
+	other := CreateWitnessProofFromNodes([]string{"a"})
+	if !proof.Equals(other) {
+		t.Errorf("proofs should be equal")
+	}
+
 }
 
 // createReferenceProofForLabels creates a reference witness proof for the given root node.
