@@ -46,15 +46,15 @@ type CheckpointCoordinator interface {
 	Restore() error
 }
 
-// CheckpointParticipant is a participant in a checkpoint that can participate in
-// the coordinated creation and restoration of checkpoints.
+// CheckpointParticipant engages in a coordinated creation and restoration of
+// checkpoints.
 type CheckpointParticipant interface {
 	// GuaranteeCheckpoint requires the participant to check whether a restoration
 	// to the given checkpoint is possible. If the participant is not able to restore to
 	// the given checkpoint, an error is returned. If the participant finds the given
-	// checkpoint as a prepared checkpoint that has not yet been committed, it should
-	// be committed. If there is a prepared checkpoint beyond the given checkpoint,
-	// it can be discarded.
+	// checkpoint as a prepared checkpoint that has not yet been committed, the call
+	// should perform the commit. If there is a prepared checkpoint beyond the given
+	// checkpoint, it can be discarded.
 	GuaranteeCheckpoint(Checkpoint) error
 
 	// Prepare is called to signal the participant to prepare for a new checkpoint.
@@ -74,7 +74,7 @@ type CheckpointParticipant interface {
 	// for future restore calls.
 	Abort(Checkpoint) error
 
-	// Restore requests this participant to restore the state overed by the given
+	// Restore requests this participant to restore the state to the given
 	// checkpoint -- which may be the last previously committed checkpoint or a
 	// prepared checkpoint that has not been aborted or committed yet.
 	Restore(Checkpoint) error
@@ -211,7 +211,7 @@ func readCheckpointFile(path string) (Checkpoint, error) {
 	}
 	content := make([]byte, 4)
 	if _, err := io.ReadFull(file, content); err != nil {
-		return 0, err
+		return 0, errors.Join(err, file.Close())
 	}
 	return Checkpoint(binary.BigEndian.Uint32(content)), file.Close()
 }

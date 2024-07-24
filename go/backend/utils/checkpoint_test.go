@@ -26,12 +26,12 @@ func TestCheckpointCoordinator_CanHandleSuccessfulCommit(t *testing.T) {
 	p2 := NewMockCheckpointParticipant(ctrl)
 
 	gomock.InOrder(
-		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(0)).Return(nil),
-		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(0)).Return(nil),
-		p1.EXPECT().Prepare(Checkpoint(1)).Return(nil),
-		p2.EXPECT().Prepare(Checkpoint(1)).Return(nil),
-		p1.EXPECT().Commit(Checkpoint(1)).Return(nil),
-		p2.EXPECT().Commit(Checkpoint(1)).Return(nil),
+		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(0)),
+		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(0)),
+		p1.EXPECT().Prepare(Checkpoint(1)),
+		p2.EXPECT().Prepare(Checkpoint(1)),
+		p1.EXPECT().Commit(Checkpoint(1)),
+		p2.EXPECT().Commit(Checkpoint(1)),
 	)
 
 	coordinator, err := NewCheckpointCoordinator(t.TempDir(), p1, p2)
@@ -60,11 +60,11 @@ func TestCheckpointCoordinator_CommitIsAbortedIfPreparationFails(t *testing.T) {
 
 	injectedError := fmt.Errorf("injected error")
 	gomock.InOrder(
-		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(0)).Return(nil),
-		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(0)).Return(nil),
-		p1.EXPECT().Prepare(Checkpoint(1)).Return(nil),
+		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(0)),
+		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(0)),
+		p1.EXPECT().Prepare(Checkpoint(1)),
 		p2.EXPECT().Prepare(Checkpoint(1)).Return(injectedError),
-		p1.EXPECT().Abort(Checkpoint(1)).Return(nil),
+		p1.EXPECT().Abort(Checkpoint(1)),
 	)
 
 	coordinator, err := NewCheckpointCoordinator(t.TempDir(), p1, p2)
@@ -94,9 +94,9 @@ func TestCheckpointCoordinator_ErrorsDuringAbortAreCollected(t *testing.T) {
 	injectedCommitError := fmt.Errorf("injected error")
 	injectedAbortError := fmt.Errorf("injected error")
 	gomock.InOrder(
-		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(0)).Return(nil),
-		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(0)).Return(nil),
-		p1.EXPECT().Prepare(Checkpoint(1)).Return(nil),
+		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(0)),
+		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(0)),
+		p1.EXPECT().Prepare(Checkpoint(1)),
 		p2.EXPECT().Prepare(Checkpoint(1)).Return(injectedCommitError),
 		p1.EXPECT().Abort(Checkpoint(1)).Return(injectedAbortError),
 	)
@@ -163,8 +163,8 @@ func TestCheckpointCoordinator_ParticipantsAreCheckedForLastCommitNumber(t *test
 	p2 := NewMockCheckpointParticipant(ctrl)
 
 	gomock.InOrder(
-		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(3)).Return(nil),
-		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(3)).Return(nil),
+		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(3)),
+		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(3)),
 	)
 
 	_, err = NewCheckpointCoordinator(dir, p1, p2)
@@ -242,7 +242,7 @@ func TestCheckpointCoordinator_InconsistentParticipantsAreDetected(t *testing.T)
 	p2 := NewMockCheckpointParticipant(ctrl)
 
 	gomock.InOrder(
-		p1.EXPECT().GuaranteeCheckpoint(checkpoint).Return(nil),
+		p1.EXPECT().GuaranteeCheckpoint(checkpoint),
 		p2.EXPECT().GuaranteeCheckpoint(checkpoint).Return(errors.New("inconsistent state")),
 	)
 
