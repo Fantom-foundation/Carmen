@@ -22,8 +22,8 @@ import (
 
 func TestCheckpointCoordinator_CanHandleSuccessfulCommit(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	p1 := NewMockCheckpointParticipant(ctrl)
-	p2 := NewMockCheckpointParticipant(ctrl)
+	p1 := NewMockParticipant(ctrl)
+	p2 := NewMockParticipant(ctrl)
 
 	gomock.InOrder(
 		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(0)),
@@ -55,8 +55,8 @@ func TestCheckpointCoordinator_CanHandleSuccessfulCommit(t *testing.T) {
 
 func TestCheckpointCoordinator_CommitIsAbortedIfPreparationFails(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	p1 := NewMockCheckpointParticipant(ctrl)
-	p2 := NewMockCheckpointParticipant(ctrl)
+	p1 := NewMockParticipant(ctrl)
+	p2 := NewMockParticipant(ctrl)
 
 	injectedError := fmt.Errorf("injected error")
 	gomock.InOrder(
@@ -88,8 +88,8 @@ func TestCheckpointCoordinator_CommitIsAbortedIfPreparationFails(t *testing.T) {
 
 func TestCheckpointCoordinator_ErrorsDuringAbortAreCollected(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	p1 := NewMockCheckpointParticipant(ctrl)
-	p2 := NewMockCheckpointParticipant(ctrl)
+	p1 := NewMockParticipant(ctrl)
+	p2 := NewMockParticipant(ctrl)
 
 	injectedCommitError := fmt.Errorf("injected error")
 	injectedAbortError := fmt.Errorf("injected error")
@@ -159,8 +159,8 @@ func TestCheckpointCoordinator_ParticipantsAreCheckedForLastCommitNumber(t *test
 	}
 
 	ctrl := gomock.NewController(t)
-	p1 := NewMockCheckpointParticipant(ctrl)
-	p2 := NewMockCheckpointParticipant(ctrl)
+	p1 := NewMockParticipant(ctrl)
+	p2 := NewMockParticipant(ctrl)
 
 	gomock.InOrder(
 		p1.EXPECT().GuaranteeCheckpoint(Checkpoint(3)),
@@ -238,8 +238,8 @@ func TestCheckpointCoordinator_InconsistentParticipantsAreDetected(t *testing.T)
 	}
 
 	ctrl := gomock.NewController(t)
-	p1 := NewMockCheckpointParticipant(ctrl)
-	p2 := NewMockCheckpointParticipant(ctrl)
+	p1 := NewMockParticipant(ctrl)
+	p2 := NewMockParticipant(ctrl)
 
 	gomock.InOrder(
 		p1.EXPECT().GuaranteeCheckpoint(checkpoint),
@@ -255,7 +255,7 @@ func TestCheckpointCoordinator_FailedCommitLeadsToAbort(t *testing.T) {
 	dir := t.TempDir()
 
 	ctrl := gomock.NewController(t)
-	participant := NewMockCheckpointParticipant(ctrl)
+	participant := NewMockParticipant(ctrl)
 
 	gomock.InOrder(
 		participant.EXPECT().GuaranteeCheckpoint(Checkpoint(0)),
@@ -283,7 +283,7 @@ func TestCheckpointCoordinator_FailedCommitOfParticipantLeadsToAnError(t *testin
 	dir := t.TempDir()
 
 	ctrl := gomock.NewController(t)
-	participant := NewMockCheckpointParticipant(ctrl)
+	participant := NewMockParticipant(ctrl)
 
 	injectedError := fmt.Errorf("injected error")
 	gomock.InOrder(
@@ -311,8 +311,8 @@ func TestCheckPointCoordinator_RestoreSignalsAllParticipantsToRestoreLastCheckpo
 	}
 
 	ctrl := gomock.NewController(t)
-	p1 := NewMockCheckpointParticipant(ctrl)
-	p2 := NewMockCheckpointParticipant(ctrl)
+	p1 := NewMockParticipant(ctrl)
+	p2 := NewMockParticipant(ctrl)
 
 	gomock.InOrder(
 		p1.EXPECT().GuaranteeCheckpoint(checkpoint),
@@ -335,10 +335,10 @@ func TestCheckPointCoordinator_RestoreIssuesAreCollectedAndReported(t *testing.T
 	dir := t.TempDir()
 
 	ctrl := gomock.NewController(t)
-	p1 := NewMockCheckpointParticipant(ctrl)
-	p2 := NewMockCheckpointParticipant(ctrl)
-	p3 := NewMockCheckpointParticipant(ctrl)
-	p4 := NewMockCheckpointParticipant(ctrl)
+	p1 := NewMockParticipant(ctrl)
+	p2 := NewMockParticipant(ctrl)
+	p3 := NewMockParticipant(ctrl)
+	p4 := NewMockParticipant(ctrl)
 
 	checkpoint := Checkpoint(0)
 	issue1 := fmt.Errorf("issue 1")
