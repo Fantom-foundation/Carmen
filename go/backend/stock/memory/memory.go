@@ -15,18 +15,25 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // inMemoryStock provides an in-memory implementation of the stock.Stock interface.
 type inMemoryStock[I stock.Index, V any] struct {
-	values    []V
-	freeList  []I
-	directory string
-	encoder   stock.ValueEncoder[V]
+	values                          []V
+	freeList                        []I
+	directory                       string
+	encoder                         stock.ValueEncoder[V]
+	checkpoint                      checkpoint.Checkpoint
+	checkpointValueListLength       I
+	checkpointFreeListLength        int
+	backupCheckpointValueListLength I
+	backupCheckpointFreeListLength  int
 }
 
 func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (stock.Stock[I, V], error) {
@@ -37,13 +44,13 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		encoder:   encoder,
 	}
 
-	// Create the direcory if needed.
+	// Create the directory if needed.
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, err
 	}
 
 	// Test whether a meta file exists in this directory.
-	metafile := directory + "/meta.json"
+	metafile := filepath.Join(directory, "meta.json")
 	if _, err := os.Stat(metafile); err != nil {
 		return res, nil
 	}
@@ -74,7 +81,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Load list of values.
 	{
-		valuefile := directory + "/values.dat"
+		valuefile := filepath.Join(directory, "values.dat")
 		stats, err := os.Stat(valuefile)
 		if err != nil {
 			return nil, err
@@ -102,7 +109,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Load freelist.
 	{
-		freelistfile := directory + "/freelist.dat"
+		freelistfile := filepath.Join(directory, "freelist.dat")
 		stats, err := os.Stat(freelistfile)
 		if err != nil {
 			return nil, err
@@ -126,6 +133,11 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		}
 	}
 
+	// Load last checkpoint.
+	res.checkpoint = meta.LastCheckpoint
+	res.checkpointValueListLength = I(meta.LastCheckpointValueListLength)
+	res.checkpointFreeListLength = meta.LastCheckpointFreeListLength
+
 	return res, nil
 }
 
@@ -135,7 +147,7 @@ func (s *inMemoryStock[I, V]) New() (I, error) {
 
 	// Reuse free index positions or grow list of values.
 	lenFreeList := len(s.freeList)
-	if lenFreeList > 0 {
+	if lenFreeList > s.checkpointFreeListLength {
 		index = s.freeList[lenFreeList-1]
 		s.freeList = s.freeList[0 : lenFreeList-1]
 	} else {
@@ -158,6 +170,9 @@ func (s *inMemoryStock[I, V]) Set(index I, value V) error {
 	if index >= I(len(s.values)) || index < 0 {
 		return fmt.Errorf("index out of range, got %d, range [0,%d)", index, I(len(s.values)))
 	}
+	if index < s.checkpointValueListLength {
+		return fmt.Errorf("index %d is read-only", index)
+	}
 	s.values[index] = value
 	return nil
 }
@@ -165,6 +180,9 @@ func (s *inMemoryStock[I, V]) Set(index I, value V) error {
 func (s *inMemoryStock[I, V]) Delete(index I) error {
 	if index >= I(len(s.values)) || index < 0 {
 		return nil
+	}
+	if index < s.checkpointValueListLength {
+		return fmt.Errorf("index %d is read-only", index)
 	}
 	s.freeList = append(s.freeList, index)
 	return nil
@@ -188,25 +206,37 @@ func (s *inMemoryStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *inMemoryStock[I, V]) Flush() error {
+	return s.writeTo(s.directory)
+}
+
+func (s *inMemoryStock[I, V]) writeTo(dir string) error {
+	// Create the directory if needed.
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
 	// Write metadata.
 	var index I
 	indexSize := int(unsafe.Sizeof(index))
 	metadata, err := json.Marshal(metadata{
-		Version:         dataFormatVersion,
-		IndexTypeSize:   indexSize,
-		ValueTypeSize:   s.encoder.GetEncodedSize(),
-		ValueListLength: len(s.values),
-		FreeListLength:  len(s.freeList),
+		Version:                       dataFormatVersion,
+		IndexTypeSize:                 indexSize,
+		ValueTypeSize:                 s.encoder.GetEncodedSize(),
+		ValueListLength:               len(s.values),
+		FreeListLength:                len(s.freeList),
+		LastCheckpoint:                s.checkpoint,
+		LastCheckpointValueListLength: int(s.checkpointValueListLength),
+		LastCheckpointFreeListLength:  int(s.checkpointFreeListLength),
 	})
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), metadata, 0600); err != nil {
 		return err
 	}
 
 	// Write list of values.
-	if f, err := os.Create(s.directory + "/values.dat"); err != nil {
+	if f, err := os.Create(filepath.Join(dir, "values.dat")); err != nil {
 		return err
 	} else {
 		defer f.Close()
@@ -226,7 +256,7 @@ func (s *inMemoryStock[I, V]) Flush() error {
 	}
 
 	// Write free list.
-	if f, err := os.Create(s.directory + "/freelist.dat"); err != nil {
+	if f, err := os.Create(filepath.Join(dir, "freelist.dat")); err != nil {
 		return err
 	} else {
 		defer f.Close()
@@ -251,13 +281,100 @@ func (s *inMemoryStock[I, V]) Close() error {
 	return s.Flush()
 }
 
+func (s *inMemoryStock[I, V]) GuaranteeCheckpoint(checkpoint checkpoint.Checkpoint) error {
+	// If requested checkpoint is the stock's current checkpoint, everything is fine.
+	if s.checkpoint == checkpoint {
+		return nil
+	}
+
+	// If the requested checkpoint is pending, it needs to be completed.
+	if s.checkpoint+1 == checkpoint {
+		return s.Commit(checkpoint)
+	}
+
+	// Otherwise, the stock is in an inconsistent state.
+	return fmt.Errorf("unable to guarantee availability of checkpoint %d", checkpoint)
+}
+
+func (s *inMemoryStock[I, V]) Prepare(commit checkpoint.Checkpoint) error {
+	if s.checkpoint+1 != commit {
+		return fmt.Errorf("unable to prepare checkpoint %d, expected %d", commit, s.checkpoint+1)
+	}
+	if err := s.Flush(); err != nil {
+		return err
+	}
+	return writeCheckpointMetaData(filepath.Join(s.directory, "prepare.json"), checkpointData{
+		Checkpoint:     commit,
+		NumValues:      len(s.values),
+		FreeListLength: len(s.freeList),
+	})
+}
+
+func (s *inMemoryStock[I, V]) Commit(checkpoint checkpoint.Checkpoint) error {
+	prepareFile := filepath.Join(s.directory, "prepare.json")
+	commitFile := filepath.Join(s.directory, "commit.json")
+	meta, err := readCheckpointMetaData(prepareFile)
+	if err != nil {
+		return err
+	}
+	if meta.Checkpoint != checkpoint {
+		return fmt.Errorf("unable to commit checkpoint %d, expected %d", checkpoint, meta.Checkpoint)
+	}
+	s.checkpoint = checkpoint
+	s.checkpointValueListLength = I(meta.NumValues)
+	s.checkpointFreeListLength = meta.FreeListLength
+	return os.Rename(prepareFile, commitFile)
+}
+
+func (s *inMemoryStock[I, V]) Abort(commit checkpoint.Checkpoint) error {
+	s.checkpointValueListLength = s.backupCheckpointValueListLength
+	s.checkpointFreeListLength = s.backupCheckpointFreeListLength
+	prepareFile := filepath.Join(s.directory, "prepare.json")
+	return os.Remove(prepareFile)
+}
+
+func (s *inMemoryStock[I, V]) Restore(checkpoint checkpoint.Checkpoint) error {
+	s.values = s.values[:s.checkpointValueListLength]
+	s.freeList = s.freeList[:s.checkpointFreeListLength]
+	return nil
+}
+
 const dataFormatVersion = 0
 
 // metadata is the helper type to read and write metadata from/to the disk.
 type metadata struct {
-	Version         int
-	IndexTypeSize   int
-	ValueTypeSize   int
-	ValueListLength int
-	FreeListLength  int
+	Version                       int
+	IndexTypeSize                 int
+	ValueTypeSize                 int
+	ValueListLength               int
+	FreeListLength                int
+	LastCheckpoint                checkpoint.Checkpoint
+	LastCheckpointValueListLength int
+	LastCheckpointFreeListLength  int
+}
+
+type checkpointData struct {
+	Checkpoint     checkpoint.Checkpoint
+	NumValues      int
+	FreeListLength int
+}
+
+func readCheckpointMetaData(path string) (checkpointData, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return checkpointData{}, err
+	}
+	var meta checkpointData
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return checkpointData{}, err
+	}
+	return meta, nil
+}
+
+func writeCheckpointMetaData(path string, data checkpointData) error {
+	meta, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, meta, 0600)
 }

@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -77,4 +78,34 @@ func (s *syncedStock[I, V]) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.nested.Close()
+}
+
+func (s *syncedStock[I, V]) GuaranteeCheckpoint(checkpoint checkpoint.Checkpoint) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.GuaranteeCheckpoint(checkpoint)
+}
+
+func (s *syncedStock[I, V]) Prepare(checkpoint checkpoint.Checkpoint) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Prepare(checkpoint)
+}
+
+func (s *syncedStock[I, V]) Commit(checkpoint checkpoint.Checkpoint) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Commit(checkpoint)
+}
+
+func (s *syncedStock[I, V]) Abort(checkpoint checkpoint.Checkpoint) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Abort(checkpoint)
+}
+
+func (s *syncedStock[I, V]) Restore(checkpoint checkpoint.Checkpoint) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Restore(checkpoint)
 }

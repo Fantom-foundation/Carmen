@@ -19,6 +19,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"go.uber.org/mock/gomock"
 )
 
@@ -586,6 +587,34 @@ func BenchmarkFileStock_Set(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if err := stock.Set(id, 12); err != nil {
 			b.Fatalf("failed to set value: %v", err)
+		}
+	}
+}
+
+func BenchmarkFileStock_Commit(b *testing.B) {
+	dir := b.TempDir()
+	stock, err := openStock[int, int](stock.IntEncoder{}, dir)
+	if err != nil {
+		b.Fatalf("failed to open stock")
+	}
+	for i := 0; i < 10; i++ {
+		id, err := stock.New()
+		if err != nil {
+			b.Fatalf("failed to create item in stock")
+		}
+		if err := stock.Set(id, i); err != nil {
+			b.Fatalf("failed to set value in stock")
+		}
+	}
+	defer stock.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := stock.Prepare(checkpoint.Checkpoint(i + 1)); err != nil {
+			b.Fatalf("failed to prepare commit: %v", err)
+		}
+		if err := stock.Commit(checkpoint.Checkpoint(i + 1)); err != nil {
+			b.Fatalf("failed to commit: %v", err)
 		}
 	}
 }

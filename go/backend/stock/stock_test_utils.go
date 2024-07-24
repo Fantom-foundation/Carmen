@@ -14,6 +14,8 @@ import (
 	"encoding/binary"
 	"os"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 )
 
 type IntEncoder struct{}
@@ -60,6 +62,13 @@ func RunStockTests(t *testing.T, factory NamedStockFactory) {
 	t.Run("CanBeClosedAndReopened", wrap(testCanBeClosedAndReopened))
 	t.Run("GetIdsProducesAllIdsInTheStock", wrap(testGetIdsProducesAllIdsInTheStock))
 	t.Run("GetDeleteIndexOutOfRange", wrap(testDeleteIndexOutOfRange))
+	t.Run("CanCreateCheckpoint", wrap(testCanCreateCheckpoint))
+	t.Run("CanBeCommittedAndSealed", wrap(testCanBeCommittedAndSealed))
+	t.Run("CheckpointCreationCanBeAborted", wrap(testCheckpointCreationCanBeAborted))
+	t.Run("CheckpointIsPersisted", wrap(testCheckpointIsPersisted))
+	t.Run("StockElementsIncludedInCheckpointArePersisted", wrap(testStockElementsIncludedInCheckpointArePersisted))
+	t.Run("CheckpointCanBeRecoverFromCrashAfterPrepare", wrap(testCheckpointCanBeRecoverFromCrashAfterPrepare))
+	t.Run("RestoreResetsStockContent", wrap(testRestoreResetsStockContent))
 }
 
 func testNewCreatesFreshIndexValues(t *testing.T, factory NamedStockFactory) {
@@ -394,5 +403,269 @@ func testDeleteIndexOutOfRange(t *testing.T, factory NamedStockFactory) {
 
 	if err := stock.Delete(1); err != nil {
 		t.Errorf("deleting index above range should be no-op")
+	}
+}
+
+func testCanCreateCheckpoint(t *testing.T, factory NamedStockFactory) {
+	commitDir := t.TempDir()
+	stockDir := t.TempDir()
+
+	stock, err := factory.Open(t, stockDir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+	coordinator, err := checkpoint.NewCoordinator(commitDir, stock)
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+
+	if _, err := coordinator.CreateCheckpoint(); err != nil {
+		t.Fatalf("failed to create checkpoint: %v", err)
+	}
+
+	if err := stock.Close(); err != nil {
+		t.Fatalf("failed to close stock: %v", err)
+	}
+}
+
+func testCanBeCommittedAndSealed(t *testing.T, factory NamedStockFactory) {
+	stock, err := factory.Open(t, t.TempDir())
+	if err != nil {
+		t.Errorf("failed to open stock: %v", err)
+	}
+
+	id, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if err := stock.Set(id, 1); err != nil {
+		t.Fatalf("failed to set value in stock: %v", err)
+	}
+
+	if err := stock.Prepare(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+
+	if err := stock.Commit(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to commit checkpoint: %v", err)
+	}
+
+	if err := stock.GuaranteeCheckpoint(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to check checkpoint: %v", err)
+	}
+
+	if err := stock.Set(id, 2); err == nil {
+		t.Errorf("setting value should fail after the commit of a checkpoint")
+	}
+}
+
+func testCheckpointCreationCanBeAborted(t *testing.T, factory NamedStockFactory) {
+	stock, err := factory.Open(t, t.TempDir())
+	if err != nil {
+		t.Errorf("failed to open stock: %v", err)
+	}
+
+	id, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if err := stock.Set(id, 1); err != nil {
+		t.Fatalf("failed to set value in stock: %v", err)
+	}
+
+	if err := stock.Prepare(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+
+	if err := stock.Abort(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to abort checkpoint creation: %v", err)
+	}
+
+	if err := stock.GuaranteeCheckpoint(checkpoint.Checkpoint(0)); err != nil {
+		t.Fatalf("failed to check pre-existing checkpoint: %v", err)
+	}
+
+	if err := stock.Set(id, 2); err != nil {
+		t.Errorf("as the checkpoint creation was aborted, setting value should succeed: %v", err)
+	}
+}
+
+func testCheckpointIsPersisted(t *testing.T, factory NamedStockFactory) {
+	dir := t.TempDir()
+	stock, err := factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	if err := stock.GuaranteeCheckpoint(checkpoint.Checkpoint(0)); err != nil {
+		t.Fatalf("failed to check checkpoint: %v", err)
+	}
+
+	if err := stock.Prepare(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+	if err := stock.Commit(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to commit checkpoint: %v", err)
+	}
+	if err := stock.Close(); err != nil {
+		t.Fatalf("failed to close stock: %v", err)
+	}
+
+	stock, err = factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	if err := stock.GuaranteeCheckpoint(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to check checkpoint: %v", err)
+	}
+}
+
+func testStockElementsIncludedInCheckpointArePersisted(t *testing.T, factory NamedStockFactory) {
+	dir := t.TempDir()
+	stock, err := factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	id, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if err := stock.Set(id, 1); err != nil {
+		t.Fatalf("failed to set value in stock: %v", err)
+	}
+
+	if err := stock.GuaranteeCheckpoint(checkpoint.Checkpoint(0)); err != nil {
+		t.Fatalf("failed to check checkpoint: %v", err)
+	}
+
+	if err := stock.Prepare(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+	if err := stock.Commit(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to checkpoint: %v", err)
+	}
+	if err := stock.Close(); err != nil {
+		t.Fatalf("failed to close stock: %v", err)
+	}
+
+	stock, err = factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	if err := stock.GuaranteeCheckpoint(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to check checkpoint: %v", err)
+	}
+
+	if err := stock.Set(id, 1); err == nil {
+		t.Errorf("committed value should not be allowed to be set any more")
+	}
+}
+
+func testCheckpointCanBeRecoverFromCrashAfterPrepare(t *testing.T, factory NamedStockFactory) {
+	tests := map[string]struct {
+		recoveryCommit checkpoint.Checkpoint
+		shouldBeSealed bool
+	}{
+		"crash-before-commit": {
+			recoveryCommit: checkpoint.Checkpoint(0),
+			shouldBeSealed: false,
+		},
+		"crash-after-commit": {
+			recoveryCommit: checkpoint.Checkpoint(1),
+			shouldBeSealed: true,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			first, err := factory.Open(t, dir)
+			if err != nil {
+				t.Fatalf("failed to open stock: %v", err)
+			}
+
+			id, err := first.New()
+			if err != nil {
+				t.Fatalf("failed to create item in stock: %v", err)
+			}
+			if err := first.Set(id, 1); err != nil {
+				t.Fatalf("failed to set value in stock: %v", err)
+			}
+
+			if err := first.Prepare(checkpoint.Checkpoint(1)); err != nil {
+				t.Fatalf("failed to prepare checkpoint: %v", err)
+			}
+
+			// At this point the node is crashing and the stock is not closed.
+			// For the first stock, it is unclear whether the commit was successful
+			// and should be enforced or whether it failed, and should be rolled
+			// back. This is decided during re-opening the stock and recovering
+			// the state using the `GuaranteeCheckpoint` function.
+
+			second, err := factory.Open(t, dir)
+			if err != nil {
+				t.Fatalf("failed to open stock: %v", err)
+			}
+
+			if err := second.GuaranteeCheckpoint(test.recoveryCommit); err != nil {
+				t.Fatalf("failed to check checkpoint: %v", err)
+			}
+
+			if test.shouldBeSealed {
+				if err := second.Set(id, 2); err == nil {
+					t.Errorf("setting value should fail after the checkpoint has been committed")
+				}
+			} else {
+				if err := second.Set(id, 2); err != nil {
+					t.Errorf("setting value should succeed after abort: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func testRestoreResetsStockContent(t *testing.T, factory NamedStockFactory) {
+	dir := t.TempDir()
+	stock, err := factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	id, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if err := stock.Set(id, 1); err != nil {
+		t.Fatalf("failed to set value in stock: %v", err)
+	}
+
+	if err := stock.Prepare(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+	if err := stock.Commit(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to checkpoint: %v", err)
+	}
+
+	id2, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if err := stock.Set(id2, 2); err != nil {
+		t.Fatalf("failed to set value in stock: %v", err)
+	}
+
+	if err := stock.Restore(checkpoint.Checkpoint(1)); err != nil {
+		t.Fatalf("failed to restore checkpoint: %v", err)
+	}
+
+	id3, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if want, got := id2, id3; want != got {
+		t.Errorf("expected reuse of index %d, got %d", want, got)
 	}
 }

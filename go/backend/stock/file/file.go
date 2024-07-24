@@ -15,22 +15,27 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 type fileStock[I stock.Index, V any] struct {
-	directory       string
-	encoder         stock.ValueEncoder[V]
-	values          utils.SeekableFile
-	freelist        *fileBasedStack[I]
-	numValueSlots   I
-	numValuesInFile int64
-	bufferPool      sync.Pool
+	directory                    string
+	encoder                      stock.ValueEncoder[V]
+	values                       utils.SeekableFile
+	freelist                     *fileBasedStack[I]
+	numValueSlots                I
+	numValuesInFile              int64
+	bufferPool                   sync.Pool
+	lastCheckpoint               checkpoint.Checkpoint
+	numValuesCoveredByCheckpoint I
+	freeListSizeOfCheckpoint     int
 }
 
 // OpenStock opens a stock retained in the given directory. To that end, meta
@@ -69,6 +74,18 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 		return nil, err
 	}
 
+	var committed checkpointMetaData
+	commitMetaDataFile := filepath.Join(directory, "committed.json")
+	if exists(commitMetaDataFile) {
+		data, err := os.ReadFile(commitMetaDataFile)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &committed); err != nil {
+			return nil, err
+		}
+	}
+
 	// Create new files
 	valueSize := encoder.GetEncodedSize()
 	return &fileStock[I, V]{
@@ -83,6 +100,9 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 				raw: make([]byte, valueSize),
 			}
 		}},
+		lastCheckpoint:               committed.Checkpoint,
+		numValuesCoveredByCheckpoint: I(committed.ValueListLength),
+		freeListSizeOfCheckpoint:     int(committed.FreeListLength),
 	}, nil
 }
 
@@ -214,9 +234,9 @@ func verifyStackInternal[I stock.Index](meta metadata, freelistfile utils.OsFile
 }
 
 func getFileNames(directory string) (metafile string, valuefile string, freelistfile string) {
-	metafile = directory + "/meta.json"
-	valuefile = directory + "/values.dat"
-	freelistfile = directory + "/freelist.dat"
+	metafile = filepath.Join(directory, "meta.json")
+	valuefile = filepath.Join(directory, "values.dat")
+	freelistfile = filepath.Join(directory, "freelist.dat")
 	return
 }
 
@@ -224,7 +244,9 @@ func (s *fileStock[I, V]) New() (I, error) {
 	index := s.numValueSlots
 
 	// Reuse free index positions or grow list of values.
-	if !s.freelist.Empty() {
+	// However, committed parts of the free-list must not
+	// be reused any more.
+	if s.freelist.Size() > s.freeListSizeOfCheckpoint {
 		free, err := s.freelist.Pop()
 		if err != nil {
 			return 0, err
@@ -265,6 +287,9 @@ func (s *fileStock[I, V]) Set(index I, value V) error {
 	if index >= s.numValueSlots || index < 0 {
 		return fmt.Errorf("index out of range, got %d, range [0,%d)", index, s.numValueSlots)
 	}
+	if index < s.numValuesCoveredByCheckpoint {
+		return fmt.Errorf("index %d is already committed and cannot be updated any more", index)
+	}
 
 	// Encode the value to be written.
 	valueSize := s.encoder.GetEncodedSize()
@@ -295,6 +320,9 @@ func (s *fileStock[I, V]) Set(index I, value V) error {
 func (s *fileStock[I, V]) Delete(index I) error {
 	if index >= s.numValueSlots || index < 0 {
 		return nil
+	}
+	if index < s.numValuesCoveredByCheckpoint {
+		return fmt.Errorf("index %d is already committed and cannot be updated any more", index)
 	}
 	return s.freelist.Push(index)
 }
@@ -330,7 +358,7 @@ func (s *fileStock[I, V]) Flush() error {
 		NumValuesInFile: s.numValuesInFile,
 	})
 	if err == nil {
-		if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(s.directory, "meta.json"), metadata, 0600); err != nil {
 			return err
 		}
 	}
@@ -352,6 +380,139 @@ func (s *fileStock[I, V]) Close() error {
 		s.values.Close(),
 		s.freelist.Close(),
 	)
+}
+
+func (s *fileStock[I, V]) GuaranteeCheckpoint(checkpoint checkpoint.Checkpoint) error {
+	// If the stock is at the requested commit, everything is fine.
+	if s.lastCheckpoint == checkpoint {
+		return nil
+	}
+
+	// If the stock is behind the requested commit, it can be brought up to date.
+	pendingFile := filepath.Join(s.directory, "pending.json")
+	if exists(pendingFile) {
+		meta, err := readCheckpointMetaData(pendingFile)
+		if err != nil {
+			return err
+		}
+		if meta.Checkpoint == checkpoint {
+			return s.Commit(checkpoint)
+		}
+	}
+
+	// Otherwise, the stock is in an inconsistent state.
+	return fmt.Errorf("unable to guarantee availability of checkpoint %d", checkpoint)
+}
+
+func (s *fileStock[I, V]) Prepare(checkpoint checkpoint.Checkpoint) error {
+	if want, got := s.lastCheckpoint+1, checkpoint; want != got {
+		return fmt.Errorf("invalid next checkpoint, expected %d, got %d", want, got)
+	}
+
+	if err := s.Flush(); err != nil {
+		return err
+	}
+
+	// As part of the preparation, existing slots are sealed. Those slots
+	// should not be updated any more after the flush.
+	s.numValuesCoveredByCheckpoint = s.numValueSlots
+	s.freeListSizeOfCheckpoint = s.freelist.Size()
+
+	pendingFile := filepath.Join(s.directory, "pending.json")
+	return writeCheckpointMetaData(pendingFile, checkpointMetaData{
+		Checkpoint:      checkpoint,
+		ValueListLength: uint64(s.numValueSlots),
+		NumValuesInFile: uint64(s.numValuesInFile),
+		FreeListLength:  uint64(s.freelist.Size()),
+	})
+}
+
+func (s *fileStock[I, V]) Commit(checkpoint checkpoint.Checkpoint) error {
+	if want, got := s.lastCheckpoint+1, checkpoint; want != got {
+		return fmt.Errorf("invalid next checkpoint, expected %d, got %d", want, got)
+	}
+	pendingFile := filepath.Join(s.directory, "pending.json")
+	if !exists(pendingFile) {
+		return fmt.Errorf("missing pending file %v", pendingFile)
+	}
+	committedFile := filepath.Join(s.directory, "committed.json")
+	if err := os.Rename(pendingFile, committedFile); err != nil {
+		return err
+	}
+
+	meta, err := readCheckpointMetaData(committedFile)
+	if err != nil {
+		return err
+	}
+	if meta.Checkpoint != checkpoint {
+		return fmt.Errorf("inconsistent data in checkpoint metadata, expected checkpoint %d, got %d", checkpoint, meta.Checkpoint)
+	}
+
+	s.lastCheckpoint = checkpoint
+	s.numValuesCoveredByCheckpoint = I(meta.ValueListLength)
+	s.freeListSizeOfCheckpoint = int(meta.FreeListLength)
+	return nil
+}
+
+func (s *fileStock[I, V]) Abort(checkpoint checkpoint.Checkpoint) error {
+	if want, got := s.lastCheckpoint+1, checkpoint; want != got {
+		return fmt.Errorf("invalid next checkpoint, expected %d, got %d", want, got)
+	}
+
+	// Delete pending checkpoint file.
+	pendingFile := filepath.Join(s.directory, "pending.json")
+	if err := os.Remove(pendingFile); err != nil {
+		return err
+	}
+
+	// Revert limit of committed values to previous checkpoint.
+	meta, err := readCheckpointMetaData(filepath.Join(s.directory, "committed.json"))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		meta = checkpointMetaData{}
+	}
+	s.numValuesCoveredByCheckpoint = I(meta.ValueListLength)
+	s.freeListSizeOfCheckpoint = int(meta.FreeListLength)
+	return nil
+}
+
+func (s *fileStock[I, V]) Restore(checkpoint checkpoint.Checkpoint) error {
+	if checkpoint != s.lastCheckpoint {
+		return fmt.Errorf("checkpoint %d is not the last available checkpoint, got %d", checkpoint, s.lastCheckpoint)
+	}
+
+	// Revert limit of committed values to previous checkpoint.
+	committedFile := filepath.Join(s.directory, "committed.json")
+	if !exists(committedFile) {
+		if checkpoint != 0 {
+			return fmt.Errorf("failed to revert to checkpoint %d, missing committed file %v", checkpoint, committedFile)
+		}
+		s.numValuesCoveredByCheckpoint = 0
+		s.numValueSlots = 0
+		return s.freelist.Clear()
+	}
+
+	meta, err := readCheckpointMetaData(committedFile)
+	if err != nil {
+		return err
+	}
+	if meta.Checkpoint != checkpoint {
+		return fmt.Errorf("inconsistent data in checkpoint metadata, expected checkpoint %d, got %d", checkpoint, meta.Checkpoint)
+	}
+	s.numValueSlots = I(meta.ValueListLength)
+	s.numValuesInFile = int64(meta.NumValuesInFile)
+	s.numValuesCoveredByCheckpoint = s.numValueSlots
+	s.freeListSizeOfCheckpoint = int(meta.FreeListLength)
+
+	for s.freelist.Size() > s.freeListSizeOfCheckpoint {
+		if _, err := s.freelist.Pop(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 const dataFormatVersion = 0
@@ -383,4 +544,31 @@ func exists(path string) bool {
 func isDirectory(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+type checkpointMetaData struct {
+	Checkpoint      checkpoint.Checkpoint
+	ValueListLength uint64
+	NumValuesInFile uint64
+	FreeListLength  uint64
+}
+
+func readCheckpointMetaData(file string) (checkpointMetaData, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return checkpointMetaData{}, err
+	}
+	var meta checkpointMetaData
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return checkpointMetaData{}, err
+	}
+	return meta, nil
+}
+
+func writeCheckpointMetaData(file string, data checkpointMetaData) error {
+	content, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(file, content, 0600)
 }
