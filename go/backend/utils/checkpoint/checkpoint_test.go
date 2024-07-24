@@ -8,7 +8,7 @@
 // On the date above, in accordance with the Business Source License, use of
 // this software will be governed by the GNU Lesser General Public License v3.
 
-package utils
+package checkpoint
 
 import (
 	"errors"
@@ -34,7 +34,7 @@ func TestCheckpointCoordinator_CanHandleSuccessfulCommit(t *testing.T) {
 		p2.EXPECT().Commit(Checkpoint(1)),
 	)
 
-	coordinator, err := NewCheckpointCoordinator(t.TempDir(), p1, p2)
+	coordinator, err := NewCoordinator(t.TempDir(), p1, p2)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestCheckpointCoordinator_CommitIsAbortedIfPreparationFails(t *testing.T) {
 		p1.EXPECT().Abort(Checkpoint(1)),
 	)
 
-	coordinator, err := NewCheckpointCoordinator(t.TempDir(), p1, p2)
+	coordinator, err := NewCoordinator(t.TempDir(), p1, p2)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestCheckpointCoordinator_ErrorsDuringAbortAreCollected(t *testing.T) {
 		p1.EXPECT().Abort(Checkpoint(1)).Return(injectedAbortError),
 	)
 
-	coordinator, err := NewCheckpointCoordinator(t.TempDir(), p1, p2)
+	coordinator, err := NewCoordinator(t.TempDir(), p1, p2)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestCheckpointCoordinator_CommitNumberIsPersisted(t *testing.T) {
 	dir := t.TempDir()
 
 	for commit := Checkpoint(0); commit < 10; commit++ {
-		coordinator, err := NewCheckpointCoordinator(dir)
+		coordinator, err := NewCoordinator(dir)
 		if err != nil {
 			t.Fatalf("failed to create coordinator: %v", err)
 		}
@@ -148,7 +148,7 @@ func TestCheckpointCoordinator_CommitNumberIsPersisted(t *testing.T) {
 func TestCheckpointCoordinator_ParticipantsAreCheckedForLastCommitNumber(t *testing.T) {
 	dir := t.TempDir()
 
-	coordinator, err := NewCheckpointCoordinator(dir)
+	coordinator, err := NewCoordinator(dir)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestCheckpointCoordinator_ParticipantsAreCheckedForLastCommitNumber(t *test
 		p2.EXPECT().GuaranteeCheckpoint(Checkpoint(3)),
 	)
 
-	_, err = NewCheckpointCoordinator(dir, p1, p2)
+	_, err = NewCoordinator(dir, p1, p2)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestCheckpointCoordinator_ParticipantsAreCheckedForLastCommitNumber(t *test
 func TestCheckpointCoordinator_CreationFailsIfTheProvidedDirectoryLacksWritePermissions(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := NewCheckpointCoordinator(dir); err != nil {
+	if _, err := NewCoordinator(dir); err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
 
@@ -189,7 +189,7 @@ func TestCheckpointCoordinator_CreationFailsIfTheProvidedDirectoryLacksWritePerm
 	if err := os.Chmod(dir, 0500); err != nil {
 		t.Fatalf("failed to change permissions: %v", err)
 	}
-	if _, err := NewCheckpointCoordinator(dir); err == nil {
+	if _, err := NewCoordinator(dir); err == nil {
 		t.Errorf("expected coordinator creation to fail since no files can be created in given directory, but it did not")
 	}
 }
@@ -202,7 +202,7 @@ func TestCheckpointCoordinator_CreationFailsIfTheProvidedPathIsNotADirectory(t *
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	if _, err := NewCheckpointCoordinator(path); err == nil {
+	if _, err := NewCoordinator(path); err == nil {
 		t.Errorf("expected coordinator creation to fail since the provided path is not a directory, but it did not")
 	}
 }
@@ -216,7 +216,7 @@ func TestCheckpointCoordinator_MalformedCommittedCheckPointIsDetected(t *testing
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	if _, err := NewCheckpointCoordinator(dir); err != nil {
+	if _, err := NewCoordinator(dir); err != nil {
 		t.Errorf("unexpected error when loading valid commit: %v", err)
 	}
 
@@ -224,7 +224,7 @@ func TestCheckpointCoordinator_MalformedCommittedCheckPointIsDetected(t *testing
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	if _, err := NewCheckpointCoordinator(dir); err == nil {
+	if _, err := NewCoordinator(dir); err == nil {
 		t.Errorf("invalid commit number should have been detected, but it was not")
 	}
 }
@@ -246,7 +246,7 @@ func TestCheckpointCoordinator_InconsistentParticipantsAreDetected(t *testing.T)
 		p2.EXPECT().GuaranteeCheckpoint(checkpoint).Return(errors.New("inconsistent state")),
 	)
 
-	if _, err := NewCheckpointCoordinator(dir, p1, p2); err == nil {
+	if _, err := NewCoordinator(dir, p1, p2); err == nil {
 		t.Errorf("inconsistent state should have been detected, but it was not")
 	}
 }
@@ -263,7 +263,7 @@ func TestCheckpointCoordinator_FailedCommitLeadsToAbort(t *testing.T) {
 		participant.EXPECT().Abort(Checkpoint(1)),
 	)
 
-	coordinator, err := NewCheckpointCoordinator(dir, participant)
+	coordinator, err := NewCoordinator(dir, participant)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestCheckpointCoordinator_FailedCommitOfParticipantLeadsToAnError(t *testin
 		participant.EXPECT().Commit(Checkpoint(1)).Return(injectedError),
 	)
 
-	coordinator, err := NewCheckpointCoordinator(dir, participant)
+	coordinator, err := NewCoordinator(dir, participant)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestCheckPointCoordinator_RestoreSignalsAllParticipantsToRestoreLastCheckpo
 		p2.EXPECT().Restore(checkpoint),
 	)
 
-	coordinator, err := NewCheckpointCoordinator(dir, p1, p2)
+	coordinator, err := NewCoordinator(dir, p1, p2)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestCheckPointCoordinator_RestoreIssuesAreCollectedAndReported(t *testing.T
 		p4.EXPECT().Restore(checkpoint),
 	)
 
-	coordinator, err := NewCheckpointCoordinator(dir, p1, p2, p3, p4)
+	coordinator, err := NewCoordinator(dir, p1, p2, p3, p4)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}

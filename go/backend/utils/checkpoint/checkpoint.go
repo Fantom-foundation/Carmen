@@ -8,7 +8,7 @@
 // On the date above, in accordance with the Business Source License, use of
 // this software will be governed by the GNU Lesser General Public License v3.
 
-package utils
+package checkpoint
 
 import (
 	"encoding/binary"
@@ -21,7 +21,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-//go:generate mockgen -source checkpoint.go -destination checkpoint_mocks.go -package utils
+//go:generate mockgen -source checkpoint.go -destination checkpoint_mocks.go -package checkpoint
 
 // A checkpoint is a monotonically increasing number that is used to identify
 // a backup state of a data structure that can be created in coordination with
@@ -29,10 +29,10 @@ import (
 // have a consistent view of the overall state they are part of.
 type Checkpoint uint32
 
-// CheckpointCoordinator is able to coordinate the creation and restoration of
+// Coordinator is able to coordinate the creation and restoration of
 // checkpoints with multiple participants. The coordinator is responsible for
 // ensuring that all participants are atomically transitioned to a new checkpoint.
-type CheckpointCoordinator interface {
+type Coordinator interface {
 	// GetCurrentCheckpoint returns the last checkpoint that was created. If no
 	// checkpoint was created yet, the return value is 0.
 	GetCurrentCheckpoint() Checkpoint
@@ -46,9 +46,9 @@ type CheckpointCoordinator interface {
 	Restore() error
 }
 
-// CheckpointParticipant engages in a coordinated creation and restoration of
+// Participant engages in a coordinated creation and restoration of
 // checkpoints.
-type CheckpointParticipant interface {
+type Participant interface {
 	// GuaranteeCheckpoint requires the participant to check whether a restoration
 	// to the given checkpoint is possible. If the participant is not able to restore to
 	// the given checkpoint, an error is returned. If the participant finds the given
@@ -80,20 +80,20 @@ type CheckpointParticipant interface {
 	Restore(Checkpoint) error
 }
 
-// checkpointCoordinator implements the CheckpointCoordinator interface using a two-phase
+// coordinator implements the CheckpointCoordinator interface using a two-phase
 // commit protocol and an atomic file-system operation to ensure recoverability if the
 // process crashes during checkpoint creation.
-type checkpointCoordinator struct {
+type coordinator struct {
 	path           string
-	participants   []CheckpointParticipant
+	participants   []Participant
 	lastCheckpoint Checkpoint
 }
 
-// NewCheckpointCoordinator creates a new checkpoint coordinator using the given directory
+// NewCoordinator creates a new checkpoint coordinator using the given directory
 // for retaining coordination information and managing the creation and restoration of checkpoints
 // for the given participants. During its creation, it is checked whether all participants
 // are in sync regarding their check points. If not, the creation fails.
-func NewCheckpointCoordinator(directory string, participants ...CheckpointParticipant) (*checkpointCoordinator, error) {
+func NewCoordinator(directory string, participants ...Participant) (*coordinator, error) {
 	// create the directory to be used for coordination if it does not exist yet
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create directory %s: %w", directory, err)
@@ -127,17 +127,17 @@ func NewCheckpointCoordinator(directory string, participants ...CheckpointPartic
 		return nil, errors.Join(errs...)
 	}
 
-	return &checkpointCoordinator{
+	return &coordinator{
 		path:           directory,
 		participants:   slices.Clone(participants),
 		lastCheckpoint: lastCheckpoint,
 	}, nil
 }
 
-func (c *checkpointCoordinator) CreateCheckpoint() (Checkpoint, error) {
+func (c *coordinator) CreateCheckpoint() (Checkpoint, error) {
 	commit := c.lastCheckpoint + 1
 
-	prepared := make([]CheckpointParticipant, 0, len(c.participants))
+	prepared := make([]Participant, 0, len(c.participants))
 	abort := func() error {
 		errs := []error{}
 		for _, p := range prepared {
@@ -184,11 +184,11 @@ func (c *checkpointCoordinator) CreateCheckpoint() (Checkpoint, error) {
 	return commit, errors.Join(errs...)
 }
 
-func (c *checkpointCoordinator) GetCurrentCheckpoint() Checkpoint {
+func (c *coordinator) GetCurrentCheckpoint() Checkpoint {
 	return c.lastCheckpoint
 }
 
-func (c *checkpointCoordinator) Restore() error {
+func (c *coordinator) Restore() error {
 	var errs []error
 	for _, p := range c.participants {
 		if err := p.Restore(c.lastCheckpoint); err != nil {

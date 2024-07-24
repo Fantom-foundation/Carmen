@@ -17,7 +17,7 @@
 //
 
 // Package utils is a generated GoMock package.
-package utils
+package checkpoint
 
 import (
 	reflect "reflect"
