@@ -1685,38 +1685,37 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 }
 
 func TestArchiveTrie_VisitTrie_CorrectDataIsVisited(t *testing.T) {
-	var (
-		found bool
-		addr  = common.Address{1}
-	)
+	addr := common.Address{1}
 
 	tests := []struct {
 		name         string
 		visitedBlock uint64
-		visitFunc    func(Node, NodeInfo)
+		visitFunc    func(Node, NodeInfo) bool
 	}{
 		{
 			name:         "empty-block",
 			visitedBlock: 0,
-			visitFunc: func(node Node, info NodeInfo) {
+			visitFunc: func(node Node, info NodeInfo) bool {
 				switch node.(type) {
 				case EmptyNode:
-					found = true
+					return true
 				}
+				return false
 			},
 		},
 		{
 			name:         "filled-block",
 			visitedBlock: 1,
-			visitFunc: func(node Node, info NodeInfo) {
+			visitFunc: func(node Node, info NodeInfo) bool {
 				switch n := node.(type) {
 				case *AccountNode:
-					found = true
 					a := n.Address()
 					if a != addr {
 						t.Fatalf("unexpected address node, got: %s, want: %s", a, addr)
 					}
+					return true
 				}
+				return false
 			},
 		},
 	}
@@ -1739,8 +1738,15 @@ func TestArchiveTrie_VisitTrie_CorrectDataIsVisited(t *testing.T) {
 					},
 				}, nil)
 
+				var found bool
+
 				nodeVisitor := NewMockNodeVisitor(ctrl)
-				nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(test.visitFunc).MinTimes(1)
+				nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(func(node Node, info NodeInfo) {
+					if test.visitFunc(node, info) {
+						found = true
+						return
+					}
+				}).MinTimes(1)
 
 				err = archive.VisitTrie(test.visitedBlock, nodeVisitor)
 				if err != nil {
