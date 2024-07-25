@@ -410,6 +410,83 @@ func ExampleHistoricBlockContext_GetProof() {
 	//Storage slot value of key 0x0900000000000000000000000000000000000000000000000000000000000000 at block: 9 and address: 0x0900000000000000000000000000000000000000 is 0x0900000000000000000000000000000000000000000000000000000000000000
 }
 
+func ExampleWitnessProof_GetStorageElements() {
+	dir, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temporary directory: %v", err)
+	}
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// ------- Prepare the database -------
+
+	// Add only one block with one address and storage
+	if err := db.AddBlock(0, func(context carmen.HeadBlockContext) error {
+		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
+			context.CreateAccount(carmen.Address{1})
+			context.AddBalance(carmen.Address{1}, carmen.NewAmount(1))
+			context.SetState(carmen.Address{1}, carmen.Key{1}, carmen.Value{1})
+			return nil
+		}); err != nil {
+			log.Fatalf("cannot create transaction: %v", err)
+		}
+		return nil
+	}); err != nil {
+		log.Fatalf("cannot add block: %v", err)
+	}
+
+	// block wait until the archive is in sync
+	if err := db.Flush(); err != nil {
+		log.Fatalf("cannot flush: %v", err)
+	}
+
+	// ------- Query witness proofs from a block -------
+
+	var elements []string
+	// proof each address and key from each block, and merge all in one proof
+	if err := db.QueryBlock(0, func(ctxt carmen.HistoricBlockContext) error {
+		proof, err := ctxt.GetProof(carmen.Address{1}, carmen.Key{1})
+		if err != nil {
+			log.Fatalf("cannot create witness proof: %v", err)
+		}
+
+		// store proof
+		elements = proof.GetElements()
+		return nil
+	}); err != nil {
+		log.Fatalf("cannot query block: %v", err)
+	}
+
+	var rootHash carmen.Hash
+	if err := db.QueryHistoricState(0, func(ctxt carmen.QueryContext) {
+		rootHash = ctxt.GetStateHash()
+	}); err != nil {
+		log.Fatalf("cannot query block: %v", err)
+	}
+
+	// ------- Close the database - no more needed -------
+	if err := db.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		log.Fatalf("cannot remove dir: %v", err)
+	}
+
+	// ------- Recover Proof and Split into Account and Storage Proof  -------
+
+	proof := carmen.CreateWitnessProofFromNodes(elements...)
+	accountProof, accountComplete := proof.Extract(rootHash, carmen.Address{1})
+	storageElements, storageRoot, storageComplete := proof.GetStorageElements(rootHash, carmen.Address{1}, carmen.Key{1})
+
+	fmt.Printf("Account proof is complete: %v and has %d elements\n", accountComplete, len(accountProof.GetElements()))
+	fmt.Printf("Storage proof is complete: %v and has %d elements and root: %v\n", storageComplete, len(storageElements), storageRoot)
+
+	// Output: Account proof is complete: true and has 1 elements
+	// Storage proof is complete: true and has 1 elements and root: [46 124 116 253 41 173 162 163 11 134 9 5 150 41 208 193 156 91 227 104 90 168 232 46 92 214 249 73 33 194 217 13]
+}
+
 func ExampleDatabase_GetMemoryFootprint() {
 	dir, err := os.MkdirTemp("", "carmen_db_*")
 	if err != nil {

@@ -13,6 +13,7 @@ package carmen
 import (
 	"errors"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"os"
 	"path/filepath"
 	"sync"
@@ -1098,6 +1099,144 @@ func TestDatabase_GetProof_Serialise_Deserialize(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	// init data
+	const numAccounts = 11
+	const numKeys = 12
+
+	keys := make([]Key, 0, numKeys)
+	for k := 0; k < numKeys; k++ {
+		keys = append(keys, Key{byte(k)})
+	}
+
+	if err := db.AddBlock(0, func(context HeadBlockContext) error {
+		for j := 0; j < numAccounts; j++ {
+			if err := context.RunTransaction(func(tc TransactionContext) error {
+				addr := Address{byte(j)}
+				tc.CreateAccount(addr)
+				tc.SetNonce(addr, uint64(j))
+				for k := 0; k < numKeys; k++ {
+					tc.SetState(addr, keys[k], Value{byte(j), byte(k)})
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("cannot add block: %v", err)
+	}
+
+	if err := db.Flush(); err != nil {
+		t.Fatalf("cannot flush db: %v", err)
+	}
+
+	// collect root
+	var root Hash
+	if err := db.QueryHistoricState(0, func(context QueryContext) {
+		root = context.GetStateHash()
+	}); err != nil {
+		t.Fatalf("cannot query state: %v", err)
+	}
+
+	// extract proofs
+	block, err := db.GetHistoricContext(0)
+	if err != nil {
+		t.Fatalf("cannot get block: %v", err)
+	}
+
+	// proof each account and all keys of the account
+	shadowProofs := make(map[Address]WitnessProof, numAccounts)
+	serialized := make([]string, 0, 1024)
+	for j := 0; j < numAccounts; j++ {
+		addr := Address{byte(j)}
+		proof, err := block.GetProof(addr, keys...)
+		if err != nil {
+			t.Errorf("cannot get proof: %v", err)
+		}
+		// collect both merged proof and each proof
+		serialized = append(serialized, proof.GetElements()...)
+		shadowProofs[addr] = proof
+	}
+	if err := block.Close(); err != nil {
+		t.Fatalf("cannot close block: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("db cannot be closed: %v", err)
+	}
+
+	recovered := CreateWitnessProofFromNodes(serialized...)
+	t.Run("extract subproofs", func(t *testing.T) {
+		for j := 0; j < numAccounts; j++ {
+			addr := Address{byte(j)}
+			want := shadowProofs[addr]
+
+			// extract subproof of an account and its storage
+			// and check it matches the shadow proof
+			got, complete := recovered.Extract(root, addr, keys...)
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+			gotElements := got.GetElements()
+			wantElements := want.GetElements()
+			slices.Sort(gotElements)
+			slices.Sort(wantElements)
+			if got, want := gotElements, wantElements; !slices.Equal(got, want) {
+				t.Errorf("unexpected proof, wanted %v, got %v", want, got)
+			}
+		}
+	})
+
+	t.Run("extract account and storage nodes", func(t *testing.T) {
+		for j := 0; j < numAccounts; j++ {
+			addr := Address{byte(j)}
+
+			// extract address nodes only
+			gotAccount, complete := recovered.Extract(root, addr)
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+
+			// extract storage nodes only
+			gotStorageElements, _, complete := recovered.GetStorageElements(root, addr, keys...)
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+			// first block's account has no storage, others do
+			if j > 0 && len(gotStorageElements) == 0 {
+				t.Errorf("no storage elements")
+			}
+
+			// both proofs must be distinct
+			for _, accountElement := range gotAccount.GetElements() {
+				for _, storageElement := range gotStorageElements {
+					if accountElement == storageElement {
+						t.Errorf("account and storage proofs must be distinct")
+					}
+				}
+			}
+
+			// putting nodes together must provide the original proof
+			merged := CreateWitnessProofFromNodes(append(gotStorageElements, gotAccount.GetElements()...)...)
+
+			gotElements := merged.GetElements()
+			wantElements := shadowProofs[addr].GetElements()
+			slices.Sort(gotElements)
+			slices.Sort(wantElements)
+			if got, want := gotElements, wantElements; !slices.Equal(got, want) {
+				t.Errorf("unexpected proof, wanted %v, got %v", want, got)
+			}
+		}
+	})
 }
 
 func TestDatabase_CloseDB_Unfinished_Proof_CannotCloseDb(t *testing.T) {

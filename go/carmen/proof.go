@@ -30,12 +30,29 @@ func CreateWitnessProofFromNodes(elements ...string) WitnessProof {
 // the full state to extract information.
 type WitnessProof interface {
 
+	// Extract extracts a sub-proof for a given account and selected storage locations from this proof.
+	// It returns a copy that contains only the data necessary for proving the given address and storage keys.
+	// The resulting proof covers proofs for the intersection of the requested properties (account information and slots)
+	// and the properties covered by this proof. The second return parameter indicates whether everything that
+	// was requested could be covered. If so it is set to true, otherwise it is set to false.
+	Extract(root Hash, address Address, keys ...Key) (WitnessProof, bool)
+
 	// IsValid checks that this proof is self-consistent. If the result is true, the proof can be used
 	// for extracting verified information. If false, the proof is corrupted and should be discarded.
 	IsValid() bool
 
 	// GetElements returns serialised elements of the witness proof.
 	GetElements() []string
+
+	// GetStorageElements returns serialised elements of the witness proof for a given account
+	// and selected storage locations from this proof.
+	// The resulting elements contains only the storage part of the account.
+	// For this reason, the second parameter of this method returns the storage root for this storage
+	// as any proving and other operations on the resulting proof must be done related to the storage root.
+	// This method returns a copy that contains only the data necessary for proving storage keys.
+	// The third return parameter indicates whether everything that was requested could be covered.
+	// If so, it is set to true, otherwise it is set to false.
+	GetStorageElements(root Hash, address Address, keys ...Key) ([]string, Hash, bool)
 
 	// GetBalance extracts a balance from the witness proof for the input root hash and the address.
 	// If the witness proof contains the requested account for the input address for the given root hash, it returns its balance.
@@ -82,8 +99,28 @@ type witnessProof struct {
 	proof witness.Proof
 }
 
+func (w witnessProof) Extract(root Hash, address Address, keys ...Key) (WitnessProof, bool) {
+	commonKeys := make([]common.Key, len(keys))
+	for i, k := range keys {
+		commonKeys[i] = common.Key(k)
+	}
+
+	proof, complete := w.proof.Extract(common.Hash(root), common.Address(address), commonKeys...)
+	return witnessProof{proof}, complete
+}
+
 func (w witnessProof) GetElements() []string {
 	return w.proof.GetElements()
+}
+
+func (w witnessProof) GetStorageElements(root Hash, address Address, keys ...Key) ([]string, Hash, bool) {
+	commonKeys := make([]common.Key, len(keys))
+	for i, k := range keys {
+		commonKeys[i] = common.Key(k)
+	}
+
+	resProof, storageRoot, complete := w.proof.GetStorageElements(common.Hash(root), common.Address(address), commonKeys...)
+	return resProof, Hash(storageRoot), complete
 }
 
 func (w witnessProof) IsValid() bool {
