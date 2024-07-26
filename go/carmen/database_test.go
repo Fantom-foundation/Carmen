@@ -11,6 +11,7 @@
 package carmen
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"golang.org/x/exp/slices"
@@ -1037,7 +1038,7 @@ func TestDatabase_GetProof_Serialise_Deserialize(t *testing.T) {
 	}
 
 	// proof properties
-	serialized := make([]string, 0, 1024)
+	serialized := make([]Bytes, 0, 1024)
 	for i := 0; i < numBlocks; i++ {
 		block, err := db.GetHistoricContext(uint64(i))
 		if err != nil {
@@ -1155,7 +1156,7 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 
 	// proof each account and all keys of the account
 	shadowProofs := make(map[Address]WitnessProof, numAccounts)
-	serialized := make([]string, 0, 1024)
+	serialized := make([]Bytes, 0, 1024)
 	for j := 0; j < numAccounts; j++ {
 		addr := Address{byte(j)}
 		proof, err := block.GetProof(addr, keys...)
@@ -1188,8 +1189,12 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 			}
 			gotElements := got.GetElements()
 			wantElements := want.GetElements()
-			slices.Sort(gotElements)
-			slices.Sort(wantElements)
+			slices.SortFunc(gotElements, func(a, b Bytes) bool {
+				return bytes.Compare(a.ToBytes(), b.ToBytes()) < 0
+			})
+			slices.SortFunc(wantElements, func(a, b Bytes) bool {
+				return bytes.Compare(a.ToBytes(), b.ToBytes()) < 0
+			})
 			if got, want := gotElements, wantElements; !slices.Equal(got, want) {
 				t.Errorf("unexpected proof, wanted %v, got %v", want, got)
 			}
@@ -1230,8 +1235,12 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 
 			gotElements := merged.GetElements()
 			wantElements := shadowProofs[addr].GetElements()
-			slices.Sort(gotElements)
-			slices.Sort(wantElements)
+			slices.SortFunc(gotElements, func(a, b Bytes) bool {
+				return bytes.Compare(a.ToBytes(), b.ToBytes()) < 0
+			})
+			slices.SortFunc(wantElements, func(a, b Bytes) bool {
+				return bytes.Compare(a.ToBytes(), b.ToBytes()) < 0
+			})
 			if got, want := gotElements, wantElements; !slices.Equal(got, want) {
 				t.Errorf("unexpected proof, wanted %v, got %v", want, got)
 			}
