@@ -32,6 +32,10 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 		check func(t *testing.T, sourceDir string)
 	}
 
+	exportBlockFromArchive := func(ctx context.Context, dir string, out io.Writer) error {
+		return ExportBlockFromArchive(ctx, dir, out, 3)
+	}
+
 	tests := map[string]testFuncs{
 		"live": {
 			export:   Export,
@@ -40,6 +44,11 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 		},
 		"archive": {
 			export:   ExportArchive,
+			createDB: createTestArchive,
+			check:    checkCanOpenArchive,
+		},
+		"live-from-archive": {
+			export:   exportBlockFromArchive,
 			createDB: createTestArchive,
 			check:    checkCanOpenArchive,
 		},

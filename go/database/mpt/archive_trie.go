@@ -205,7 +205,7 @@ func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte
 	return a.head.GetCodeForHash(info.CodeHash), nil
 }
 
-func (a *ArchiveTrie) GetCodes() (map[common.Hash][]byte, error) {
+func (a *ArchiveTrie) GetCodes() map[common.Hash][]byte {
 	return a.head.GetCodes()
 }
 
@@ -326,6 +326,14 @@ func (a *ArchiveTrie) Flush() error {
 		a.head.Flush(),
 		a.roots.storeRoots(),
 	)
+}
+
+func (a *ArchiveTrie) VisitTrie(block uint64, visitor NodeVisitor) error {
+	view, err := a.getView(block)
+	if err != nil {
+		return err
+	}
+	return view.VisitTrie(visitor)
 }
 
 func (a *ArchiveTrie) Close() error {

@@ -113,10 +113,8 @@ func TestIO_ExportedDataDoesNotContainExtraCodes(t *testing.T) {
 	// Modify the state by adding and removing code from an account.
 	// This temporary code should not be included in the resulting exported data.
 	modified, modifiedHash := exportExampleStateWithModification(t, func(s *mpt.MptState) {
-		codesBefore, err := s.GetCodes()
-		if err != nil {
-			t.Fatalf("failed to fetch codes: %v", err)
-		}
+		codesBefore := s.GetCodes()
+
 		addr1 := common.Address{1}
 		code, err := s.GetCode(addr1)
 		if err != nil {
@@ -125,10 +123,7 @@ func TestIO_ExportedDataDoesNotContainExtraCodes(t *testing.T) {
 		modified := append(code, []byte("extra_code")...)
 		s.SetCode(addr1, modified)
 		s.SetCode(addr1, code)
-		codesAfter, err := s.GetCodes()
-		if err != nil {
-			t.Fatalf("failed to fetch codes: %v", err)
-		}
+		codesAfter := s.GetCodes()
 		if before, after := len(codesBefore), len(codesAfter); before+1 != after {
 			t.Fatalf("modification did not had expected code-altering effect: %d -> %d", before, after)
 		}
@@ -286,4 +281,87 @@ func TestCheckEmptyDirectory_FailsIfDirectoryContainsADirectory(t *testing.T) {
 	if err := checkEmptyDirectory(dir); err == nil || !strings.Contains(err.Error(), "is not empty") {
 		t.Errorf("unexpected error: %v", err)
 	}
+}
+
+func TestIO_ExportBlockFromArchive(t *testing.T) {
+	// Create a small Archive from which we export LiveDB genesis.
+	sourceDir := t.TempDir()
+	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+	const (
+		M = 10
+		N = 3
+	)
+
+	var expectedHashes []common.Hash
+
+	for i := 0; i < M; i++ {
+		code := []byte{1, 2, 3, byte(i)}
+		u := uint64(i)
+		update := common.Update{}
+		for j := 0; j < N; j++ {
+			newAddr := common.AddressFromNumber(j)
+
+			update.CreatedAccounts = append(update.CreatedAccounts, newAddr)
+			update.Balances = append(update.Balances, common.BalanceUpdate{Account: newAddr, Balance: amount.New(u + 1)})
+			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: newAddr, Nonce: common.ToNonce(u + 1)})
+			update.Codes = append(update.Codes, common.CodeUpdate{Account: newAddr, Code: code})
+			update.Slots = append(update.Slots, common.SlotUpdate{Account: newAddr, Key: common.Key{byte(j)}, Value: common.Value{byte(i)}})
+		}
+		err = archive.Add(u, update, nil)
+		if err != nil {
+			t.Fatalf("failed to create block in archive: %v", err)
+		}
+
+		hash, err := archive.GetHash(u)
+		if err != nil {
+			t.Fatalf("cannot get hash: %v", err)
+		}
+
+		expectedHashes = append(expectedHashes, hash)
+	}
+
+	if err := archive.Close(); err != nil {
+		t.Fatalf("failed to close archive archive: %v", err)
+	}
+
+	for i := 0; i < M; i++ {
+		// Export live database from archive.
+		buffer := new(bytes.Buffer)
+		if err := ExportBlockFromArchive(context.Background(), sourceDir, buffer, uint64(i)); err != nil {
+			t.Fatalf("failed to export Archive: %v", err)
+		}
+
+		// Import live database.
+		targetDir := t.TempDir()
+		if err := ImportLiveDb(targetDir, buffer); err != nil {
+			t.Fatalf("failed to import DB: %v", err)
+		}
+
+		if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+			t.Fatalf("verification of imported DB failed: %v", err)
+		}
+
+		db, err := mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+		if err != nil {
+			t.Fatalf("failed to open recovered DB: %v", err)
+		}
+
+		got, err := db.GetHash()
+		if err != nil {
+			t.Fatalf("cannot get hash: %v", err)
+		}
+		want := expectedHashes[i]
+		if got != want {
+			t.Errorf("restored DB failed to reproduce same hash\nwanted %x\n got %x", want, got)
+		}
+
+		err = db.Close()
+		if err != nil {
+			t.Fatalf("cannot close database: %v", err)
+		}
+	}
+
 }

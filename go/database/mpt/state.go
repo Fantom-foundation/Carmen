@@ -118,7 +118,7 @@ type LiveState interface {
 	GetCodeForHash(hash common.Hash) []byte
 
 	// GetCodes retrieves all codes and their hashes.
-	GetCodes() (map[common.Hash][]byte, error)
+	GetCodes() map[common.Hash][]byte
 
 	// UpdateHashes recomputes hash root of this trie.
 	UpdateHashes() (common.Hash, *NodeHashes, error)
@@ -383,11 +383,11 @@ func (s *MptState) Visit(visitor NodeVisitor) error {
 	return s.trie.VisitTrie(visitor)
 }
 
-func (s *MptState) GetCodes() (map[common.Hash][]byte, error) {
+func (s *MptState) GetCodes() map[common.Hash][]byte {
 	s.codeMutex.Lock()
 	res := maps.Clone(s.code)
 	s.codeMutex.Unlock()
-	return res, nil
+	return res
 }
 
 // Flush codes and state trie
