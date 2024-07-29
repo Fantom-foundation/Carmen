@@ -125,10 +125,3 @@ func (s *shadowStock[I, V]) Abort(checkpoint checkpoint.Checkpoint) error {
 		s.secondary.Abort(checkpoint),
 	)
 }
-
-func (s *shadowStock[I, V]) Restore(checkpoint checkpoint.Checkpoint) error {
-	return errors.Join(
-		s.primary.Restore(checkpoint),
-		s.secondary.Restore(checkpoint),
-	)
-}

@@ -68,7 +68,10 @@ func RunStockTests(t *testing.T, factory NamedStockFactory) {
 	t.Run("CheckpointIsPersisted", wrap(testCheckpointIsPersisted))
 	t.Run("StockElementsIncludedInCheckpointArePersisted", wrap(testStockElementsIncludedInCheckpointArePersisted))
 	t.Run("CheckpointCanBeRecoverFromCrashAfterPrepare", wrap(testCheckpointCanBeRecoverFromCrashAfterPrepare))
-	t.Run("RestoreResetsStockContent", wrap(testRestoreResetsStockContent))
+	t.Run("MissingCheckpointIsDetected", wrap(testMissingCheckpointIsDetected))
+	t.Run("CheckpointPrepareFailsOnWrongCheckpoint", wrap(testCheckpointPrepareFailsOnWrongCheckpoint))
+	t.Run("CheckpointCommitFailsOnWrongCheckpoint", wrap(testCheckpointCommitFailsOnWrongCheckpoint))
+	t.Run("CheckpointAbortFailsOnWrongCheckpoint", wrap(testCheckpointAbortFailsOnWrongCheckpoint))
 }
 
 func testNewCreatesFreshIndexValues(t *testing.T, factory NamedStockFactory) {
@@ -627,45 +630,67 @@ func testCheckpointCanBeRecoverFromCrashAfterPrepare(t *testing.T, factory Named
 	}
 }
 
-func testRestoreResetsStockContent(t *testing.T, factory NamedStockFactory) {
+func testMissingCheckpointIsDetected(t *testing.T, factory NamedStockFactory) {
 	dir := t.TempDir()
 	stock, err := factory.Open(t, dir)
 	if err != nil {
 		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	id, err := stock.New()
-	if err != nil {
-		t.Fatalf("failed to create item in stock: %v", err)
+	checkpoint := checkpoint.Checkpoint(1)
+
+	if err := stock.GuaranteeCheckpoint(checkpoint); err == nil {
+		t.Fatalf("missing checkpoint should be detected")
 	}
-	if err := stock.Set(id, 1); err != nil {
-		t.Fatalf("failed to set value in stock: %v", err)
+}
+
+func testCheckpointPrepareFailsOnWrongCheckpoint(t *testing.T, factory NamedStockFactory) {
+	dir := t.TempDir()
+	stock, err := factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	if err := stock.Prepare(checkpoint.Checkpoint(1)); err != nil {
+	c2 := checkpoint.Checkpoint(2)
+	if err := stock.Prepare(c2); err == nil {
+		t.Fatalf("preparing with wrong checkpoint should fail")
+	}
+}
+
+func testCheckpointCommitFailsOnWrongCheckpoint(t *testing.T, factory NamedStockFactory) {
+	dir := t.TempDir()
+	stock, err := factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	c1 := checkpoint.Checkpoint(1)
+	c2 := checkpoint.Checkpoint(2)
+
+	if err := stock.Prepare(c1); err != nil {
 		t.Fatalf("failed to prepare checkpoint: %v", err)
 	}
-	if err := stock.Commit(checkpoint.Checkpoint(1)); err != nil {
-		t.Fatalf("failed to checkpoint: %v", err)
-	}
 
-	id2, err := stock.New()
+	if err := stock.Commit(c2); err == nil {
+		t.Fatalf("committing with wrong checkpoint should fail")
+	}
+}
+
+func testCheckpointAbortFailsOnWrongCheckpoint(t *testing.T, factory NamedStockFactory) {
+	dir := t.TempDir()
+	stock, err := factory.Open(t, dir)
 	if err != nil {
-		t.Fatalf("failed to create item in stock: %v", err)
-	}
-	if err := stock.Set(id2, 2); err != nil {
-		t.Fatalf("failed to set value in stock: %v", err)
+		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	if err := stock.Restore(checkpoint.Checkpoint(1)); err != nil {
-		t.Fatalf("failed to restore checkpoint: %v", err)
+	c1 := checkpoint.Checkpoint(1)
+	c2 := checkpoint.Checkpoint(2)
+
+	if err := stock.Prepare(c1); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
 	}
 
-	id3, err := stock.New()
-	if err != nil {
-		t.Fatalf("failed to create item in stock: %v", err)
-	}
-	if want, got := id2, id3; want != got {
-		t.Errorf("expected reuse of index %d, got %d", want, got)
+	if err := stock.Abort(c2); err == nil {
+		t.Fatalf("abort with wrong checkpoint should fail")
 	}
 }

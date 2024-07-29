@@ -136,13 +136,6 @@ func (s *fileBasedStack[I]) Pop() (I, error) {
 	return res, nil
 }
 
-func (s *fileBasedStack[I]) Clear() error {
-	s.size = 0
-	s.buffer = s.buffer[0:0]
-	s.bufferOffset = 0
-	return s.file.Truncate(0)
-}
-
 func (s *fileBasedStack[I]) flushBuffer() error {
 	valueSize := int(unsafe.Sizeof(I(0)))
 	if _, err := s.file.Seek(int64(valueSize*s.bufferOffset), 0); err != nil {

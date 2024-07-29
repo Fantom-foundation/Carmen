@@ -207,20 +207,6 @@ func (mr *MockStockMockRecorder[I, V]) Prepare(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockStock[I, V])(nil).Prepare), arg0)
 }
 
-// Restore mocks base method.
-func (m *MockStock[I, V]) Restore(arg0 checkpoint.Checkpoint) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Restore", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Restore indicates an expected call of Restore.
-func (mr *MockStockMockRecorder[I, V]) Restore(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockStock[I, V])(nil).Restore), arg0)
-}
-
 // Set mocks base method.
 func (m *MockStock[I, V]) Set(arg0 I, arg1 V) error {
 	m.ctrl.T.Helper()

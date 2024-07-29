@@ -327,6 +327,9 @@ func (s *inMemoryStock[I, V]) Commit(checkpoint checkpoint.Checkpoint) error {
 }
 
 func (s *inMemoryStock[I, V]) Abort(commit checkpoint.Checkpoint) error {
+	if s.checkpoint+1 != commit {
+		return fmt.Errorf("unable to abort checkpoint %d, expected %d", commit, s.checkpoint+1)
+	}
 	s.checkpointValueListLength = s.backupCheckpointValueListLength
 	s.checkpointFreeListLength = s.backupCheckpointFreeListLength
 	prepareFile := filepath.Join(s.directory, "prepare.json")

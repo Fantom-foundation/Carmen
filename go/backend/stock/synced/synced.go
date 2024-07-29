@@ -103,9 +103,3 @@ func (s *syncedStock[I, V]) Abort(checkpoint checkpoint.Checkpoint) error {
 	defer s.mu.Unlock()
 	return s.nested.Abort(checkpoint)
 }
-
-func (s *syncedStock[I, V]) Restore(checkpoint checkpoint.Checkpoint) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.nested.Restore(checkpoint)
-}
