@@ -3272,6 +3272,29 @@ func TestStateDB_Copy(t *testing.T) {
 	}
 }
 
+func TestStateDB_CreateWitnessProofCallsAreForwarded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateNonCommittableStateDBUsing(mock)
+
+	address1 := common.Address{0xA}
+	key1 := common.Key{0xB}
+	key2 := common.Key{0xC}
+
+	injectedError := fmt.Errorf("injected error")
+
+	mock.EXPECT().CreateWitnessProof(address1, key1, key2)
+	mock.EXPECT().CreateWitnessProof(address1, key2).Return(nil, injectedError)
+
+	if _, err := db.CreateWitnessProof(address1, key1, key2); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if _, err := db.CreateWitnessProof(address1, key2); !errors.Is(err, injectedError) {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestStateDB_LogsCanBeAddedAndRetrieved(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
