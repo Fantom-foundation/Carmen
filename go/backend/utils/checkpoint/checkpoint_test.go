@@ -302,7 +302,7 @@ func TestCheckpointCoordinator_FailedCommitOfParticipantLeadsToAnError(t *testin
 	}
 }
 
-func TestCheckPointCoordinator_RestoreSignalsAllParticipantsToRestoreLastCheckpoint(t *testing.T) {
+func TestRestore_RestoreSignalsAllParticipantsToRestoreLastCheckpoint(t *testing.T) {
 	dir := t.TempDir()
 
 	checkpoint := Checkpoint(42)
@@ -315,23 +315,16 @@ func TestCheckPointCoordinator_RestoreSignalsAllParticipantsToRestoreLastCheckpo
 	p2 := NewMockParticipant(ctrl)
 
 	gomock.InOrder(
-		p1.EXPECT().GuaranteeCheckpoint(checkpoint),
-		p2.EXPECT().GuaranteeCheckpoint(checkpoint),
 		p1.EXPECT().Restore(checkpoint),
 		p2.EXPECT().Restore(checkpoint),
 	)
 
-	coordinator, err := NewCoordinator(dir, p1, p2)
-	if err != nil {
-		t.Fatalf("failed to create coordinator: %v", err)
-	}
-
-	if err = coordinator.Restore(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err := Restore(dir, p1, p2); err != nil {
+		t.Fatalf("failed to restore: %v", err)
 	}
 }
 
-func TestCheckPointCoordinator_RestoreIssuesAreCollectedAndReported(t *testing.T) {
+func TestRestore_RestoreIssuesAreCollectedAndReported(t *testing.T) {
 	dir := t.TempDir()
 
 	ctrl := gomock.NewController(t)
@@ -340,30 +333,36 @@ func TestCheckPointCoordinator_RestoreIssuesAreCollectedAndReported(t *testing.T
 	p3 := NewMockParticipant(ctrl)
 	p4 := NewMockParticipant(ctrl)
 
-	checkpoint := Checkpoint(0)
+	checkpoint := Checkpoint(1)
+	if err := createCheckpointFile(filepath.Join(dir, "committed"), checkpoint); err != nil {
+		t.Fatalf("failed to write commit file: %v", err)
+	}
+
 	issue1 := fmt.Errorf("issue 1")
 	issue2 := fmt.Errorf("issue 2")
 	gomock.InOrder(
-		p1.EXPECT().GuaranteeCheckpoint(checkpoint),
-		p2.EXPECT().GuaranteeCheckpoint(checkpoint),
-		p3.EXPECT().GuaranteeCheckpoint(checkpoint),
-		p4.EXPECT().GuaranteeCheckpoint(checkpoint),
 		p1.EXPECT().Restore(checkpoint),
 		p2.EXPECT().Restore(checkpoint).Return(issue1),
 		p3.EXPECT().Restore(checkpoint).Return(issue2),
 		p4.EXPECT().Restore(checkpoint),
 	)
 
-	coordinator, err := NewCoordinator(dir, p1, p2, p3, p4)
-	if err != nil {
-		t.Fatalf("failed to create coordinator: %v", err)
-	}
-
-	err = coordinator.Restore()
+	err := Restore(dir, p1, p2, p3, p4)
 	if !errors.Is(err, issue1) {
 		t.Errorf("missing issue 1: %v", err)
 	}
 	if !errors.Is(err, issue2) {
 		t.Errorf("missing issue 2: %v", err)
+	}
+}
+
+func TestRestore_RestoreFailsIfThereIsNoCheckpointData(t *testing.T) {
+	dir := t.TempDir()
+
+	ctrl := gomock.NewController(t)
+	p := NewMockParticipant(ctrl)
+
+	if err := Restore(dir, p); err == nil {
+		t.Errorf("restoration should have failed, but it did not: %v", err)
 	}
 }
