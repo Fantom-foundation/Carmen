@@ -63,7 +63,7 @@ func TestCodes_OpenCodes_IOErrorsAreHandled(t *testing.T) {
 		"missing permissions to create code file": func(t *testing.T) string {
 			dir := t.TempDir()
 			// the code directory must exist to reach the code file creation
-			if err := os.MkdirAll(filepath.Join(dir, "codes"), 0700); err != nil {
+			if err := os.MkdirAll(filepath.Join(dir, fileNameCodesCheckpointDirectory), 0700); err != nil {
 				t.Fatalf("failed to create codes directory: %v", err)
 			}
 			stat, err := os.Stat(dir)
@@ -80,7 +80,7 @@ func TestCodes_OpenCodes_IOErrorsAreHandled(t *testing.T) {
 		},
 		"missing permissions to read code file": func(t *testing.T) string {
 			dir := t.TempDir()
-			file := filepath.Join(dir, "codes.dat")
+			file := filepath.Join(dir, fileNameCodes)
 			if err := os.WriteFile(file, []byte{}, 0600); err != nil {
 				t.Fatalf("failed to create file: %v", err)
 			}
@@ -94,11 +94,11 @@ func TestCodes_OpenCodes_IOErrorsAreHandled(t *testing.T) {
 		},
 		"missing permissions to read checkpoint data": func(t *testing.T) string {
 			dir := t.TempDir()
-			nested := filepath.Join(dir, "codes")
+			nested := filepath.Join(dir, fileNameCodesCheckpointDirectory)
 			if err := os.MkdirAll(nested, 0700); err != nil {
 				t.Fatalf("failed to create codes directory: %v", err)
 			}
-			file := filepath.Join(nested, "committed.json")
+			file := filepath.Join(nested, fileNameCodesCommittedCheckpoint)
 			if err := os.WriteFile(file, []byte{}, 0600); err != nil {
 				t.Fatalf("failed to create file: %v", err)
 			}
@@ -321,7 +321,7 @@ func TestCodes_GuaranteeCheckpoint_IoErrorsAreHandled(t *testing.T) {
 		t.Fatalf("failed to prepare checkpoint: %v", err)
 	}
 
-	pendingFile := filepath.Join(codes.directory, "prepare.json")
+	pendingFile := filepath.Join(codes.directory, fileNameCodesPrepareCheckpoint)
 	if err := os.WriteFile(pendingFile, []byte("invalid json"), 0600); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
@@ -368,13 +368,13 @@ func TestCodes_Prepare_FailsIfFlushFails(t *testing.T) {
 func TestCodes_Commit_HandlesIoIssues(t *testing.T) {
 	tests := map[string]func(*testing.T, string) error{
 		"missing prepare file": func(t *testing.T, dir string) error {
-			return os.Remove(filepath.Join(dir, "codes", "prepare.json"))
+			return os.Remove(filepath.Join(dir, fileNameCodesCheckpointDirectory, fileNameCodesPrepareCheckpoint))
 		},
 		"invalid prepare file": func(t *testing.T, dir string) error {
-			return os.WriteFile(filepath.Join(dir, "codes", "prepare.json"), []byte("invalid json"), 0600)
+			return os.WriteFile(filepath.Join(dir, fileNameCodesCheckpointDirectory, fileNameCodesPrepareCheckpoint), []byte("invalid json"), 0600)
 		},
 		"missing rename permissions": func(t *testing.T, dir string) error {
-			subDir := filepath.Join(dir, "codes")
+			subDir := filepath.Join(dir, fileNameCodesCheckpointDirectory)
 			if err := os.Chmod(subDir, 0500); err != nil {
 				return err
 			}
@@ -415,12 +415,12 @@ func TestCodes_Restore_InvalidCheckpointMetaDataIsDetected(t *testing.T) {
 	dir := t.TempDir()
 	restorer := getCodeRestorer(dir)
 
-	subDir := filepath.Join(dir, "codes")
+	subDir := filepath.Join(dir, fileNameCodesCheckpointDirectory)
 	if err := os.MkdirAll(subDir, 0700); err != nil {
 		t.Fatalf("failed to create codes directory: %v", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(subDir, "committed.json"), []byte("invalid json"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(subDir, fileNameCodesCommittedCheckpoint), []byte("invalid json"), 0600); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
@@ -650,7 +650,7 @@ func TestCodes_CanBeHandledByCheckpointCoordinator(t *testing.T) {
 
 func TestCodes_writeCodes_WritesCodesToFile(t *testing.T) {
 	dir := t.TempDir()
-	file := filepath.Join(dir, "codes.dat")
+	file := filepath.Join(dir, fileNameCodes)
 
 	codes := map[common.Hash][]byte{
 		{1}: {5},
@@ -720,7 +720,7 @@ func TestCodes_writeCodes_WriteFailures(t *testing.T) {
 
 func TestCodes_writeCodes_CannotCreateTheOutputFile(t *testing.T) {
 	dir := t.TempDir()
-	file := filepath.Join(dir, "codes")
+	file := filepath.Join(dir, fileNameCodesCheckpointDirectory)
 	if err := os.Mkdir(file, os.FileMode(0644)); err != nil {
 		t.Fatalf("cannot create dir: %s", err)
 	}
@@ -773,7 +773,7 @@ func TestCodes_writeCodesTo_ForwardWriteErrors(t *testing.T) {
 
 func TestCodes_readCodesAndSize_ReadingNonExistingFileReturnsEmptyCodeMap(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "codes.dat")
+	path := filepath.Join(dir, fileNameCodes)
 	codes, size, err := readCodesAndSize(path)
 	if err != nil {
 		t.Fatalf("failed to read codes: %v", err)
@@ -788,7 +788,7 @@ func TestCodes_readCodesAndSize_ReadingNonExistingFileReturnsEmptyCodeMap(t *tes
 
 func TestCodes_readCodesAndSize_ReadingIssuesAreReported(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "codes.dat")
+	path := filepath.Join(dir, fileNameCodes)
 
 	if err := os.WriteFile(path, []byte("invalid"), 0600); err != nil {
 		t.Fatalf("failed to prepare invalid code file: %v", err)
@@ -802,7 +802,7 @@ func TestCodes_readCodesAndSize_ReadingIssuesAreReported(t *testing.T) {
 
 func TestCodes_readCodesAndSize_PermissionErrorsAreDetected(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "codes.dat")
+	path := filepath.Join(dir, fileNameCodes)
 
 	if err := os.Chmod(dir, 0000); err != nil {
 		t.Fatalf("failed to change directory permissions: %v", err)

@@ -46,6 +46,13 @@ type codes struct {
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
+const (
+	fileNameCodes                    = "codes.dat"
+	fileNameCodesCheckpointDirectory = "codes"
+	fileNameCodesCommittedCheckpoint = "committed.json"
+	fileNameCodesPrepareCheckpoint   = "prepare.json"
+)
+
 func openCodes(stateDirectory string) (*codes, error) {
 	file, directory := getCodePaths(stateDirectory)
 	if err := os.MkdirAll(directory, 0700); err != nil {
@@ -64,7 +71,7 @@ func openCodes(stateDirectory string) (*codes, error) {
 		return nil, err
 	}
 
-	committed := filepath.Join(directory, "committed.json")
+	committed := filepath.Join(directory, fileNameCodesCommittedCheckpoint)
 	meta, err := readCodeCheckpointMetaData(committed)
 	if err != nil {
 		return nil, err
@@ -141,7 +148,7 @@ func (c *codes) GuaranteeCheckpoint(checkpoint checkpoint.Checkpoint) error {
 	}
 
 	if c.checkpoint+1 == checkpoint {
-		preparedFile := filepath.Join(c.directory, "prepare.json")
+		preparedFile := filepath.Join(c.directory, fileNameCodesPrepareCheckpoint)
 		meta, err := readCodeCheckpointMetaData(preparedFile)
 		if err != nil {
 			return err
@@ -161,7 +168,7 @@ func (c *codes) Prepare(checkpoint checkpoint.Checkpoint) error {
 	if err := c.Flush(); err != nil {
 		return err
 	}
-	preparedFile := filepath.Join(c.directory, "prepare.json")
+	preparedFile := filepath.Join(c.directory, fileNameCodesPrepareCheckpoint)
 	return writeCodeCheckpointMetaData(preparedFile, codeCheckpointMetaData{
 		Checkpoint: checkpoint,
 		FileSize:   c.fileSize,
@@ -169,8 +176,8 @@ func (c *codes) Prepare(checkpoint checkpoint.Checkpoint) error {
 }
 
 func (c *codes) Commit(checkpoint checkpoint.Checkpoint) error {
-	committedFile := filepath.Join(c.directory, "committed.json")
-	preparedFile := filepath.Join(c.directory, "prepare.json")
+	committedFile := filepath.Join(c.directory, fileNameCodesCommittedCheckpoint)
+	preparedFile := filepath.Join(c.directory, fileNameCodesPrepareCheckpoint)
 	meta, err := readCodeCheckpointMetaData(preparedFile)
 	if err != nil {
 		return err
@@ -186,11 +193,12 @@ func (c *codes) Commit(checkpoint checkpoint.Checkpoint) error {
 }
 
 func (c *codes) Abort(checkpoint checkpoint.Checkpoint) error {
-	return os.Remove(filepath.Join(c.directory, "prepare.json"))
+	return os.Remove(filepath.Join(c.directory, fileNameCodesPrepareCheckpoint))
 }
 
 func getCodePaths(directory string) (codeFile, codeDir string) {
-	return filepath.Join(directory, "codes.dat"), filepath.Join(directory, "codes")
+	return filepath.Join(directory, fileNameCodes),
+		filepath.Join(directory, fileNameCodesCheckpointDirectory)
 }
 
 type codeRestorer struct {
@@ -207,7 +215,7 @@ func getCodeRestorer(stateDirectory string) codeRestorer {
 }
 
 func (r codeRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
-	committedFile := filepath.Join(r.directory, "committed.json")
+	committedFile := filepath.Join(r.directory, fileNameCodesCommittedCheckpoint)
 	meta, err := readCodeCheckpointMetaData(committedFile)
 	if err != nil {
 		return err
