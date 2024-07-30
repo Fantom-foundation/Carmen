@@ -24,6 +24,7 @@ import (
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
 	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
+	witness "github.com/Fantom-foundation/Carmen/go/common/witness"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -1411,6 +1412,26 @@ func (m *MockNonCommittableStateDB) CreateContract(arg0 common.Address) {
 func (mr *MockNonCommittableStateDBMockRecorder) CreateContract(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContract", reflect.TypeOf((*MockNonCommittableStateDB)(nil).CreateContract), arg0)
+}
+
+// CreateWitnessProof mocks base method.
+func (m *MockNonCommittableStateDB) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{address}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateWitnessProof", varargs...)
+	ret0, _ := ret[0].(witness.Proof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateWitnessProof indicates an expected call of CreateWitnessProof.
+func (mr *MockNonCommittableStateDBMockRecorder) CreateWitnessProof(address any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{address}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWitnessProof", reflect.TypeOf((*MockNonCommittableStateDB)(nil).CreateWitnessProof), varargs...)
 }
 
 // Empty mocks base method.
