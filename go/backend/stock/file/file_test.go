@@ -106,7 +106,7 @@ func TestFile_Open_MissingFile(t *testing.T) {
 	}
 
 	// delete file
-	if err := os.Remove(fmt.Sprintf("%s/values.dat", directory)); err != nil {
+	if err := os.Remove(filepath.Join(directory, fileNameValues)); err != nil {
 		t.Fatalf("cannot delete file: %s", err)
 	}
 
@@ -116,15 +116,15 @@ func TestFile_Open_MissingFile(t *testing.T) {
 }
 
 func TestFile_Open_CorruptedValueFile(t *testing.T) {
-	testOpenCorruptedFiles(t, "values.dat")
+	testOpenCorruptedFiles(t, fileNameValues)
 }
 
 func TestFile_Open_CorruptedFreelistFile(t *testing.T) {
-	testOpenCorruptedFiles(t, "freelist.dat")
+	testOpenCorruptedFiles(t, fileNameFreeList)
 }
 
 func TestFile_Open_CorruptedCheckpointFile(t *testing.T) {
-	testOpenCorruptedFiles(t, "committed.json")
+	testOpenCorruptedFiles(t, fileNameCommittedCheckpoint)
 }
 
 func testOpenCorruptedFiles(t *testing.T, filename string) {
@@ -169,15 +169,15 @@ func testOpenCorruptedFiles(t *testing.T, filename string) {
 }
 
 func TestFile_VerifyStock_FailReadMeta(t *testing.T) {
-	testFileVerifyStockMissingFile(t, "meta.json")
+	testFileVerifyStockMissingFile(t, fileNameMetadata)
 }
 
 func TestFile_VerifyStock_FailReadValues(t *testing.T) {
-	testFileVerifyStockMissingFile(t, "values.dat")
+	testFileVerifyStockMissingFile(t, fileNameValues)
 }
 
 func TestFile_VerifyStock_FailReadFreelist(t *testing.T) {
-	testFileVerifyStockMissingFile(t, "freelist.dat")
+	testFileVerifyStockMissingFile(t, fileNameFreeList)
 }
 
 func testFileVerifyStockMissingFile(t *testing.T, filename string) {
@@ -262,7 +262,7 @@ func TestFile_NewId_FailReadFile(t *testing.T) {
 		t.Fatalf("cannot init stock: %s", err)
 	}
 
-	if err := os.Truncate(fmt.Sprintf("%s/%s", directory, "values.dat"), 0); err != nil {
+	if err := os.Truncate(filepath.Join(directory, fileNameValues), 0); err != nil {
 		t.Fatalf("failed to delete file %v", err)
 	}
 	s.freelist.buffer = make([]int, 0, 1) // force to try to load from the file
@@ -372,7 +372,7 @@ func TestFile_Set_FailReadFile(t *testing.T) {
 		t.Fatalf("cannot init stock: %s", err)
 	}
 
-	if err := os.Truncate(fmt.Sprintf("%s/%s", directory, "values.dat"), 0); err != nil {
+	if err := os.Truncate(filepath.Join(directory, fileNameValues), 0); err != nil {
 		t.Fatalf("failed to delete file %v", err)
 	}
 
@@ -441,7 +441,7 @@ func TestFile_AFreshStockPassesVerification(t *testing.T) {
 }
 
 func TestFile_DetectsMissingFiles(t *testing.T) {
-	for _, file := range []string{"meta.json", "values.dat", "freelist.dat"} {
+	for _, file := range []string{fileNameMetadata, fileNameValues, fileNameFreeList} {
 		t.Run(file, func(t *testing.T) {
 			dir := t.TempDir()
 			encoder := stock.IntEncoder{}
@@ -678,7 +678,7 @@ func TestStock_Commit_FailsOnIoIssues(t *testing.T) {
 			return os.Remove(getPendingCheckpointFile(dir))
 		},
 		"corrupted pending file": func(_ *testing.T, dir string) error {
-			return writeJson(getPendingCheckpointFile(dir), checkpointMetaData{})
+			return utils.WriteJsonFile(getPendingCheckpointFile(dir), checkpointMetaData{})
 		},
 		"missing rename permissions": func(t *testing.T, dir string) error {
 			info, err := os.Stat(dir)
@@ -820,7 +820,7 @@ func TestRestore_CorruptedStockCanBeRestored(t *testing.T) {
 				// A pending checkpoint is not a huge issue, but should be removed
 				// by the restoration as it indicates a failed checkpoint creation.
 				pendingFile := getPendingCheckpointFile(dir)
-				return writeJson(pendingFile, checkpointMetaData{})
+				return utils.WriteJsonFile(pendingFile, checkpointMetaData{})
 			},
 			canBeIgnoredByVerification: true,
 		},
@@ -918,12 +918,12 @@ func TestStock_Restore_FailsOnIoIssues(t *testing.T) {
 		},
 		"wrong committed checkpoint": func(_ *testing.T, dir string) error {
 			path := getCommittedCheckpointFile(dir)
-			meta, err := readJson[checkpointMetaData](path)
+			meta, err := utils.ReadJsonFile[checkpointMetaData](path)
 			if err != nil {
 				return err
 			}
 			meta.Checkpoint++
-			return writeJson(path, meta)
+			return utils.WriteJsonFile(path, meta)
 		},
 		"missing meta file permissions": func(_ *testing.T, dir string) error {
 			meta, _, _ := getFileNames(dir)
@@ -939,7 +939,7 @@ func TestStock_Restore_FailsOnIoIssues(t *testing.T) {
 		},
 		"missing pending checkpoint permissions": func(t *testing.T, dir string) error {
 			path := getPendingCheckpointFile(dir)
-			if err := writeJson(path, checkpointMetaData{}); err != nil {
+			if err := utils.WriteJsonFile(path, checkpointMetaData{}); err != nil {
 				return err
 			}
 			info, err := os.Stat(dir)
@@ -1058,7 +1058,7 @@ func containsSubsetOfFiles(t *testing.T, super, sub string) error {
 func TestWriteJson_FailsOnMarshalingError(t *testing.T) {
 	dir := t.TempDir()
 	nonSerializable := make(chan struct{})
-	if err := writeJson(dir, nonSerializable); err == nil {
+	if err := utils.WriteJsonFile(dir, nonSerializable); err == nil {
 		t.Errorf("writing non-serializable data to JSON")
 	}
 }

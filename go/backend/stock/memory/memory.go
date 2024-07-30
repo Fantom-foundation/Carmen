@@ -19,6 +19,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -303,7 +304,7 @@ func (s *inMemoryStock[I, V]) Prepare(commit checkpoint.Checkpoint) error {
 	if err := s.Flush(); err != nil {
 		return err
 	}
-	return writeCheckpointMetaData(filepath.Join(s.directory, "prepare.json"), checkpointData{
+	return utils.WriteJsonFile(filepath.Join(s.directory, "prepare.json"), checkpointData{
 		Checkpoint:     commit,
 		NumValues:      len(s.values),
 		FreeListLength: len(s.freeList),
@@ -313,7 +314,7 @@ func (s *inMemoryStock[I, V]) Prepare(commit checkpoint.Checkpoint) error {
 func (s *inMemoryStock[I, V]) Commit(checkpoint checkpoint.Checkpoint) error {
 	prepareFile := filepath.Join(s.directory, "prepare.json")
 	commitFile := filepath.Join(s.directory, "commit.json")
-	meta, err := readCheckpointMetaData(prepareFile)
+	meta, err := utils.ReadJsonFile[checkpointData](prepareFile)
 	if err != nil {
 		return err
 	}
@@ -360,24 +361,4 @@ type checkpointData struct {
 	Checkpoint     checkpoint.Checkpoint
 	NumValues      int
 	FreeListLength int
-}
-
-func readCheckpointMetaData(path string) (checkpointData, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return checkpointData{}, err
-	}
-	var meta checkpointData
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return checkpointData{}, err
-	}
-	return meta, nil
-}
-
-func writeCheckpointMetaData(path string, data checkpointData) error {
-	meta, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, meta, 0600)
 }

@@ -11,7 +11,6 @@
 package file
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -79,7 +78,7 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 	var committed checkpointMetaData
 	commitMetaDataFile := getCommittedCheckpointFile(directory)
 	if exists(commitMetaDataFile) {
-		committed, err = readJson[checkpointMetaData](commitMetaDataFile)
+		committed, err = utils.ReadJsonFile[checkpointMetaData](commitMetaDataFile)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +149,7 @@ func verifyStockInternal[I stock.Index, V any](encoder stock.ValueEncoder[V], di
 
 func verifyStockFilesInternal[I stock.Index, V any](encoder stock.ValueEncoder[V], metafile, valuefile, freelistfile string) (metadata, error) {
 	// Attempt to parse the meta-data.
-	meta, err := readJson[metadata](metafile)
+	meta, err := utils.ReadJsonFile[metadata](metafile)
 	if err != nil {
 		return meta, err
 	}
@@ -227,19 +226,27 @@ func verifyStackInternal[I stock.Index](meta metadata, freelistfile utils.OsFile
 	return nil
 }
 
+const (
+	fileNameMetadata            = "meta.json"
+	fileNameValues              = "values.dat"
+	fileNameFreeList            = "freelist.dat"
+	fileNameCommittedCheckpoint = "committed.json"
+	fileNamePendingCheckpoint   = "pending.json"
+)
+
 func getFileNames(directory string) (metafile string, valuefile string, freelistfile string) {
-	metafile = filepath.Join(directory, "meta.json")
-	valuefile = filepath.Join(directory, "values.dat")
-	freelistfile = filepath.Join(directory, "freelist.dat")
+	metafile = filepath.Join(directory, fileNameMetadata)
+	valuefile = filepath.Join(directory, fileNameValues)
+	freelistfile = filepath.Join(directory, fileNameFreeList)
 	return
 }
 
 func getCommittedCheckpointFile(directory string) string {
-	return filepath.Join(directory, "committed.json")
+	return filepath.Join(directory, fileNameCommittedCheckpoint)
 }
 
 func getPendingCheckpointFile(directory string) string {
-	return filepath.Join(directory, "pending.json")
+	return filepath.Join(directory, fileNamePendingCheckpoint)
 }
 
 func (s *fileStock[I, V]) New() (I, error) {
@@ -350,7 +357,7 @@ func (s *fileStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 func (s *fileStock[I, V]) Flush() error {
 	meta, _, _ := getFileNames(s.directory)
 	return errors.Join(
-		writeJson(meta, s.getMetadata()),
+		utils.WriteJsonFile(meta, s.getMetadata()),
 		s.values.Flush(),
 		s.freelist.Flush(),
 	)
@@ -389,7 +396,7 @@ func (s *fileStock[I, V]) GuaranteeCheckpoint(checkpoint checkpoint.Checkpoint) 
 	// If the stock is behind the requested commit, it can be brought up to date.
 	pendingFile := getPendingCheckpointFile(s.directory)
 	if exists(pendingFile) {
-		meta, err := readJson[checkpointMetaData](pendingFile)
+		meta, err := utils.ReadJsonFile[checkpointMetaData](pendingFile)
 		if err != nil {
 			return err
 		}
@@ -417,7 +424,7 @@ func (s *fileStock[I, V]) Prepare(checkpoint checkpoint.Checkpoint) error {
 	s.freeListSizeOfCheckpoint = s.freelist.Size()
 
 	pendingFile := getPendingCheckpointFile(s.directory)
-	return writeJson(pendingFile, checkpointMetaData{
+	return utils.WriteJsonFile(pendingFile, checkpointMetaData{
 		Checkpoint: checkpoint,
 		Metadata:   s.getMetadata(),
 	})
@@ -428,7 +435,7 @@ func (s *fileStock[I, V]) Commit(checkpoint checkpoint.Checkpoint) error {
 		return fmt.Errorf("invalid next checkpoint, expected %d, got %d", want, got)
 	}
 	pendingFile := getPendingCheckpointFile(s.directory)
-	meta, err := readJson[checkpointMetaData](pendingFile)
+	meta, err := utils.ReadJsonFile[checkpointMetaData](pendingFile)
 	if err != nil {
 		return err
 	}
@@ -453,7 +460,7 @@ func (s *fileStock[I, V]) Abort(checkpoint checkpoint.Checkpoint) error {
 	}
 
 	// Get last committed checkpoint.
-	meta, err := readJson[checkpointMetaData](getCommittedCheckpointFile(s.directory))
+	meta, err := utils.ReadJsonFile[checkpointMetaData](getCommittedCheckpointFile(s.directory))
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return err
@@ -490,7 +497,7 @@ func (s *fileStockRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
 		return fmt.Errorf("failed to restore checkpoint %d, missing committed file %v", checkpoint, committedFile)
 	}
 
-	checkpointData, err := readJson[checkpointMetaData](committedFile)
+	checkpointData, err := utils.ReadJsonFile[checkpointMetaData](committedFile)
 	if err != nil {
 		return err
 	}
@@ -502,7 +509,7 @@ func (s *fileStockRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
 	meta, values, freelist := getFileNames(s.directory)
 
 	// the meta data file can be simply restored from the checkpoint
-	if err := writeJson(meta, checkpointData.Metadata); err != nil {
+	if err := utils.WriteJsonFile(meta, checkpointData.Metadata); err != nil {
 		return err
 	}
 
@@ -565,25 +572,4 @@ func isDirectory(path string) bool {
 type checkpointMetaData struct {
 	Checkpoint checkpoint.Checkpoint
 	Metadata   metadata
-}
-
-func readJson[T any](file string) (T, error) {
-	var zero T
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return zero, err
-	}
-	var meta T
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return zero, err
-	}
-	return meta, nil
-}
-
-func writeJson[T any](file string, data T) error {
-	content, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(file, content, 0600)
 }
