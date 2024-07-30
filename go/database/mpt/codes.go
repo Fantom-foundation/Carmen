@@ -13,7 +13,6 @@ package mpt
 import (
 	"bufio"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -24,22 +23,25 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
 )
 
+// codes is a simple data structure to store and manage the codes of accounts.
+// All codes are retained in memory, incrementally backed up to disk during
+// checkpoint and flush operations.
 type codes struct {
-	codes     map[common.Hash][]byte
-	pending   []common.Hash
-	mutex     sync.Mutex
-	file      string
-	fileSize  uint64
-	directory string
-	hasher    hash.Hash
+	codes    map[common.Hash][]byte // < all managed codes
+	pending  []common.Hash          // < the hashes of codes not written to disk yet
+	file     string                 // < the file to store the codes
+	fileSize uint64                 // < the current file size
+	mutex    sync.Mutex
+	hasher   hash.Hash
 
-	checkpoint         checkpoint.Checkpoint
-	checkpointFileSize uint64
+	directory  string                // < a directory for placing checkpoint data
+	checkpoint checkpoint.Checkpoint // < the last checkpoint
 }
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
@@ -69,13 +71,12 @@ func openCodes(stateDirectory string) (*codes, error) {
 	}
 
 	return &codes{
-		codes:              data,
-		file:               file,
-		fileSize:           size,
-		directory:          directory,
-		hasher:             sha3.NewLegacyKeccak256(),
-		checkpoint:         meta.Checkpoint,
-		checkpointFileSize: meta.FileSize,
+		codes:      data,
+		file:       file,
+		fileSize:   size,
+		directory:  directory,
+		hasher:     sha3.NewLegacyKeccak256(),
+		checkpoint: meta.Checkpoint,
 	}, nil
 }
 
@@ -181,7 +182,6 @@ func (c *codes) Commit(checkpoint checkpoint.Checkpoint) error {
 		return err
 	}
 	c.checkpoint = checkpoint
-	c.checkpointFileSize = meta.FileSize
 	return nil
 }
 
@@ -230,8 +230,11 @@ func readCodes(path string) (map[common.Hash][]byte, error) {
 func readCodesAndSize(path string) (map[common.Hash][]byte, uint64, error) {
 	// If there is no file, initialize and return an empty code collection.
 	info, err := os.Stat(path)
-	if err != nil {
+	if os.IsNotExist(err) {
 		return map[common.Hash][]byte{}, 0, nil
+	}
+	if err != nil {
+		return nil, 0, err
 	}
 
 	file, err := os.Open(path)
@@ -275,8 +278,10 @@ func writeCodes(codes map[common.Hash][]byte, filename string) (err error) {
 	if err != nil {
 		return err
 	}
+	buffer := bufio.NewWriter(file)
 	return errors.Join(
-		writeCodesTo(codes, file),
+		writeCodesTo(codes, buffer),
+		buffer.Flush(),
 		file.Close(),
 	)
 }
@@ -287,33 +292,29 @@ func appendCodes(codes map[common.Hash][]byte, filename string) (fileSize uint64
 	if err != nil {
 		return 0, err
 	}
-	if err := writeCodesTo(codes, file); err != nil {
-		return 0, err
-	}
-	size, err := file.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return 0, err
-	}
-	return uint64(size), file.Close()
+	buffer := bufio.NewWriter(file)
+	err1 := writeCodesTo(codes, buffer)
+	err2 := buffer.Flush()
+	size, err3 := file.Seek(0, io.SeekCurrent)
+	return uint64(size), errors.Join(err1, err2, err3, file.Close())
 }
 
 func writeCodesTo(codes map[common.Hash][]byte, out io.Writer) (err error) {
-	writer := bufio.NewWriter(out)
 	// The format is simple: [<key>, <length>, <code>]*
 	for key, code := range codes {
-		if _, err := writer.Write(key[:]); err != nil {
+		if _, err := out.Write(key[:]); err != nil {
 			return err
 		}
 		var length [4]byte
 		binary.BigEndian.PutUint32(length[:], uint32(len(code)))
-		if _, err := writer.Write(length[:]); err != nil {
+		if _, err := out.Write(length[:]); err != nil {
 			return err
 		}
-		if _, err := writer.Write(code); err != nil {
+		if _, err := out.Write(code); err != nil {
 			return err
 		}
 	}
-	return writer.Flush()
+	return nil
 }
 
 type codeCheckpointMetaData struct {
@@ -322,22 +323,13 @@ type codeCheckpointMetaData struct {
 }
 
 func readCodeCheckpointMetaData(path string) (codeCheckpointMetaData, error) {
-	data, err := os.ReadFile(path)
+	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return codeCheckpointMetaData{}, nil
 	}
-	if err != nil {
-		return codeCheckpointMetaData{}, err
-	}
-	var meta codeCheckpointMetaData
-	err = json.Unmarshal(data, &meta)
-	return meta, err
+	return utils.ReadJsonFile[codeCheckpointMetaData](path)
 }
 
 func writeCodeCheckpointMetaData(path string, meta codeCheckpointMetaData) error {
-	data, err := json.Marshal(meta)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0600)
+	return utils.WriteJsonFile(path, meta)
 }
