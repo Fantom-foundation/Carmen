@@ -27,6 +27,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/exp/maps"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -766,7 +767,7 @@ func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 
 	// Add some codes to be flushed.
 	for i := 0; i < numAccounts; i++ {
-		state.code[common.Hash{byte(i >> 8), byte(i)}] = make([]byte, 100)
+		state.codes.codes[common.Hash{byte(i >> 8), byte(i)}] = make([]byte, 100)
 	}
 
 	if err = state.Flush(); err != nil {
@@ -790,7 +791,10 @@ func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 				}
 				handle.Release()
 			})
-			state.codeDirty = true
+			if err := os.Remove(state.codes.file); err != nil {
+				b.Fatalf("failed to remove codes file: %v", err)
+			}
+			state.codes.pending = maps.Keys(state.codes.codes)
 		}
 		if err = state.Flush(); err != nil {
 			b.Fatalf("failed to flush state: %v", err)
