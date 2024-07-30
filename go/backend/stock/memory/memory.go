@@ -37,6 +37,14 @@ type inMemoryStock[I stock.Index, V any] struct {
 	backupCheckpointFreeListLength  int
 }
 
+const (
+	fileNameMetadata            = "meta.json"
+	fileNameValues              = "values.dat"
+	fileNameFreeList            = "freelist.dat"
+	fileNameCommittedCheckpoint = "committed.json"
+	fileNamePreparedCheckpoint  = "prepare.json"
+)
+
 func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (stock.Stock[I, V], error) {
 	res := &inMemoryStock[I, V]{
 		values:    make([]V, 0, 10),
@@ -51,7 +59,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 	}
 
 	// Test whether a meta file exists in this directory.
-	metafile := filepath.Join(directory, "meta.json")
+	metafile := filepath.Join(directory, fileNameMetadata)
 	if _, err := os.Stat(metafile); err != nil {
 		return res, nil
 	}
@@ -82,7 +90,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Load list of values.
 	{
-		valuefile := filepath.Join(directory, "values.dat")
+		valuefile := filepath.Join(directory, fileNameValues)
 		stats, err := os.Stat(valuefile)
 		if err != nil {
 			return nil, err
@@ -110,7 +118,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Load freelist.
 	{
-		freelistfile := filepath.Join(directory, "freelist.dat")
+		freelistfile := filepath.Join(directory, fileNameFreeList)
 		stats, err := os.Stat(freelistfile)
 		if err != nil {
 			return nil, err
@@ -232,12 +240,12 @@ func (s *inMemoryStock[I, V]) writeTo(dir string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "meta.json"), metadata, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, fileNameMetadata), metadata, 0600); err != nil {
 		return err
 	}
 
 	// Write list of values.
-	if f, err := os.Create(filepath.Join(dir, "values.dat")); err != nil {
+	if f, err := os.Create(filepath.Join(dir, fileNameValues)); err != nil {
 		return err
 	} else {
 		defer f.Close()
@@ -257,7 +265,7 @@ func (s *inMemoryStock[I, V]) writeTo(dir string) error {
 	}
 
 	// Write free list.
-	if f, err := os.Create(filepath.Join(dir, "freelist.dat")); err != nil {
+	if f, err := os.Create(filepath.Join(dir, fileNameFreeList)); err != nil {
 		return err
 	} else {
 		defer f.Close()
@@ -304,7 +312,7 @@ func (s *inMemoryStock[I, V]) Prepare(commit checkpoint.Checkpoint) error {
 	if err := s.Flush(); err != nil {
 		return err
 	}
-	return utils.WriteJsonFile(filepath.Join(s.directory, "prepare.json"), checkpointData{
+	return utils.WriteJsonFile(filepath.Join(s.directory, fileNamePreparedCheckpoint), checkpointData{
 		Checkpoint:     commit,
 		NumValues:      len(s.values),
 		FreeListLength: len(s.freeList),
@@ -312,8 +320,8 @@ func (s *inMemoryStock[I, V]) Prepare(commit checkpoint.Checkpoint) error {
 }
 
 func (s *inMemoryStock[I, V]) Commit(checkpoint checkpoint.Checkpoint) error {
-	prepareFile := filepath.Join(s.directory, "prepare.json")
-	commitFile := filepath.Join(s.directory, "commit.json")
+	prepareFile := filepath.Join(s.directory, fileNamePreparedCheckpoint)
+	commitFile := filepath.Join(s.directory, fileNameCommittedCheckpoint)
 	meta, err := utils.ReadJsonFile[checkpointData](prepareFile)
 	if err != nil {
 		return err
@@ -333,14 +341,8 @@ func (s *inMemoryStock[I, V]) Abort(commit checkpoint.Checkpoint) error {
 	}
 	s.checkpointValueListLength = s.backupCheckpointValueListLength
 	s.checkpointFreeListLength = s.backupCheckpointFreeListLength
-	prepareFile := filepath.Join(s.directory, "prepare.json")
+	prepareFile := filepath.Join(s.directory, fileNamePreparedCheckpoint)
 	return os.Remove(prepareFile)
-}
-
-func (s *inMemoryStock[I, V]) Restore(checkpoint checkpoint.Checkpoint) error {
-	s.values = s.values[:s.checkpointValueListLength]
-	s.freeList = s.freeList[:s.checkpointFreeListLength]
-	return nil
 }
 
 const dataFormatVersion = 0
