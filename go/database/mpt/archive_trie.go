@@ -16,10 +16,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -37,21 +40,31 @@ type ArchiveTrie struct {
 	head         LiveState // the current head-state
 	forest       Database  // global forest with all versions of LiveState
 	nodeSource   NodeSource
-	roots        rootList   // the roots of individual blocks indexed by block height
+	roots        *rootList  // the roots of individual blocks indexed by block height
 	rootsMutex   sync.Mutex // protecting access to the roots list
-	rootFile     string     // the file storing the list of roots
 	addMutex     sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
 	errorMutex   sync.RWMutex
 	archiveError error // a non-nil error will be stored here should it occur during any archive operation
 }
 
-func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheConfig) (*ArchiveTrie, error) {
+const (
+	fileNameArchiveCheckpointDirectory      = "checkpoint"
+	fileNameArchiveRoots                    = "roots.dat"
+	fileNameArchiveRootsCheckpointDirectory = "roots"
+	fileNameArchiveRootsCommittedCheckpoint = "committed.json"
+	fileNameArchiveRootsPreparedCheckpoint  = "prepare.json"
+)
+
+func OpenArchiveTrie(
+	directory string,
+	config MptConfig,
+	cacheConfig NodeCacheConfig,
+) (*ArchiveTrie, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
-	rootfile := directory + "/roots.dat"
-	roots, err := loadRoots(rootfile)
+	roots, err := loadRoots(directory)
 	if err != nil {
 		return nil, err
 	}
@@ -62,20 +75,17 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 	}
 	head, err := makeTrie(directory, forest)
 	if err != nil {
-		forest.Close()
-		return nil, err
+		return nil, errors.Join(err, forest.Close())
 	}
 	state, err := newMptState(directory, lock, head)
 	if err != nil {
-		head.Close()
-		return nil, err
+		return nil, errors.Join(err, head.Close())
 	}
 	return &ArchiveTrie{
 		head:       state,
 		forest:     forest,
 		nodeSource: forest,
 		roots:      roots,
-		rootFile:   rootfile,
 	}, nil
 }
 
@@ -83,7 +93,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 // If the test passes, the data stored in the respective directory
 // can be considered a valid archive database of the given configuration.
 func VerifyArchiveTrie(directory string, config MptConfig, observer VerificationObserver) error {
-	roots, err := loadRoots(directory + "/roots.dat")
+	roots, err := loadRoots(directory)
 	if err != nil {
 		return err
 	}
@@ -384,8 +394,11 @@ func (a *ArchiveTrie) addError(err error) error {
 // of an archive and its synchronization with an on-disk file copy.
 type rootList struct {
 	roots          []Root
-	filename       string
+	filename       string // < the file storing the list of roots
+	directory      string // < the directory for checkpoint data
 	numRootsInFile int
+
+	checkpoint checkpoint.Checkpoint
 }
 
 func (l *rootList) length() int {
@@ -400,26 +413,44 @@ func (l *rootList) append(r Root) {
 	l.roots = append(l.roots, r)
 }
 
-func loadRoots(filename string) (rootList, error) {
+func loadRoots(archiveDirectory string) (*rootList, error) {
+	filename := filepath.Join(archiveDirectory, fileNameArchiveRoots)
+	directory := filepath.Join(archiveDirectory, fileNameArchiveRootsCheckpointDirectory)
+
+	// Create the directory for commit files if it does not exist.
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, err
+	}
 	// If there is no file, initialize and return an empty list.
 	if _, err := os.Stat(filename); err != nil {
-		return rootList{filename: filename}, nil
+		return &rootList{
+			filename:  filename,
+			directory: directory,
+		}, nil
+	}
+
+	committedCheckpointFile := filepath.Join(directory, fileNameArchiveRootsCommittedCheckpoint)
+	checkpointData, err := readRootListCheckpointData(committedCheckpointFile)
+	if err != nil {
+		return nil, err
 	}
 
 	f, err := os.Open(filename)
 	if err != nil {
-		return rootList{}, err
+		return nil, err
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
 	roots, err := loadRootsFrom(reader)
 	if err != nil {
-		return rootList{}, err
+		return nil, err
 	}
-	return rootList{
+	return &rootList{
 		roots:          roots,
 		filename:       filename,
+		directory:      directory,
 		numRootsInFile: len(roots),
+		checkpoint:     checkpointData.Checkpoint,
 	}, nil
 }
 
@@ -487,4 +518,107 @@ func storeRootsTo(writer io.Writer, roots []Root) error {
 		}
 	}
 	return nil
+}
+
+func (l *rootList) GuaranteeCheckpoint(checkpoint checkpoint.Checkpoint) error {
+	if l.checkpoint == checkpoint {
+		return nil
+	}
+	if l.checkpoint+1 == checkpoint {
+		pendingFile := filepath.Join(l.directory, fileNameArchiveRootsPreparedCheckpoint)
+		if _, err := os.Stat(pendingFile); err == nil {
+			return l.Commit(checkpoint)
+		}
+	}
+	return fmt.Errorf("unable to guarantee checkpoint %v, current checkpoint is %v", checkpoint, l.checkpoint)
+}
+
+func (l *rootList) Prepare(checkpoint checkpoint.Checkpoint) error {
+	if l.checkpoint+1 != checkpoint {
+		return fmt.Errorf("checkpoint mismatch, expected %v, got %v", l.checkpoint+1, checkpoint)
+	}
+	pendingFile := filepath.Join(l.directory, fileNameArchiveRootsPreparedCheckpoint)
+	return writeRootListCheckpointData(pendingFile, rootListCheckpointData{
+		Checkpoint: checkpoint,
+		NumRoots:   l.length(),
+	})
+}
+
+func (l *rootList) Commit(checkpoint checkpoint.Checkpoint) error {
+	if l.checkpoint+1 != checkpoint {
+		return fmt.Errorf("checkpoint mismatch, expected %v, got %v", l.checkpoint+1, checkpoint)
+	}
+	committedFile := filepath.Join(l.directory, fileNameArchiveRootsCommittedCheckpoint)
+	pendingFile := filepath.Join(l.directory, fileNameArchiveRootsPreparedCheckpoint)
+	meta, err := readRootListCheckpointData(pendingFile)
+	if err != nil {
+		return err
+	}
+	if meta.Checkpoint != checkpoint {
+		return fmt.Errorf("checkpoint mismatch, prepared %v, committed %v", meta.Checkpoint, checkpoint)
+	}
+	l.checkpoint = checkpoint
+	return os.Rename(pendingFile, committedFile)
+}
+
+func (l *rootList) Abort(checkpoint checkpoint.Checkpoint) error {
+	if l.checkpoint+1 != checkpoint {
+		return fmt.Errorf("checkpoint mismatch, expected %v, got %v", l.checkpoint+1, checkpoint)
+	}
+	pendingFile := filepath.Join(l.directory, fileNameArchiveRootsPreparedCheckpoint)
+	return os.Remove(pendingFile)
+}
+
+type rootListRestorer struct {
+	rootsFile string
+	directory string
+}
+
+func getRootListRestorer(archiveDir string) rootListRestorer {
+	return rootListRestorer{
+		rootsFile: filepath.Join(archiveDir, fileNameArchiveRoots),
+		directory: filepath.Join(archiveDir, fileNameArchiveRootsCheckpointDirectory),
+	}
+}
+
+func (r rootListRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
+	meta, err := readRootListCheckpointData(filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint))
+	if err != nil {
+		return err
+	}
+
+	// If the given checkpoint is one step in the future, check whether there is a pending checkpoint.
+	if meta.Checkpoint+1 == checkpoint {
+		pending, err := readRootListCheckpointData(filepath.Join(r.directory, fileNameArchiveRootsPreparedCheckpoint))
+		if err == nil && pending.Checkpoint == checkpoint {
+			meta = pending
+		}
+	}
+
+	if meta.Checkpoint != checkpoint {
+		return fmt.Errorf("checkpoint mismatch, expected %v, got %v", checkpoint, meta.Checkpoint)
+	}
+
+	return truncateRootsFile(r.rootsFile, meta.NumRoots)
+}
+
+func truncateRootsFile(path string, length int) error {
+	return os.Truncate(path, int64(length*(NodeIdEncoder{}.GetEncodedSize()+32)))
+}
+
+type rootListCheckpointData struct {
+	Checkpoint checkpoint.Checkpoint
+	NumRoots   int
+}
+
+func readRootListCheckpointData(file string) (rootListCheckpointData, error) {
+	_, err := os.Stat(file)
+	if os.IsNotExist(err) {
+		return rootListCheckpointData{}, nil
+	}
+	return utils.ReadJsonFile[rootListCheckpointData](file)
+}
+
+func writeRootListCheckpointData(file string, data rootListCheckpointData) error {
+	return utils.WriteJsonFile(file, data)
 }
