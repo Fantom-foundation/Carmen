@@ -119,7 +119,7 @@ func OpenArchiveTrie(
 
 	checkpointInterval := archiveConfig.CheckpointInterval
 	if checkpointInterval <= 0 {
-		checkpointInterval = 10_000
+		checkpointInterval = 1000
 	}
 
 	return &ArchiveTrie{
@@ -412,14 +412,6 @@ func (a *ArchiveTrie) Close() error {
 		a.head.closeWithError(a.Flush()))
 }
 
-func (a *ArchiveTrie) GetCheckpointBlock() (uint64, error) {
-	numRoots := a.roots.checkpointNumRoots
-	if numRoots > 0 {
-		return uint64(numRoots - 1), nil
-	}
-	return 0, fmt.Errorf("archive has no checkpoint")
-}
-
 func (a *ArchiveTrie) createCheckpoint() error {
 	// Before the checkpoint can be created, all data needs
 	// to be flushed to the underlying storage.
@@ -432,6 +424,18 @@ func (a *ArchiveTrie) createCheckpoint() error {
 	return err
 }
 
+func GetCheckpointBlock(dir string) (uint64, error) {
+	checkpointDir := filepath.Join(dir, fileNameArchiveCheckpointDirectory)
+	coordinator, err := checkpoint.NewCoordinator(checkpointDir)
+	if err != nil {
+		return 0, err
+	}
+	cp := coordinator.GetCurrentCheckpoint()
+	restorer := getRootListRestorer(dir)
+	numRoots, err := restorer.getNumRootsInCheckpoint(cp)
+	return uint64(numRoots - 1), err
+}
+
 func RestoreBlockHeight(directory string, config MptConfig, block uint64) (err error) {
 
 	// Make sure access to the directory is exclusive.
@@ -442,13 +446,12 @@ func RestoreBlockHeight(directory string, config MptConfig, block uint64) (err e
 	defer lock.Release()
 
 	// Check available block height -- stop recovery if there are not enough blocks.
-	rootRestore := getRootListRestorer(directory)
-	checkpointHeight, err := rootRestore.getNumRootsInCheckpoint()
+	checkpointHeight, err := GetCheckpointBlock(directory)
 	if err != nil {
 		return fmt.Errorf("failed to get checkpoint height: %v", err)
 	}
-	if block >= uint64(checkpointHeight) {
-		return fmt.Errorf("block %d is beyond the last checkpoint height of %d", block, checkpointHeight-1)
+	if block > uint64(checkpointHeight) {
+		return fmt.Errorf("block %d is beyond the last checkpoint height of %d", block, checkpointHeight)
 	}
 
 	// Mark this directory as dirty at least for the duration of the recovery.
@@ -463,6 +466,7 @@ func RestoreBlockHeight(directory string, config MptConfig, block uint64) (err e
 	}()
 
 	// Restore the last checkpoint created by the archive.
+	rootRestorer := getRootListRestorer(directory)
 	accountsDir, branchesDir, extensionsDir, valuesDir := getForestDirectories(directory)
 	restorers := []checkpoint.Restorer{
 		file.GetRestorer(accountsDir),
@@ -470,7 +474,7 @@ func RestoreBlockHeight(directory string, config MptConfig, block uint64) (err e
 		file.GetRestorer(extensionsDir),
 		file.GetRestorer(valuesDir),
 		getCodeRestorer(directory),
-		rootRestore,
+		rootRestorer,
 	}
 
 	checkpointDir := filepath.Join(directory, "checkpoint")
@@ -478,7 +482,8 @@ func RestoreBlockHeight(directory string, config MptConfig, block uint64) (err e
 		return fmt.Errorf("failed to restore checkpoint: %w", err)
 	}
 
-	return truncateRootsFile(rootRestore.rootsFile, int(block+1))
+	// After the checkpoint, restore the block height.
+	return rootRestorer.truncate(int(block + 1))
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
@@ -725,22 +730,57 @@ func (r rootListRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
 	}
 
 	if meta.Checkpoint != checkpoint {
-		return fmt.Errorf("checkpoint mismatch, expected %v, got %v", checkpoint, meta.Checkpoint)
+		return fmt.Errorf("unknown checkpoint, have %v, wanted %v", meta.Checkpoint, checkpoint)
 	}
 
 	return truncateRootsFile(r.rootsFile, meta.NumRoots)
 }
 
-func (r rootListRestorer) getNumRootsInCheckpoint() (int, error) {
+func (r rootListRestorer) getNumRootsInCheckpoint(checkpoint checkpoint.Checkpoint) (int, error) {
 	meta, err := utils.ReadJsonFile[rootListCheckpointData](filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint))
 	if err != nil {
 		return 0, err
 	}
-	return meta.NumRoots, nil
+	if meta.Checkpoint == checkpoint {
+		return meta.NumRoots, nil
+	}
+	if meta.Checkpoint+1 == checkpoint {
+		pending, err := utils.ReadJsonFile[rootListCheckpointData](filepath.Join(r.directory, fileNameArchiveRootsPreparedCheckpoint))
+		if err == nil && pending.Checkpoint == checkpoint {
+			return pending.NumRoots, nil
+		}
+	}
+	return 0, fmt.Errorf("checkpoint %v not found", checkpoint)
+}
+
+func (r rootListRestorer) truncate(length int) error {
+	committed := filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint)
+	meta, err := utils.ReadJsonFile[rootListCheckpointData](committed)
+	if err != nil {
+		return err
+	}
+	if meta.NumRoots < length {
+		return fmt.Errorf("cannot truncate to %d, only %d roots available", length, meta.NumRoots)
+	}
+	meta.NumRoots = length
+	return errors.Join(
+		writeRootListCheckpointData(committed, meta),
+		truncateRootsFile(r.rootsFile, length),
+	)
 }
 
 func truncateRootsFile(path string, length int) error {
-	return os.Truncate(path, int64(length*(NodeIdEncoder{}.GetEncodedSize()+32)))
+	state, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	entrySize := int64(NodeIdEncoder{}.GetEncodedSize() + 32)
+	sourceLength := state.Size()
+	targetLength := int64(length) * entrySize
+	if sourceLength < targetLength {
+		return fmt.Errorf("cannot truncate root file to %d elements, only %d elements available", targetLength/entrySize, sourceLength/entrySize)
+	}
+	return os.Truncate(path, targetLength)
 }
 
 type rootListCheckpointData struct {

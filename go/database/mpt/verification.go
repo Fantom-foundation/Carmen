@@ -206,11 +206,11 @@ func verifyForest(directory string, config MptConfig, roots []Root, source *veri
 		if err != nil {
 			return err
 		}
-		for _, root := range roots {
+		for block, root := range roots {
 			want := hashes[root.NodeRef.Id()]
 			got := root.Hash
 			if want != got {
-				return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.NodeRef.Id(), want, got)
+				return fmt.Errorf("inconsistent hash for root node %v of block %d, want %v, got %v", root.NodeRef.Id(), block, want, got)
 			}
 		}
 	}

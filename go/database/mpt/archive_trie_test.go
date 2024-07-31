@@ -697,7 +697,7 @@ func TestArchiveTrie_Add_CreatesCheckpointPeriodically(t *testing.T) {
 				}
 
 				cpBlockWanted := int(cpWanted) * interval
-				cpBlockGot, err := archive.GetCheckpointBlock()
+				cpBlockGot, err := GetCheckpointBlock(dir)
 
 				if cpBlockWanted == 0 {
 					if err == nil {
@@ -746,7 +746,7 @@ func TestArchiveTrie_Add_CheckpointsAreCreatedForMissingBlocks(t *testing.T) {
 		t.Fatalf("wrong checkpoint, want %d, have %d", want, got)
 	}
 
-	if got, err := archive.GetCheckpointBlock(); err != nil || got != 7 {
+	if got, err := GetCheckpointBlock(dir); err != nil || got != 7 {
 		t.Fatalf("wrong checkpoint block, want %d, have %d, err %v", 7, got, err)
 	}
 
@@ -759,7 +759,7 @@ func TestArchiveTrie_Add_CheckpointsAreCreatedForMissingBlocks(t *testing.T) {
 		t.Fatalf("wrong checkpoint, want %d, have %d", want, got)
 	}
 
-	if got, err := archive.GetCheckpointBlock(); err != nil || got != 50 {
+	if got, err := GetCheckpointBlock(dir); err != nil || got != 50 {
 		t.Fatalf("wrong checkpoint block, want %d, have %d, err %v", 50, got, err)
 	}
 }
@@ -2176,6 +2176,49 @@ func TestArchiveTrie_createCheckpoint_forwardsErrors(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_GetCheckpointBlock(t *testing.T) {
+	dir := t.TempDir()
+
+	subDir := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory)
+	if err := os.Mkdir(subDir, 0700); err != nil {
+		t.Fatalf("failed to create sub-directory: %v", err)
+	}
+	checkpointFile := filepath.Join(subDir, fileNameArchiveRootsCommittedCheckpoint)
+	if err := utils.WriteJsonFile(checkpointFile, rootListCheckpointData{NumRoots: 42}); err != nil {
+		t.Fatalf("failed to write checkpoint file: %v", err)
+	}
+
+	block, err := GetCheckpointBlock(dir)
+	if err != nil {
+		t.Fatalf("failed to get checkpoint block: %v", err)
+	}
+	if want, got := uint64(41), block; want != got {
+		t.Errorf("unexpected checkpoint block, got: %d, want: %d", got, want)
+	}
+}
+
+func TestArchiveTrie_GetCheckpointBlock_CorruptedCoordinatorIsDetected(t *testing.T) {
+	dir := t.TempDir()
+
+	// trigger error when creating coordinator by blocking the needed
+	// directory location with a file.
+	coordinatorDirectory := filepath.Join(dir, fileNameArchiveCheckpointDirectory)
+	if err := os.WriteFile(coordinatorDirectory, []byte("corrupted"), 0600); err != nil {
+		t.Fatalf("failed to write coordinator file: %v", err)
+	}
+
+	if _, err := GetCheckpointBlock(dir); err == nil {
+		t.Fatalf("expected error when checkpoint file is corrupted")
+	}
+}
+
+func TestArchiveTrie_GetCheckpointBlock_MissingFileIsDetected(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := GetCheckpointBlock(dir); err == nil {
+		t.Fatalf("expected error when checkpoint file is missing")
+	}
+}
+
 func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 
 	addBlocks := func(archive *ArchiveTrie, from int, to int) error {
@@ -2242,7 +2285,7 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 				}
 
 				// check that the archive has a checkpoint at block 90
-				checkpoint, err := archive.GetCheckpointBlock()
+				checkpoint, err := GetCheckpointBlock(dir)
 				if err != nil {
 					t.Fatalf("failed to get checkpoint block: %v", err)
 				}
@@ -2307,11 +2350,11 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 				}
 
 				// check that the archive has a checkpoint at block 90
-				checkpoint, err := archive.GetCheckpointBlock()
+				checkpoint, err := GetCheckpointBlock(dir)
 				if err != nil {
 					t.Fatalf("failed to get checkpoint block: %v", err)
 				}
-				if want, got := uint64(90), checkpoint; want != got {
+				if want, got := uint64(47), checkpoint; want != got {
 					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
 				}
 
@@ -2358,7 +2401,7 @@ func TestArchiveTrie_RestoreBlockHeightFailsOnBlockBeyondTheLastCheckpoint(t *te
 		t.Fatalf("failed to add update: %v", err)
 	}
 
-	cpHeight, err := archive.GetCheckpointBlock()
+	cpHeight, err := GetCheckpointBlock(dir)
 	if err != nil || cpHeight != 10 {
 		t.Fatalf("unexpected checkpoint block: %d, %v", cpHeight, err)
 	}
@@ -2399,16 +2442,8 @@ func TestArchiveTrie_RestoreBlockHeight_DetectsIssuesAndForwardsThose(t *testing
 		"failed checkpoint restore": {
 			sabotage: func(_ *testing.T, dir string) error {
 				// The checkpoint recovery fails when the checkpoint data is corrupted.
-				return utils.WriteJsonFile(
-					filepath.Join(dir,
-						fileNameArchiveRootsCheckpointDirectory,
-						fileNameArchiveRootsCommittedCheckpoint,
-					),
-					rootListCheckpointData{
-						Checkpoint: 10,
-						NumRoots:   100,
-					},
-				)
+				rootsFile := filepath.Join(dir, fileNameArchiveRoots)
+				return os.WriteFile(rootsFile, []byte("invalid data"), 0644)
 			},
 			expectedErrorMessageFragment: "failed to restore checkpoint",
 			directoryShouldBeDirtyAfter:  true,
@@ -2466,6 +2501,111 @@ func TestArchiveTrie_RestoreBlockHeight_DetectsIssuesAndForwardsThose(t *testing
 				t.Errorf("expected dirty state of directory to be %t, got %t", want, got)
 			}
 		})
+	}
+}
+
+func TestArchiveTrie_RestoredTrieCanBeReused(t *testing.T) {
+	// This test creates an archive with 100 blocks, reset it to 50,
+	// and then adds 100 new blocks on top. In the end it checks that
+	// the archive contains the correct data for each block.
+
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{
+		CheckpointInterval: 10,
+	})
+	if err != nil {
+		t.Fatalf("cannot open archive: %v", err)
+	}
+
+	counter := 0
+	address := common.Address{}
+	for i := 0; i < 100; i++ {
+		counter++
+		err := archive.Add(uint64(i), common.Update{
+			CreatedAccounts: []common.Address{address},
+			Nonces: []common.NonceUpdate{
+				{Account: address, Nonce: common.Nonce{byte(counter)}},
+			},
+			Codes: []common.CodeUpdate{
+				{Account: address, Code: []byte{byte(counter)}},
+			},
+		}, nil)
+		if err != nil {
+			t.Fatalf("failed to add update: %v", err)
+		}
+	}
+
+	for i := 0; i < 100; i++ {
+		nonce, err := archive.GetNonce(uint64(i), address)
+		if err != nil {
+			t.Fatalf("failed to get nonce: %v", err)
+		}
+		if want, got := (common.Nonce{byte(i + 1)}), nonce; want != got {
+			t.Errorf("unexpected nonce, wanted %d, got %d", want, got)
+		}
+		code, err := archive.GetCode(uint64(i), address)
+		if err != nil {
+			t.Fatalf("failed to get nonce: %v", err)
+		}
+		if want, got := []byte{byte(i + 1)}, code; !bytes.Equal(want, got) {
+			t.Errorf("unexpected nonce, wanted %d, got %d", want, got)
+		}
+	}
+
+	if err := archive.Close(); err != nil {
+		t.Fatalf("failed to close archive: %v", err)
+	}
+
+	if err := RestoreBlockHeight(dir, S5ArchiveConfig, 50); err != nil {
+		t.Fatalf("failed to restore block height: %v", err)
+	}
+
+	archive, err = OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{
+		CheckpointInterval: 10,
+	})
+	if err != nil {
+		t.Fatalf("cannot open archive: %v", err)
+	}
+
+	for i := 51; i < 150; i++ {
+		counter++
+		err := archive.Add(uint64(i), common.Update{
+			CreatedAccounts: []common.Address{address},
+			Nonces: []common.NonceUpdate{
+				{Account: address, Nonce: common.Nonce{byte(counter)}},
+			},
+			Codes: []common.CodeUpdate{
+				{Account: address, Code: []byte{byte(counter)}},
+			},
+		}, nil)
+		if err != nil {
+			t.Fatalf("failed to add update: %v", err)
+		}
+	}
+
+	for i := 0; i < 150; i++ {
+		nonce, err := archive.GetNonce(uint64(i), address)
+		if err != nil {
+			t.Fatalf("failed to get nonce: %v", err)
+		}
+		want := byte(i + 1)
+		if i > 50 {
+			want += 49 // 49 blocks got removed during the reset
+		}
+		if want, got := (common.Nonce{want}), nonce; want != got {
+			t.Errorf("unexpected nonce, wanted %d, got %d", want, got)
+		}
+		code, err := archive.GetCode(uint64(i), address)
+		if err != nil {
+			t.Fatalf("failed to get nonce: %v", err)
+		}
+		if want, got := []byte{want}, code; !bytes.Equal(want, got) {
+			t.Errorf("unexpected nonce, wanted %d, got %d", want, got)
+		}
+	}
+
+	if err := archive.Close(); err != nil {
+		t.Fatalf("failed to close archive: %v", err)
 	}
 }
 
@@ -2826,6 +2966,168 @@ func TestRootList_Restore_FailsIfCheckpointFileCanNotBeRead(t *testing.T) {
 	cp := checkpoint.Checkpoint(1)
 	if err := getRootListRestorer(dir).Restore(cp); err == nil {
 		t.Fatalf("expected recovery error due to invalid checkpoint file")
+	}
+}
+
+func TestRootList_Restore_FailsIfAskedToRecoverUnknownCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+
+	cp := checkpoint.Checkpoint(5)
+	if err := getRootListRestorer(dir).Restore(cp); err == nil || !strings.Contains(err.Error(), "unknown checkpoint") {
+		t.Fatalf("expected recovery error due to unknown checkpoint, got %v", err)
+	}
+}
+
+func TestRootList_getNumRootsInCheckpoint_RetrievesRootHeightFromCommittedOrPendingCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(2))})
+
+	err = errors.Join(
+		roots.Prepare(1),
+		roots.Commit(1),
+	)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(3))})
+	if err := roots.Prepare(2); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+
+	restorer := getRootListRestorer(dir)
+
+	if _, err := restorer.getNumRootsInCheckpoint(0); err == nil {
+		t.Errorf("expected error when checkpoint does not exist")
+	}
+
+	if res, err := restorer.getNumRootsInCheckpoint(1); err != nil && res != 2 {
+		t.Errorf("expected 2 roots in checkpoint 1, got %d, err %v", res, err)
+	}
+
+	if res, err := restorer.getNumRootsInCheckpoint(2); err != nil && res != 3 {
+		t.Errorf("expected 3 roots in checkpoint 2, got %d, err %v", res, err)
+	}
+
+	if _, err := restorer.getNumRootsInCheckpoint(3); err == nil {
+		t.Errorf("expected error when checkpoint does not exist")
+	}
+}
+
+func TestRootList_getNumRootsInCheckpoint_ReturnsAnErrorIfThereIsNoCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	restorer := getRootListRestorer(dir)
+	if _, err := restorer.getNumRootsInCheckpoint(0); err == nil {
+		t.Errorf("expected error when there is no checkpoint")
+	}
+}
+
+func TestRootList_truncate_ShortensTheRootFileAndUpdatesTheLastCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(2))})
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(3))})
+
+	if err := roots.storeRoots(); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+	coordinator, err := checkpoint.NewCoordinator(
+		filepath.Join(dir, fileNameArchiveCheckpointDirectory),
+		roots,
+	)
+	if err != nil {
+		t.Fatalf("failed to create checkpoint coordinator: %v", err)
+	}
+	if _, err := coordinator.CreateCheckpoint(); err != nil {
+		t.Fatalf("failed to create a checkpoint: %v", err)
+	}
+
+	got, err := GetCheckpointBlock(dir)
+	if err != nil {
+		t.Fatalf("failed to get checkpoint block: %v", err)
+	}
+	if want := uint64(2); got != want {
+		t.Fatalf("unexpected checkpoint block, wanted %d, got %d", want, got)
+	}
+
+	if want, got := 3, roots.length(); want != got {
+		t.Fatalf("unexpected number of roots, wanted %d, got %d", want, got)
+	}
+
+	// truncate the roots list to height 1 (=length of 2)
+	if err := getRootListRestorer(dir).truncate(2); err != nil {
+		t.Fatalf("failed to truncate roots: %v", err)
+	}
+
+	got, err = GetCheckpointBlock(dir)
+	if err != nil {
+		t.Fatalf("failed to get checkpoint block: %v", err)
+	}
+	if want := uint64(1); got != want {
+		t.Fatalf("unexpected checkpoint block, wanted %d, got %d", want, got)
+	}
+
+	roots, err = loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	if want, got := 2, roots.length(); want != got {
+		t.Fatalf("unexpected number of roots, wanted %d, got %d", want, got)
+	}
+}
+
+func TestRootList_truncate_FailsIfCurrentListIsTooShort(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(2))})
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(3))})
+
+	if err := roots.storeRoots(); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+	cp := checkpoint.Checkpoint(1)
+	err = errors.Join(
+		roots.Prepare(cp),
+		roots.Commit(cp),
+	)
+	if err != nil {
+		t.Fatalf("failed to create a checkpoint: %v", err)
+	}
+
+	if err := getRootListRestorer(dir).truncate(4); err == nil {
+		t.Fatalf("expected error when truncating would lead to an extension")
+	}
+}
+
+func TestRootList_truncate_FailsIfThereIsNoCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	if err := getRootListRestorer(dir).truncate(4); err == nil {
+		t.Fatalf("expected error when truncating without a checkpoint")
+	}
+}
+
+func TestRootList_truncateRootsFile_FailsForNonExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "non-existing-file")
+	if err := truncateRootsFile(file, 4); err == nil {
+		t.Fatalf("expected error when truncating non-existing file")
 	}
 }
 

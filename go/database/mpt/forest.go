@@ -17,6 +17,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -191,26 +192,27 @@ func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestCo
 		}
 	}()
 
+	accountsDir, branchsDir, extensionsDir, valuesDir := getForestDirectories(directory)
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
-	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
+	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, branchsDir)
 	if err != nil {
 		return nil, err
 	}
 	closers = append(closers, branches)
 
-	extensions, err := file.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
+	extensions, err := file.OpenStock[uint64, ExtensionNode](extensionEncoder, extensionsDir)
 	if err != nil {
 		return nil, err
 	}
 	closers = append(closers, extensions)
 
-	accounts, err := file.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
+	accounts, err := file.OpenStock[uint64, AccountNode](accountEncoder, accountsDir)
 	if err != nil {
 		return nil, err
 	}
 	closers = append(closers, accounts)
 
-	values, err := file.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
+	values, err := file.OpenStock[uint64, ValueNode](valueEncoder, valuesDir)
 	if err != nil {
 		return nil, err
 	}
@@ -1026,6 +1028,15 @@ func (s *Forest) releaseTrieAsynchronous(ref NodeReference) {
 	if !id.IsEmpty() { // empty Id is used for signalling sync requests
 		s.releaseQueue <- id
 	}
+}
+
+func getForestDirectories(root string) (
+	accounts, branches, extensions, values string,
+) {
+	return filepath.Join(root, "accounts"),
+		filepath.Join(root, "branches"),
+		filepath.Join(root, "extensions"),
+		filepath.Join(root, "values")
 }
 
 func getEncoder(config MptConfig) (
