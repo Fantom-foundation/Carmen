@@ -27,6 +27,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/crypto/sha3"
+	"golang.org/x/exp/maps"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -606,103 +607,6 @@ func TestState_Flush_WriteDirtyCodesOnly(t *testing.T) {
 	}
 }
 
-func TestState_writeCodes_WriteFailures(t *testing.T) {
-	codes := make(map[common.Hash][]byte, 1)
-	var h common.Hash
-	code := make([]byte, 5)
-	h[0] = byte(1)
-	code[0] = byte(5)
-	codes[h] = code
-
-	// execute dry-run to compute the number of calls to io.Writer
-	var count int
-	{
-		ctrl := gomock.NewController(t)
-		osfile := utils.NewMockOsFile(ctrl)
-
-		osfile.EXPECT().Write(gomock.Any()).AnyTimes().DoAndReturn(func([]byte) (int, error) {
-			count++
-			return 1, nil
-		})
-		if err := writeCodesTo(codes, osfile); err != nil {
-			t.Fatalf("cannot execute writeCodesTo: %s", err)
-		}
-	}
-
-	var injectedErr = errors.New("write error")
-	ctrl := gomock.NewController(t)
-	osfile := utils.NewMockOsFile(ctrl)
-
-	// execute the computed number of loops and mock calls to io.Writer so that
-	// the last one is failing.
-	// This way all branches are exercised.
-	for i := 0; i < count; i++ {
-		t.Run(fmt.Sprintf("io_error_%d", i), func(t *testing.T) {
-			calls := make([]*gomock.Call, 0, i+1)
-			for j := 0; j < i; j++ {
-				calls = append(calls, osfile.EXPECT().Write(gomock.Any()).Return(0, nil))
-			}
-			calls = append(calls, osfile.EXPECT().Write(gomock.Any()).Return(0, injectedErr))
-			gomock.InOrder(calls...)
-
-			if err := writeCodesTo(codes, osfile); !errors.Is(err, injectedErr) {
-				t.Errorf("writing roots should fail")
-			}
-		})
-
-	}
-}
-
-func TestState_writeCodes_CannotCreateTheOutputFile(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "codes")
-	if err := os.Mkdir(file, os.FileMode(0644)); err != nil {
-		t.Fatalf("cannot create dir: %s", err)
-	}
-	if err := writeCodes(make(map[common.Hash][]byte, 1), file); err == nil {
-		t.Errorf("writing roots should fail")
-	}
-}
-
-func TestState_readCodes_Cannot_Read(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "dir")
-	if err := os.Mkdir(file, os.FileMode(0)); err != nil {
-		t.Fatalf("cannot create dir: %s", err)
-	}
-	if _, err := readCodes(file); err == nil {
-		t.Errorf("reading codes should fail")
-	}
-}
-
-func TestState_parseCodes_ReadFailures(t *testing.T) {
-	var injectedErr = errors.New("read error")
-	ctrl := gomock.NewController(t)
-	osfile := utils.NewMockOsFile(ctrl)
-
-	var h common.Hash
-	sizes := []int{len(h), 4, 100}
-	// execute three times - parseCode calls io.Reader three times to get [<key>, <length>, <code>]
-	for i := 0; i < 3; i++ {
-		calls := make([]*gomock.Call, 0, i+1)
-		for j := 0; j < i; j++ {
-			pos := j
-			call := osfile.EXPECT().Read(gomock.Any()).DoAndReturn(func(buf []byte) (int, error) {
-				buf[0] = 1             // fill in an non-zero value not to return an empty array
-				return sizes[pos], nil // returning expected size causes this io.Reader is called exactly once
-			})
-			calls = append(calls, call)
-		}
-		calls = append(calls, osfile.EXPECT().Read(gomock.Any()).Return(1, injectedErr))
-		gomock.InOrder(calls...)
-
-		if _, err := parseCodes(osfile); !errors.Is(err, injectedErr) {
-			t.Errorf("reading codes should fail")
-		}
-
-	}
-}
-
 func TestEstimatePerNodeMemoryUsage(t *testing.T) {
 
 	// Use the size of the largest node
@@ -766,7 +670,7 @@ func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 
 	// Add some codes to be flushed.
 	for i := 0; i < numAccounts; i++ {
-		state.code[common.Hash{byte(i >> 8), byte(i)}] = make([]byte, 100)
+		state.codes.codes[common.Hash{byte(i >> 8), byte(i)}] = make([]byte, 100)
 	}
 
 	if err = state.Flush(); err != nil {
@@ -790,7 +694,10 @@ func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 				}
 				handle.Release()
 			})
-			state.codeDirty = true
+			if err := os.Remove(state.codes.file); err != nil {
+				b.Fatalf("failed to remove codes file: %v", err)
+			}
+			state.codes.pending = maps.Keys(state.codes.codes)
 		}
 		if err = state.Flush(); err != nil {
 			b.Fatalf("failed to flush state: %v", err)
