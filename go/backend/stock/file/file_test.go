@@ -754,6 +754,62 @@ func TestStock_Abort_FailsOnIoIssues(t *testing.T) {
 	}
 }
 
+func TestRestore_CanRestoreCommittedAndPendingCheckpoint(t *testing.T) {
+	for _, name := range []string{"committed", "pending"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			s, err := openStock[int, int](stock.IntEncoder{}, dir)
+			if err != nil {
+				t.Fatalf("failed to open stock: %v", err)
+			}
+			id, err := s.New()
+			if err != nil {
+				t.Fatalf("failed to create new item: %v", err)
+			}
+			if err := s.Set(id, 1); err != nil {
+				t.Fatalf("failed to set value: %v", err)
+			}
+
+			cp1 := checkpoint.Checkpoint(1)
+			if err := s.Prepare(cp1); err != nil {
+				t.Fatalf("failed to prepare checkpoint: %v", err)
+			}
+			if name == "committed" {
+				if err := s.Commit(cp1); err != nil {
+					t.Fatalf("failed to commit checkpoint: %v", err)
+				}
+			}
+
+			id, err = s.New()
+			if err != nil {
+				t.Fatalf("failed to create new item: %v", err)
+			}
+			if err := s.Set(id, 2); err != nil {
+				t.Fatalf("failed to set value: %v", err)
+			}
+
+			if err := s.Close(); err != nil {
+				t.Fatalf("failed to close stock: %v", err)
+			}
+
+			// restore the stock
+			if err := GetRestorer(dir).Restore(cp1); err != nil {
+				t.Fatalf("failed to restore checkpoint: %v", err)
+			}
+
+			s, err = openStock[int, int](stock.IntEncoder{}, dir)
+			if err != nil {
+				t.Fatalf("failed to re-open recovered stock: %v", err)
+			}
+
+			if err := s.Close(); err != nil {
+				t.Fatalf("failed to recovered stock: %v", err)
+			}
+		})
+	}
+}
+
 func TestRestore_CorruptedStockCanBeRestored(t *testing.T) {
 	tests := map[string]struct {
 		corrupt                    func(dir string) error
