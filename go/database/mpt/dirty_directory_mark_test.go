@@ -63,3 +63,13 @@ func TestDirtyDirectoryMark_DirectoryCanBeMarkedDirtyAndCleanedAgain(t *testing.
 		t.Fatalf("unexpected state of cleaned directory: %t, %v", dirty, err)
 	}
 }
+
+func TestDirtyDirectoryMark_DirtyFlagMustBeAFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, dirtyFileName), 0700); err != nil {
+		t.Fatalf("failed to create a directory with the dirty flag: %v", err)
+	}
+	if dirty, err := isDirty(dir); dirty || err != nil {
+		t.Fatalf("a directory with the dirty-file name should not be considered a valid dirty mark")
+	}
+}
