@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
@@ -56,10 +57,12 @@ func verify(context *cli.Context) error {
 	// run forest verification
 	observer := &verificationObserver{}
 
+	ctx := interrupt.CancelOnInterrupt(context.Context)
+
 	if info.Mode == mpt.Immutable {
-		return mpt.VerifyArchiveTrie(dir, info.Config, observer)
+		return mpt.VerifyArchiveTrie(ctx, dir, info.Config, observer)
 	}
-	return mpt.VerifyFileLiveTrie(dir, info.Config, observer)
+	return mpt.VerifyFileLiveTrie(ctx, dir, info.Config, observer)
 }
 
 type verificationObserver struct {

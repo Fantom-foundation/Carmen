@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -82,7 +83,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 // VerifyArchiveTrie validates file-based archive stored in the given directory.
 // If the test passes, the data stored in the respective directory
 // can be considered a valid archive database of the given configuration.
-func VerifyArchiveTrie(directory string, config MptConfig, observer VerificationObserver) error {
+func VerifyArchiveTrie(ctx context.Context, directory string, config MptConfig, observer VerificationObserver) error {
 	roots, err := loadRoots(directory + "/roots.dat")
 	if err != nil {
 		return err
@@ -90,7 +91,7 @@ func VerifyArchiveTrie(directory string, config MptConfig, observer Verification
 	if roots.length() == 0 {
 		return nil
 	}
-	return VerifyMptState(directory, config, roots.roots, observer)
+	return VerifyMptState(ctx, directory, config, roots.roots, observer)
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
