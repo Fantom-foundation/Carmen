@@ -12,6 +12,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
@@ -19,20 +20,20 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var Check = cli.Command{
-	Action:    check,
-	Name:      "check",
-	Usage:     "performs extensive invariants checks",
-	ArgsUsage: "<director>",
+var Reset = cli.Command{
+	Action:    reset,
+	Name:      "reset",
+	Usage:     "resets the given archive to a selected block",
+	ArgsUsage: "<director> <block>",
 	Flags: []cli.Flag{
 		&cpuProfileFlag,
 	},
 }
 
-func check(context *cli.Context) error {
+func reset(context *cli.Context) error {
 	// parse the directory argument
-	if context.Args().Len() != 1 {
-		return fmt.Errorf("missing directory storing state")
+	if context.Args().Len() != 2 {
+		return fmt.Errorf("missing directory and/or block height parameter")
 	}
 
 	// Start profiling ...
@@ -45,6 +46,11 @@ func check(context *cli.Context) error {
 	}
 
 	dir := context.Args().Get(0)
+	blockArg := context.Args().Get(1)
+	block, err := strconv.Atoi(blockArg)
+	if err != nil {
+		return fmt.Errorf("invalid block height %s", blockArg)
+	}
 
 	// try to obtain information of the contained MPT
 	info, err := io.CheckMptDirectoryAndGetInfo(dir)
@@ -52,33 +58,14 @@ func check(context *cli.Context) error {
 		return err
 	}
 
-	if info.Mode == mpt.Immutable {
-		fmt.Printf("Checking archive in %s ...\n", dir)
-		err = checkArchive(dir, info)
-	} else {
-		fmt.Printf("Checking live DB in %s ...\n", dir)
-		err = checkLiveDB(dir, info)
+	if info.Mode != mpt.Immutable {
+		return fmt.Errorf("reset is only supported for archives")
 	}
+
+	fmt.Printf("Resetting archive in %s to block %d ...\n", dir, block)
+	err = mpt.RestoreBlockHeight(dir, info.Config, uint64(block))
 	if err == nil {
-		fmt.Printf("All checks passed!\n")
+		fmt.Printf("Archive successfully reset to block %d\n", block)
 	}
 	return err
-}
-
-func checkLiveDB(dir string, info io.MptInfo) error {
-	live, err := mpt.OpenFileLiveTrie(dir, info.Config, mpt.NodeCacheConfig{})
-	if err != nil {
-		return err
-	}
-	defer live.Close()
-	return live.Check()
-}
-
-func checkArchive(dir string, info io.MptInfo) error {
-	archive, err := mpt.OpenArchiveTrie(dir, info.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
-	if err != nil {
-		return err
-	}
-	defer archive.Close()
-	return archive.Check()
 }
