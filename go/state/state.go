@@ -13,6 +13,8 @@ package state
 //go:generate mockgen -source state.go -destination state_mock.go -package state
 
 import (
+	"io"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
@@ -82,6 +84,10 @@ type State interface {
 	// Error may be produced when it occurs in the underlying database;
 	// otherwise, the proof is returned.
 	CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error)
+
+	// CreateLiveDBGenesis writes a LiveDB genesis into out.
+	// If successful, expected root hash is returned.
+	CreateLiveDBGenesis(out io.Writer) (common.Hash, error)
 
 	// States can be snapshotted.
 	backend.Snapshotable

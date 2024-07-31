@@ -13,8 +13,10 @@ package carmen
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
+	"io"
 	"sync"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
@@ -158,6 +160,21 @@ func (c *archiveBlockContext) GetProof(address Address, keys ...Key) (WitnessPro
 	}
 
 	return witnessProof{proof}, nil
+}
+
+func (c *archiveBlockContext) CreateLiveDBGenesis(out io.Writer) (Hash, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.db == nil {
+		return Hash{}, fmt.Errorf("cannot create genesis in invalid block context")
+	}
+
+	h, err := c.archiveState.CreateLiveDBGenesis(out)
+	if err != nil {
+		return Hash{}, err
+	}
+	return Hash(h), nil
 }
 
 func (c *archiveBlockContext) Close() error {

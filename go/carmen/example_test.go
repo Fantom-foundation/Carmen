@@ -11,11 +11,13 @@
 package carmen_test
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/Fantom-foundation/Carmen/go/carmen"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"golang.org/x/exp/maps"
 )
 
@@ -512,6 +514,84 @@ func ExampleDatabase_GetMemoryFootprint() {
 	}
 
 	if err := os.RemoveAll(dir); err != nil {
+		log.Fatalf("cannot remove dir: %v", err)
+	}
+}
+
+func ExampleHistoricBlockContext_CreateLiveDBGenesis() {
+	dir, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temporary directory: %v", err)
+	}
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := db.AddBlock(uint64(1), func(context carmen.HeadBlockContext) error {
+		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
+			context.CreateAccount(carmen.Address{byte(1)})
+			context.AddBalance(carmen.Address{byte(1)}, carmen.NewAmount(uint64(1)))
+			context.SetState(carmen.Address{byte(1)}, carmen.Key{byte(1)}, carmen.Value{byte(1)})
+			return nil
+		}); err != nil {
+			log.Fatalf("cannot create transaction: %v", err)
+		}
+		return nil
+	}); err != nil {
+		log.Fatalf("cannot add block: %v", err)
+	}
+
+	// block wait until the archive is in sync
+	if err := db.Flush(); err != nil {
+		log.Fatalf("cannot flush: %v", err)
+	}
+
+	// Export genesis
+	var rootHash carmen.Hash
+	b := bytes.NewBuffer(nil)
+	if err = db.QueryBlock(uint64(1), func(ctxt carmen.HistoricBlockContext) error {
+		rootHash, err = ctxt.CreateLiveDBGenesis(b)
+		if err != nil {
+			log.Fatalf("cannot create genesis: %v", err)
+		}
+		return nil
+	}); err != nil {
+		log.Fatalf("cannot query block: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		log.Fatalf("cannot remove dir: %v", err)
+	}
+
+	importedDbPath := "imported_carmen"
+
+	err = io.ImportLiveDb(importedDbPath, b)
+	if err != nil {
+		log.Fatalf("cannot import live db")
+	}
+
+	// Make sure database is valid
+	importedDb, err := carmen.OpenDatabase(importedDbPath, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatalf("cannot open imported database: %v", err)
+	}
+
+	if err := importedDb.QueryHistoricState(uint64(1), func(ctxt carmen.QueryContext) {
+		if got, want := ctxt.GetStateHash(), rootHash; got != want {
+			log.Fatalf("unexpected root hash of imported db\ngot: %s, want: %s", got, want)
+		}
+	}); err != nil {
+		log.Fatalf("cannot query block: %v", err)
+	}
+
+	if err := importedDb.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+	if err := os.RemoveAll(importedDbPath); err != nil {
 		log.Fatalf("cannot remove dir: %v", err)
 	}
 }

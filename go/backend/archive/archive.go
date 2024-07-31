@@ -13,13 +13,18 @@ package archive
 //go:generate mockgen -source archive.go -destination archive_mock.go -package archive
 
 import (
+	"io"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
 )
 
 // ErrWitnessProofNotSupported is returned when the archive does not support witness proofs.
-const ErrWitnessProofNotSupported = common.ConstError("witness proof not supported")
+const (
+	ErrWitnessProofNotSupported  = common.ConstError("witness proof not supported")
+	ErrGenesisExportNotSupported = common.ConstError("genesis export not supported")
+)
 
 // An Archive retains a history of state mutations in a blockchain on a
 // block-level granularity. The history is recorded by adding per-block updates.
@@ -59,6 +64,9 @@ type Archive interface {
 
 	// CreateWitnessProof creates a witness proof for the given account and keys.
 	CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error)
+
+	// CreateLiveDBGenesis writes a LiveDB genesis for given block into out.
+	CreateLiveDBGenesis(block uint64, out io.Writer) (common.Hash, error)
 
 	// MemoryFootprintProvider provides the size of the store in memory in bytes.
 	common.MemoryFootprintProvider

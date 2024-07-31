@@ -23,10 +23,12 @@ import "C"
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
+	"io"
 	"os"
 	"path/filepath"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -282,6 +284,10 @@ func (cs *CppState) Check() error {
 }
 
 func (cs *CppState) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
+	panic("not implemented")
+}
+
+func (cs *CppState) CreateLiveDBGenesis(out io.Writer) (common.Hash, error) {
 	panic("not implemented")
 }
 

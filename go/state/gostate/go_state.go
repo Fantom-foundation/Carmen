@@ -13,8 +13,10 @@ package gostate
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
+	"io"
 	"runtime"
+
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -366,6 +368,10 @@ func (s *GoState) GetProof() (backend.Proof, error) {
 		proofs = append(proofs, proof)
 	}
 	return backend.GetComposedProof(proofs), nil
+}
+
+func (s *GoState) CreateLiveDBGenesis(io.Writer) (common.Hash, error) {
+	panic("not implemented")
 }
 
 func (s *GoState) CreateSnapshot() (backend.Snapshot, error) {

@@ -8,7 +8,7 @@
 // On the date above, in accordance with the Business Source License, use of
 // this software will be governed by the GNU Lesser General Public License v3.
 
-package io
+package genesis
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ func TestCodes_OutputIsSortedByHash(t *testing.T) {
 	codes[common.Hash{3}] = []byte{6, 7, 8}
 
 	buffer := new(bytes.Buffer)
-	if err := writeCodes(codes, buffer); err != nil {
+	if err := WriteCodes(codes, buffer); err != nil {
 		t.Fatalf("failed to write codes: %v", err)
 	}
 
@@ -47,7 +47,7 @@ func TestCodes_OutputIsSortedByHash(t *testing.T) {
 		if want, got := byte('C'), token; want != got {
 			t.Errorf("unexpected token, wanted %c, got %c", want, got)
 		}
-		code, err := readCode(in)
+		code, err := ReadCode(in)
 		if err != nil {
 			t.Fatalf("failed to read code: %v", err)
 		}

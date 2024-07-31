@@ -11,6 +11,7 @@
 package gostate
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"testing"
@@ -102,6 +103,15 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 			},
 			func(stateArchive state.State) error {
 				_, err := stateArchive.CreateWitnessProof(common.Address{}, common.Key{})
+				return err
+			},
+		},
+		"liveDBGenesis": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().CreateLiveDBGenesis(gomock.Any(), gomock.Any()).Return(injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.CreateLiveDBGenesis(bytes.NewBuffer(nil))
 				return err
 			},
 		},

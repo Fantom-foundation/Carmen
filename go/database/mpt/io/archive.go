@@ -22,6 +22,7 @@ import (
 	"sort"
 
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/genesis"
 	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
@@ -84,7 +85,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 
 	// Write out codes.
 	codes := archive.GetCodes()
-	if err = writeCodes(codes, out); err != nil {
+	if err = genesis.WriteCodes(codes, out); err != nil {
 		return err
 	}
 
@@ -122,7 +123,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if _, err := out.Write([]byte{byte('H'), byte(EthereumHash)}); err != nil {
+		if _, err := out.Write([]byte{byte('H'), byte(genesis.EthereumHash)}); err != nil {
 			return err
 		}
 		if _, err := out.Write(hash[:]); err != nil {
@@ -276,7 +277,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 			}
 			context.setAccount(address)
 		case 'C':
-			code, err := readCode(in)
+			code, err := genesis.ReadCode(in)
 			if err != nil {
 				return err
 			}
@@ -294,12 +295,12 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 			if _, err := io.ReadFull(in, buffer[0:1]); err != nil {
 				return err
 			}
-			hashType := HashType(buffer[0])
+			hashType := genesis.HashType(buffer[0])
 			hash := common.Hash{}
 			if _, err := io.ReadFull(in, hash[:]); err != nil {
 				return err
 			}
-			if hashType == EthereumHash {
+			if hashType == genesis.EthereumHash {
 				context.setBlockHash(hash)
 			}
 

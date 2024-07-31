@@ -21,7 +21,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
-	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
+	"github.com/Fantom-foundation/Carmen/go/common/genesis"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
@@ -40,51 +40,6 @@ import (
 //
 // All values belong to the account preceding it. The produced data stream
 // may be further compressed (e.g. using Gzip) to reduce its size.
-
-var stateMagicNumber []byte = []byte("Fantom-World-State")
-
-const formatVersion = byte(1)
-
-type HashType byte
-
-// So far there is only one hash type supported, the Ethereum hash. But for
-// future situations we might want to support different hash types, like the
-// S4 hash definition. Thus this enum is introduced as a placeholder.
-const (
-	EthereumHash = HashType(0)
-)
-
-// mptStateVisitor is an interface for Tries that allows for visiting the Trie nodes
-// and furthermore getting its properties such as a root hash and contract codes.
-type mptStateVisitor interface {
-	// Visit allows for traverse the whole trie.
-	Visit(visitor mpt.NodeVisitor) error
-	// GetHash returns the hash of the represented Trie.
-	GetHash() (common.Hash, error)
-	// GetCodeForHash returns byte code for given hash.
-	GetCodeForHash(common.Hash) []byte
-}
-
-type exportableArchiveTrie struct {
-	trie  *mpt.ArchiveTrie
-	block uint64
-	codes map[common.Hash][]byte
-}
-
-func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
-	return e.trie.VisitTrie(e.block, visitor)
-}
-
-func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
-	return e.trie.GetHash(e.block)
-}
-
-func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
-	if e.codes == nil || len(e.codes) == 0 {
-		e.codes = e.trie.GetCodes()
-	}
-	return e.codes[hash]
-}
 
 // Export opens a LiveDB instance retained in the given directory and writes
 // its content to the given output writer. The result contains all the
@@ -106,7 +61,8 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	}
 	defer db.Close()
 
-	return exportLive(ctx, db, out)
+	_, err = mpt.ExportLive(ctx, db, out)
+	return err
 }
 
 // ExportBlockFromArchive exports LiveDB genesis for a single given block from an Archive.
@@ -127,49 +83,8 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 	}
 
 	defer archive.Close()
-	return exportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
-}
-
-// exportLive exports given db into out.
-func exportLive(ctx context.Context, db mptStateVisitor, out io.Writer) error {
-	// Start with the magic number.
-	if _, err := out.Write(stateMagicNumber); err != nil {
-		return err
-	}
-
-	// Add a version number.
-	if _, err := out.Write([]byte{formatVersion}); err != nil {
-		return err
-	}
-
-	// Continue with the full state hash.
-	hash, err := db.GetHash()
-	if err != nil {
-		return err
-	}
-	if _, err := out.Write([]byte{byte('H'), byte(EthereumHash)}); err != nil {
-		return err
-	}
-	if _, err := out.Write(hash[:]); err != nil {
-		return err
-	}
-
-	// Write out codes.
-	codes, err := getReferencedCodes(db)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve codes: %v", err)
-	}
-	if err := writeCodes(codes, out); err != nil {
-		return err
-	}
-
-	// Write out all accounts and values.
-	visitor := exportVisitor{out: out, ctx: ctx}
-	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
-		return fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
-	}
-
-	return nil
+	_, err = mpt.ExportLive(ctx, mpt.NewExportableArchiveTrie(archive, block), out)
+	return err
 }
 
 // ImportLiveDb creates a fresh StateDB in the given directory and fills it
@@ -225,17 +140,17 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	}
 
 	// Start by checking the magic number.
-	buffer := make([]byte, len(stateMagicNumber))
+	buffer := make([]byte, len(genesis.StateMagicNumber))
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return root, hash, err
-	} else if !bytes.Equal(buffer, stateMagicNumber) {
+	} else if !bytes.Equal(buffer, genesis.StateMagicNumber) {
 		return root, hash, fmt.Errorf("invalid format, wrong magic number")
 	}
 
 	// Check the version number.
 	if _, err := io.ReadFull(in, buffer[0:1]); err != nil {
 		return root, hash, err
-	} else if buffer[0] != formatVersion {
+	} else if buffer[0] != genesis.FormatVersion {
 		return root, hash, fmt.Errorf("invalid format, unsupported version")
 	}
 
@@ -333,7 +248,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 			}
 
 		case 'C':
-			code, err := readCode(in)
+			code, err := genesis.ReadCode(in)
 			if err != nil {
 				return root, hash, err
 			}
@@ -342,12 +257,13 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 			if _, err := io.ReadFull(in, buffer); err != nil {
 				return root, hash, err
 			}
-			hashType := HashType(buffer[0])
+			hashType := genesis.HashType(buffer[0])
 			hash := common.Hash{}
 			if _, err := io.ReadFull(in, hash[:]); err != nil {
 				return root, hash, err
 			}
-			if hashType == EthereumHash {
+			if hashType == genesis.EthereumHash {
+				fmt.Printf("hash %x\n", hash)
 				stateHash = hash
 				hashFound = true
 			}
@@ -355,82 +271,6 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 			return root, hash, fmt.Errorf("format error encountered, unexpected token type: %c", buffer[0])
 		}
 	}
-}
-
-// getReferencedCodes returns a map of codes referenced by accounts in the
-// given database. The map is indexed by the code hash.
-func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
-	codes := make(map[common.Hash][]byte)
-	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-		if n, ok := node.(*mpt.AccountNode); ok {
-			codeHash := n.Info().CodeHash
-			code := db.GetCodeForHash(codeHash)
-			if len(code) > 0 {
-				codes[codeHash] = code
-			}
-			return mpt.VisitResponsePrune // < no need to visit the storage trie
-		}
-		return mpt.VisitResponseContinue
-	}))
-	return codes, err
-}
-
-// exportVisitor is an internal utility used by the Export function to write
-// account and value node information to a given output writer.
-type exportVisitor struct {
-	out io.Writer
-	err error
-	ctx context.Context
-}
-
-func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
-	// outside call to interrupt
-	if interrupt.IsCancelled(e.ctx) {
-		e.err = interrupt.ErrCanceled
-		return mpt.VisitResponseAbort
-	}
-	switch n := node.(type) {
-	case *mpt.AccountNode:
-		addr := n.Address()
-		info := n.Info()
-		if _, err := e.out.Write([]byte{byte('A')}); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
-		}
-		if _, err := e.out.Write(addr[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
-		}
-		b := info.Balance.Bytes32()
-		if _, err := e.out.Write(b[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
-		}
-		if _, err := e.out.Write(info.Nonce[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
-		}
-		if _, err := e.out.Write(info.CodeHash[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
-		}
-	case *mpt.ValueNode:
-		key := n.Key()
-		value := n.Value()
-		if _, err := e.out.Write([]byte{byte('S')}); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
-		}
-		if _, err := e.out.Write(key[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
-		}
-		if _, err := e.out.Write(value[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
-		}
-	}
-	return mpt.VisitResponseContinue
 }
 
 func checkEmptyDirectory(directory string) error {

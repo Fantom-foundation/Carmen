@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -295,6 +296,10 @@ func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("roots", common.NewMemoryFootprint(uintptr(a.roots.length())*unsafe.Sizeof(NodeId(0))))
 	a.rootsMutex.Unlock()
 	return mf
+}
+
+func (a *ArchiveTrie) CreateLiveDBGenesis(block uint64, out io.Writer) (common.Hash, error) {
+	return ExportLive(context.Background(), NewExportableArchiveTrie(a, block), out)
 }
 
 func (a *ArchiveTrie) Check() error {

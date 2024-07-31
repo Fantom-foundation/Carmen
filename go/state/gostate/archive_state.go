@@ -13,6 +13,7 @@ package gostate
 import (
 	"errors"
 	"fmt"
+	"io"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
@@ -139,6 +140,21 @@ func (s *ArchiveState) GetHash() (common.Hash, error) {
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
 func (s *ArchiveState) GetMemoryFootprint() *common.MemoryFootprint {
 	return common.NewMemoryFootprint(unsafe.Sizeof(*s))
+}
+
+func (s *ArchiveState) CreateLiveDBGenesis(out io.Writer) (common.Hash, error) {
+	if err := s.archiveError; err != nil {
+		return common.Hash{}, err
+	}
+
+	var rootHash common.Hash
+	rootHash, err := s.archive.CreateLiveDBGenesis(s.block, out)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+		return common.Hash{}, s.archiveError
+	}
+
+	return rootHash, s.archiveError
 }
 
 func (s *ArchiveState) Flush() error {

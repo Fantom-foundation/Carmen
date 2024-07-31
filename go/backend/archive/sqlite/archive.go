@@ -15,8 +15,10 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
+	"io"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
@@ -514,6 +516,10 @@ func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash com
 
 func (a *Archive) CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error) {
 	return nil, archive.ErrWitnessProofNotSupported
+}
+
+func (a *Archive) CreateLiveDBGenesis(block uint64, out io.Writer) (common.Hash, error) {
+	return common.Hash{}, archive.ErrGenesisExportNotSupported
 }
 
 // GetMemoryFootprint provides the size of the archive in memory in bytes

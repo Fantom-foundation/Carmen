@@ -837,6 +837,40 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_CreateLiveDbGenesis(t *testing.T) {
+	for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
+		t.Run(config.Name, func(t *testing.T) {
+			a, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			defer func() {
+				if err := a.Close(); err != nil {
+					t.Fatalf("failed to close archive; %s", err)
+				}
+			}()
+
+			if err := a.Add(1, common.Update{
+				CreatedAccounts: []common.Address{{1}},
+				Balances: []common.BalanceUpdate{
+					{Account: common.Address{1}, Balance: amount.New(12)},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
+				},
+			}, nil); err != nil {
+				t.Fatalf("failed to add block: %v", err)
+			}
+			b := bytes.NewBuffer(nil)
+			_, err = a.CreateLiveDBGenesis(1, b)
+			if err != nil {
+				t.Fatalf("failed to create witness proof; %s", err)
+			}
+
+			if b.Len() <= 0 {
+				t.Error("genesis was not exported")
+			}
+		})
+	}
+}
+
 func TestArchiveTrie_GetDiffProducesValidResults(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {

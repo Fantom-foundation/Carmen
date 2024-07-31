@@ -11,15 +11,18 @@
 package carmen
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/slices"
 	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
+	"golang.org/x/exp/slices"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -2159,4 +2162,75 @@ func TestDatabase_GetMemoryFootprint(t *testing.T) {
 	}
 
 	db.GetMemoryFootprint()
+}
+
+func TestDatabase_CreateLiveDBGenesis(t *testing.T) {
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	const N = 3
+
+	for i := 0; i < N; i++ {
+		if err = db.AddBlock(uint64(i), func(context HeadBlockContext) error {
+			if err = context.RunTransaction(func(context TransactionContext) error {
+				context.CreateAccount(Address{byte(i)})
+				context.AddBalance(Address{byte(i)}, NewAmount(uint64(i)))
+				context.SetState(Address{byte(i)}, Key{byte(i)}, Value{byte(i)})
+				return nil
+			}); err != nil {
+				t.Fatalf("cannot create transaction: %v", err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("cannot add block: %v", err)
+		}
+	}
+
+	err = db.Flush()
+	if err != nil {
+		t.Fatalf("cannot flush db: %v", err)
+	}
+
+	ctx, err := db.GetHistoricContext(2)
+	if err != nil {
+		t.Fatalf("cannot get historic context: %v", err)
+	}
+
+	b := bytes.NewBuffer(nil)
+	rootHash, err := ctx.CreateLiveDBGenesis(b)
+	if err != nil {
+		t.Fatalf("cannot create live db genesis: %v", err)
+	}
+
+	if err = ctx.Close(); err != nil {
+		t.Fatalf("cannot close context: %v", err)
+	}
+
+	if err = db.Close(); err != nil {
+		t.Fatalf("cannot close db: %v", err)
+	}
+
+	importedDbPath := t.TempDir()
+	if err = io.ImportLiveDb(importedDbPath, b); err != nil {
+		t.Fatalf("cannot import live db: %v", err)
+	}
+
+	importedDb, err := OpenDatabase(importedDbPath, testNonArchiveConfig, nil)
+	if err != nil {
+		t.Fatalf("cannot open imported database: %v", err)
+	}
+
+	if err = importedDb.QueryHeadState(func(context QueryContext) {
+		if got, want := context.GetStateHash(), rootHash; got != want {
+			t.Errorf("unexpected root hash\ngot: %x\nwant: %x", got, want)
+		}
+	}); err != nil {
+		t.Fatalf("cannot query historic state: %v", err)
+	}
+
+	if err := importedDb.Close(); err != nil {
+		t.Fatalf("cannot close db: %v", err)
+	}
 }
