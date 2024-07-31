@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"golang.org/x/exp/maps"
 
@@ -93,13 +94,13 @@ func TestArchiveTrie_Open_Fails_Wrong_Roots(t *testing.T) {
 	}
 
 	// corrupt the roots
-	if err := os.WriteFile(filepath.Join(dir, "roots.dat"), []byte("Hello, World!"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, fileNameArchiveRoots), []byte("Hello, World!"), 0644); err != nil {
 		t.Fatalf("cannot update roots: %v", err)
 	}
 
 	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
 		_ = archive.Close()
-		t.Errorf("openning archive should not succeed")
+		t.Errorf("opening archive should not succeed")
 	}
 }
 
@@ -114,7 +115,7 @@ func TestArchiveTrie_Open_Fails_Too_Short_Roots(t *testing.T) {
 	}
 
 	// corrupt the roots
-	if err := os.WriteFile(filepath.Join(dir, "roots.dat"), []byte("H"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, fileNameArchiveRoots), []byte("H"), 0644); err != nil {
 		t.Fatalf("cannot update roots: %v", err)
 	}
 
@@ -135,7 +136,7 @@ func TestArchiveTrie_Open_Fails_CannotOpen_Roots(t *testing.T) {
 	}
 
 	// remove read access
-	if err := os.Chmod(filepath.Join(dir, "roots.dat"), 0); err != nil {
+	if err := os.Chmod(filepath.Join(dir, fileNameArchiveRoots), 0); err != nil {
 		t.Fatalf("cannot chmod roots file: %v", err)
 	}
 
@@ -162,7 +163,7 @@ func TestArchiveTrie_Open_Fails_Wrong_ForestMeta(t *testing.T) {
 
 	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
 		_ = archive.Close()
-		t.Errorf("openning archive should not succeed")
+		t.Errorf("opening archive should not succeed")
 	}
 }
 
@@ -183,7 +184,7 @@ func TestArchiveTrie_Open_Fails_Wrong_TrieMeta(t *testing.T) {
 
 	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
 		_ = archive.Close()
-		t.Errorf("openning archive should not succeed")
+		t.Errorf("opening archive should not succeed")
 	}
 }
 
@@ -204,7 +205,47 @@ func TestArchiveTrie_Open_Fails_Wrong_Codes(t *testing.T) {
 
 	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}); err == nil {
 		_ = archive.Close()
-		t.Errorf("openning archive should not succeed")
+		t.Errorf("opening archive should not succeed")
+	}
+}
+
+func TestArchiveTrie_CanTrackBlocksHeight(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			if err != nil {
+				t.Fatalf("failed to open empty archive: %v", err)
+			}
+			defer archive.Close()
+
+			block, empty, err := archive.GetBlockHeight()
+			if err != nil {
+				t.Fatalf("failed to get block height: %v", err)
+			}
+			if !empty || block != 0 {
+				t.Errorf("archive should be initially empty, got %t, %d", empty, block)
+			}
+
+			archive.Add(1, common.Update{}, nil)
+
+			block, empty, err = archive.GetBlockHeight()
+			if err != nil {
+				t.Fatalf("failed to get block height: %v", err)
+			}
+			if empty || block != 1 {
+				t.Errorf("archive should be have height 1, got %t, %d", empty, block)
+			}
+
+			archive.Add(3, common.Update{}, nil)
+
+			block, empty, err = archive.GetBlockHeight()
+			if err != nil {
+				t.Fatalf("failed to get block height: %v", err)
+			}
+			if empty || block != 3 {
+				t.Errorf("archive should be have height 3, got %t, %d", empty, block)
+			}
+		})
 	}
 }
 
@@ -302,7 +343,7 @@ func TestArchiveTrie_VerifyArchive_Failure_Meta(t *testing.T) {
 	}
 
 	// corrupt the roots
-	if err := os.WriteFile(filepath.Join(dir, "roots.dat"), []byte("Hello, World!"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, fileNameArchiveRoots), []byte("Hello, World!"), 0644); err != nil {
 		t.Fatalf("cannot update roots: %v", err)
 	}
 
@@ -514,49 +555,39 @@ func TestArchiveTrie_Add_UpdateFailsHashing(t *testing.T) {
 	}
 }
 
-func TestArchive_RootsGrowSubLinearly(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
-			if err != nil {
-				t.Fatalf("failed to create empty archive, err %v", err)
+func TestArchiveTrie_RootsGrowSubLinearly(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to create empty root list: %v", err)
+	}
+
+	// Golang slices grow by the factor of 2 when they are small,
+	// while they grow slower when they become huge.
+	// The slice 'archive.roots' contains millions of elements
+	// stored as GiBs in memory.
+	// This test verifies that the slices grow slower for huge arrays
+	// to ensure that memory consumption is not doubled every time
+	// the slice grows.
+	// This feature cannot be customized, i.e., this test verifies
+	// that the described assumption will hold in future versions
+	// of golang and/or runtime configurations.
+
+	const size = 100_000
+	const threshold = 10_000
+	const factor = 1.3
+
+	var prevCap int
+	for i := 0; i < size; i++ {
+		roots.append(Root{})
+
+		if i > threshold {
+			if got, want := cap(roots.roots), int(factor*float64(prevCap)); got >= want {
+				t.Fatalf("array grows too fast: %d >= %d", got, want)
 			}
-			defer func() {
-				if err := archive.Close(); err != nil {
-					t.Fatalf("cannot close archive: %v", err)
-				}
-			}()
+		}
 
-			// Golang slices grow by the factor of 2 when they are small,
-			// while they grow slower when they become huge.
-			// The slice 'archive.roots' contains millions of elements
-			// stored as GiBs in memory.
-			// This test verifies that the slices grow slower for huge arrays
-			// to ensure that memory consumption is not doubled every time
-			// the slice grows.
-			// This feature cannot be customized, i.e., this test verifies
-			// that the described assumption will hold in future versions
-			// of golang and/or runtime configurations.
-
-			const size = 100_000
-			const threshold = 10_000
-			const factor = 1.3
-
-			var prevCap int
-			for i := 0; i < size; i++ {
-				if err := archive.Add(uint64(i), common.Update{}, nil); err != nil {
-					t.Fatalf("failed to add block 1; %s", err)
-				}
-
-				if i > threshold {
-					if got, want := cap(archive.roots.roots), int(factor*float64(prevCap)); got >= want {
-						t.Fatalf("array grows too fast: %d >= %d", got, want)
-					}
-				}
-
-				prevCap = cap(archive.roots.roots)
-			}
-		})
+		prevCap = cap(roots.roots)
 	}
 }
 
@@ -1217,8 +1248,8 @@ func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
 }
 
 func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
-	original, err := loadRoots(file)
+	dir := t.TempDir()
+	original, err := loadRoots(dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1236,7 +1267,7 @@ func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 		t.Fatalf("failed to store roots: %v", err)
 	}
 
-	restored, err := loadRoots(file)
+	restored, err := loadRoots(dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1254,8 +1285,8 @@ func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 }
 
 func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
-	list, err := loadRoots(file)
+	dir := t.TempDir()
+	list, err := loadRoots(dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1269,15 +1300,21 @@ func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
 	}
 
 	// We redirect the incremental update into another file to see what is written.
-	list.filename = filepath.Join(t.TempDir(), "roots2.dat")
+	oldFile := list.filename
+	newFile := filepath.Join(dir, "new-roots.dat")
+	list.filename = newFile
 	list.append(Root{})
 	list.append(Root{})
 	if err := list.storeRoots(); err != nil {
 		t.Fatalf("failed to store roots: %v", err)
 	}
 
+	if err := os.Rename(newFile, oldFile); err != nil {
+		t.Fatalf("failed to rename file: %v", err)
+	}
+
 	// Loading the second file should only produce 2 roots.
-	restored, err := loadRoots(list.filename)
+	restored, err := loadRoots(dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1287,8 +1324,8 @@ func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
 }
 
 func TestArchiveTrie_IncrementalRootListUpdates(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
-	list, err := loadRoots(file)
+	dir := t.TempDir()
+	list, err := loadRoots(dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1307,7 +1344,7 @@ func TestArchiveTrie_IncrementalRootListUpdates(t *testing.T) {
 			t.Fatalf("failed to store roots: %v", err)
 		}
 
-		restored, err := loadRoots(file)
+		restored, err := loadRoots(dir)
 		if err != nil {
 			t.Fatalf("failed to reload roots: %v", err)
 		}
@@ -1319,7 +1356,8 @@ func TestArchiveTrie_IncrementalRootListUpdates(t *testing.T) {
 }
 
 func TestArchiveTrie_DirectlyStoredRootsCanBeRestored(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
+	dir := t.TempDir()
+	file := filepath.Join(dir, fileNameArchiveRoots)
 	roots := []Root{
 		{NewNodeReference(ValueId(12)), common.Hash{12}},
 		{NewNodeReference(ValueId(14)), common.Hash{14}},
@@ -1328,7 +1366,7 @@ func TestArchiveTrie_DirectlyStoredRootsCanBeRestored(t *testing.T) {
 	if err := StoreRoots(file, roots); err != nil {
 		t.Fatalf("failed to store roots: %v", err)
 	}
-	restored, err := loadRoots(file)
+	restored, err := loadRoots(dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1338,8 +1376,8 @@ func TestArchiveTrie_DirectlyStoredRootsCanBeRestored(t *testing.T) {
 }
 
 func TestArchiveTrie_FileAccessErrorWhenStoringRootsIsDetected(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "roots.dat")
-	list, err := loadRoots(file)
+	dir := t.TempDir()
+	list, err := loadRoots(dir)
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
@@ -1348,13 +1386,47 @@ func TestArchiveTrie_FileAccessErrorWhenStoringRootsIsDetected(t *testing.T) {
 	}
 
 	// remove write access
-	if err := os.Chmod(file, 0x400); err != nil {
+	if err := os.Chmod(list.filename, 0x400); err != nil {
 		t.Fatalf("cannot chmod roots file: %v", err)
 	}
 
 	list.append(Root{})
 	if err := list.storeRoots(); err == nil {
 		t.Errorf("expected an error when storing roots into non-accessible file")
+	}
+}
+
+func TestRootList_CanParticipateToCheckpointOperations(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(2))})
+
+	if want, got := 2, roots.length(); want != got {
+		t.Fatalf("invalid number of roots, wanted %d, got %d", want, got)
+	}
+
+	coordinator, err := checkpoint.NewCoordinator(t.TempDir(), roots)
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+
+	_, err = coordinator.CreateCheckpoint()
+	if err != nil {
+		t.Fatalf("failed to create checkpoint: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(3))})
+	if err := roots.storeRoots(); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+
+	if want, got := 3, roots.length(); want != got {
+		t.Fatalf("invalid number of roots, wanted %d, got %d", want, got)
 	}
 }
 
@@ -1511,7 +1583,7 @@ func TestStoreRootsTo_SecondWriterFailures(t *testing.T) {
 func TestStoreRoots_Cannot_Create(t *testing.T) {
 	var roots []Root
 	dir := t.TempDir()
-	file := filepath.Join(dir, "roots")
+	file := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory)
 	if err := os.Mkdir(file, os.FileMode(0644)); err != nil {
 		t.Fatalf("cannot create dir: %s", err)
 	}
@@ -1684,6 +1756,29 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 	}
 }
 
+var archiveGetters = map[string]func(archive archive.Archive) error{
+	"exists": func(archive archive.Archive) error {
+		_, err := archive.Exists(uint64(0), common.Address{})
+		return err
+	},
+	"balance": func(archive archive.Archive) error {
+		_, err := archive.GetBalance(uint64(0), common.Address{})
+		return err
+	},
+	"code": func(archive archive.Archive) error {
+		_, err := archive.GetCode(uint64(0), common.Address{})
+		return err
+	},
+	"nonce": func(archive archive.Archive) error {
+		_, err := archive.GetNonce(uint64(0), common.Address{})
+		return err
+	},
+	"storage": func(archive archive.Archive) error {
+		_, err := archive.GetStorage(uint64(0), common.Address{}, common.Key{})
+		return err
+	},
+}
+
 func TestArchiveTrie_VisitTrie_CorrectDataIsVisited(t *testing.T) {
 	addr := common.Address{1}
 
@@ -1737,6 +1832,9 @@ func TestArchiveTrie_VisitTrie_CorrectDataIsVisited(t *testing.T) {
 						{Account: addr, Nonce: common.ToNonce(1)},
 					},
 				}, nil)
+				if err != nil {
+					t.Fatalf("failed to add update: %v", err)
+				}
 
 				var found bool
 
@@ -1782,6 +1880,9 @@ func TestArchiveTrie_VisitTrie_InvalidBlock(t *testing.T) {
 					{Account: addr, Nonce: common.ToNonce(1)},
 				},
 			}, nil)
+			if err != nil {
+				t.Fatalf("failed to add update: %v", err)
+			}
 
 			err = archive.VisitTrie(1, nodeVisitor)
 			if err == nil {
@@ -1796,27 +1897,364 @@ func TestArchiveTrie_VisitTrie_InvalidBlock(t *testing.T) {
 	}
 }
 
-var archiveGetters = map[string]func(archive archive.Archive) error{
-	"exists": func(archive archive.Archive) error {
-		_, err := archive.Exists(uint64(0), common.Address{})
-		return err
-	},
-	"balance": func(archive archive.Archive) error {
-		_, err := archive.GetBalance(uint64(0), common.Address{})
-		return err
-	},
-	"code": func(archive archive.Archive) error {
-		_, err := archive.GetCode(uint64(0), common.Address{})
-		return err
-	},
-	"nonce": func(archive archive.Archive) error {
-		_, err := archive.GetNonce(uint64(0), common.Address{})
-		return err
-	},
-	"storage": func(archive archive.Archive) error {
-		_, err := archive.GetStorage(uint64(0), common.Address{}, common.Key{})
-		return err
-	},
+func TestRootList_LoadRoots_ForwardsIoIssues(t *testing.T) {
+	tests := map[string]func(t *testing.T, dir string) error{
+		"fail to create directory": func(t *testing.T, dir string) error {
+			// this case creates a file with the given directory name,
+			// making it impossible to re-create the directory.
+			if err := os.RemoveAll(dir); err != nil {
+				return err
+			}
+			t.Cleanup(func() {
+				os.Remove(dir)
+			})
+			return os.WriteFile(dir, []byte{}, 0700)
+		},
+		"corrupted checkpoint file": func(_ *testing.T, dir string) error {
+			return utils.WriteJsonFile(
+				filepath.Join(dir,
+					fileNameArchiveRootsCheckpointDirectory,
+					fileNameArchiveRootsCommittedCheckpoint,
+				), "corrupted data")
+		},
+	}
+
+	for name, sabotage := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			roots, err := loadRoots(dir)
+			if err != nil {
+				t.Fatalf("failed to load roots: %v", err)
+			}
+			roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+
+			cp := checkpoint.Checkpoint(1)
+			err = errors.Join(
+				roots.Prepare(cp),
+				roots.Commit(cp),
+				roots.storeRoots(),
+			)
+			if err != nil {
+				t.Fatalf("failed to prepare test list for roots: %v", err)
+			}
+
+			if err := sabotage(t, dir); err != nil {
+				t.Fatalf("failed to sabotage roots list: %v", err)
+			}
+
+			if _, err := loadRoots(dir); err == nil {
+				t.Fatalf("expected error when loading roots")
+			}
+		})
+	}
+}
+
+func TestRootList_storeRootsTo_HandlesWriteIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	writeCounter := utils.NewMockOsFile(ctrl)
+
+	roots := make([]Root, 10)
+
+	counter := 0
+	writeCounter.EXPECT().Write(gomock.Any()).DoAndReturn(func(p []byte) (int, error) {
+		counter++
+		return len(p), nil
+	}).AnyTimes()
+
+	if err := storeRootsTo(writeCounter, roots); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+
+	if counter == 0 {
+		t.Fatalf("expected write to be called")
+	}
+
+	for i := 0; i < counter; i++ {
+		t.Run(fmt.Sprintf("write_%d", i), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			out := utils.NewMockOsFile(ctrl)
+
+			inducedError := fmt.Errorf("induced error")
+			gomock.InOrder(
+				out.EXPECT().Write(gomock.Any()).Return(0, nil).Times(i),
+				out.EXPECT().Write(gomock.Any()).Return(0, inducedError),
+			)
+
+			if err := storeRootsTo(out, roots); !errors.Is(err, inducedError) {
+				t.Fatalf("expected error when writing roots")
+			}
+		})
+	}
+}
+
+func TestRootList_GuaranteeCheckpoint_EmptyListSupportsCheckpointZero(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	if err := roots.GuaranteeCheckpoint(checkpoint.Checkpoint(0)); err != nil {
+		t.Fatalf("failed to guarantee checkpoint: %v", err)
+	}
+}
+
+func TestRootList_GuaranteeCheckpoint_CreatedCheckpointsCanBeGuaranteed(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		cp := checkpoint.Checkpoint(i + 1)
+		err := errors.Join(
+			roots.Prepare(cp),
+			roots.Commit(cp),
+		)
+		if err != nil {
+			t.Fatalf("failed to create new checkpoint: %v", err)
+		}
+		if err := roots.GuaranteeCheckpoint(cp); err != nil {
+			t.Fatalf("failed to guarantee checkpoint: %v", err)
+		}
+	}
+}
+
+func TestRootList_GuaranteeCheckpoint_FailsForNonExistingCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		cp := checkpoint.Checkpoint(i + 1)
+		err := errors.Join(
+			roots.Prepare(cp),
+			roots.Commit(cp),
+		)
+		if err != nil {
+			t.Fatalf("failed to create new checkpoint: %v", err)
+		}
+	}
+
+	// should not work for outdated checkpoint
+	cp := checkpoint.Checkpoint(9)
+	if err := roots.GuaranteeCheckpoint(cp); err == nil {
+		t.Fatalf("expected error when checking outdated checkpoint")
+	}
+
+	// should also fail for future checkpoint
+	cp = checkpoint.Checkpoint(11)
+	if err := roots.GuaranteeCheckpoint(cp); err == nil {
+		t.Fatalf("expected error when checking future checkpoint")
+	}
+}
+
+func TestRootList_GuaranteeCheckpoint_CommitsPendingCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	cp0 := checkpoint.Checkpoint(0)
+	cp1 := checkpoint.Checkpoint(1)
+	if err := roots.Prepare(cp1); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+
+	if want, got := cp0, roots.checkpoint; want != got {
+		t.Fatalf("unexpected checkpoint, wanted %v, got %v", want, got)
+	}
+
+	if err := roots.GuaranteeCheckpoint(cp1); err != nil {
+		t.Fatalf("failed to guarantee checkpoint: %v", err)
+	}
+
+	if want, got := cp1, roots.checkpoint; want != got {
+		t.Fatalf("unexpected checkpoint, wanted %v, got %v", want, got)
+	}
+}
+
+func TestRootList_Prepare_OnlyAcceptsIncrementalCheckpoints(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	cp := checkpoint.Checkpoint(2)
+	if err := roots.Prepare(cp); err == nil {
+		t.Fatalf("expected error when preparing non-incremental checkpoint")
+	}
+}
+
+func TestRootList_Prepare_FailsOnIOError(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	prepareFile := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory, fileNameArchiveRootsPreparedCheckpoint)
+	if err := os.Mkdir(prepareFile, 0700); err != nil {
+		t.Fatalf("failed to create prepare directory blocking prepare file: %v", err)
+	}
+
+	cp := checkpoint.Checkpoint(1)
+	if err := roots.Prepare(cp); err == nil {
+		t.Fatalf("expected error when prepare file cannot be created")
+	}
+}
+
+func TestRootList_Commit_OnlyAcceptsIncrementalCheckpoints(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	cp := checkpoint.Checkpoint(2)
+	if err := roots.Commit(cp); err == nil {
+		t.Fatalf("expected error when committing non-incremental checkpoint")
+	}
+}
+
+func TestRootList_Commit_FailsOnMissingPreparationStep(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	cp := checkpoint.Checkpoint(1)
+	if err := roots.Commit(cp); err == nil {
+		t.Fatalf("expected error when committing non-incremental checkpoint")
+	}
+}
+
+func TestRootList_Commit_FailsOnUnreadablePreparationFile(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	prepareFile := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory, fileNameArchiveRootsPreparedCheckpoint)
+	if err := os.WriteFile(prepareFile, []byte("not in JSON format"), 0700); err != nil {
+		t.Fatalf("failed to create unreadable prepare file: %v", err)
+	}
+
+	cp := checkpoint.Checkpoint(1)
+	if err := roots.Commit(cp); err == nil {
+		t.Fatalf("expected error when committing non-incremental checkpoint")
+	}
+}
+
+func TestRootList_Abort_DeletesPendingCheckpointFile(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	prepareFile := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory, fileNameArchiveRootsPreparedCheckpoint)
+	if err := os.WriteFile(prepareFile, []byte{}, 0700); err != nil {
+		t.Fatalf("failed to create prepare file: %v", err)
+	}
+
+	cp := checkpoint.Checkpoint(1)
+	if err := roots.Abort(cp); err != nil {
+		t.Fatalf("failed to abort checkpoint: %v", err)
+	}
+
+	if _, err := os.Stat(prepareFile); !os.IsNotExist(err) {
+		t.Fatalf("expected prepare file to be deleted")
+	}
+}
+
+func TestRootList_Abort_OnlyAcceptsIncrementalCheckpoints(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	cp := checkpoint.Checkpoint(2)
+	if err := roots.Abort(cp); err == nil {
+		t.Fatalf("expected error when aborting non-incremental checkpoint")
+	}
+}
+
+func TestRootList_Restore_CanRecoverCorruptedRoots(t *testing.T) {
+	for _, name := range []string{"prepared", "committed"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			roots, err := loadRoots(dir)
+			if err != nil {
+				t.Fatalf("failed to load roots: %v", err)
+			}
+			roots.append(Root{NodeRef: NewNodeReference(ValueId(123))})
+			roots.append(Root{NodeRef: NewNodeReference(ValueId(123))})
+
+			if err := roots.storeRoots(); err != nil {
+				t.Fatalf("failed to store roots: %v", err)
+			}
+
+			cp := checkpoint.Checkpoint(1)
+			if err := roots.Prepare(cp); err != nil {
+				t.Fatalf("failed to prepare checkpoint: %v", err)
+			}
+			if name == "committed" {
+				if err := roots.Commit(cp); err != nil {
+					t.Fatalf("failed to commit checkpoint: %v", err)
+				}
+			}
+
+			backup, err := os.ReadFile(roots.filename)
+			if err != nil {
+				t.Fatalf("failed to read backup file: %v", err)
+			}
+
+			modified := append(backup, []byte("corrupted data")...)
+			if err := os.WriteFile(roots.filename, modified, 0700); err != nil {
+				t.Fatalf("failed to corrupt roots file: %v", err)
+			}
+
+			if err := getRootListRestorer(dir).Restore(cp); err != nil {
+				t.Fatalf("failed to restore roots: %v", err)
+			}
+
+			restored, err := os.ReadFile(roots.filename)
+			if err != nil {
+				t.Fatalf("failed to read restored file: %v", err)
+			}
+
+			if !bytes.Equal(backup, restored) {
+				t.Fatalf("unexpected restored file content")
+			}
+		})
+	}
+}
+
+func TestRootList_Restore_FailsIfCheckpointFileCanNotBeRead(t *testing.T) {
+	dir := t.TempDir()
+
+	directory := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory)
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		t.Fatalf("failed to create checkpoint directory: %v", err)
+	}
+	checkpointFile := filepath.Join(directory, fileNameArchiveRootsCommittedCheckpoint)
+	if err := os.WriteFile(checkpointFile, []byte("corrupted data"), 0700); err != nil {
+		t.Fatalf("failed to create corrupted checkpoint file: %v", err)
+	}
+
+	cp := checkpoint.Checkpoint(1)
+	if err := getRootListRestorer(dir).Restore(cp); err == nil {
+		t.Fatalf("expected recovery error due to invalid checkpoint file")
+	}
 }
 
 func BenchmarkArchiveFlush_Roots(b *testing.B) {
