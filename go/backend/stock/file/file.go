@@ -492,17 +492,23 @@ type fileStockRestorer struct {
 
 func (s *fileStockRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
 	// If the stock is at the requested commit, everything is fine.
-	committedFile := getCommittedCheckpointFile(s.directory)
-	if checkpoint != 0 && !exists(committedFile) {
-		return fmt.Errorf("failed to restore checkpoint %d, missing committed file %v", checkpoint, committedFile)
+	committed := getCommittedCheckpointFile(s.directory)
+	pending := getPendingCheckpointFile(s.directory)
+
+	var checkpointData checkpointMetaData
+	if exists(committed) {
+		if data, err := utils.ReadJsonFile[checkpointMetaData](committed); err == nil {
+			checkpointData = data
+		}
+	}
+	if checkpointData.Checkpoint != checkpoint && exists(pending) {
+		if data, err := utils.ReadJsonFile[checkpointMetaData](pending); err == nil {
+			checkpointData = data
+		}
 	}
 
-	checkpointData, err := utils.ReadJsonFile[checkpointMetaData](committedFile)
-	if err != nil {
-		return err
-	}
 	if checkpointData.Checkpoint != checkpoint {
-		return fmt.Errorf("inconsistent data in checkpoint metadata, expected checkpoint %d, got %d", checkpoint, checkpointData.Checkpoint)
+		return fmt.Errorf("unable to locate checkpoint data for checkpoint %d", checkpoint)
 	}
 
 	// fix individual files
