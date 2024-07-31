@@ -119,7 +119,7 @@ func OpenArchiveTrie(
 
 	checkpointInterval := archiveConfig.CheckpointInterval
 	if checkpointInterval <= 0 {
-		checkpointInterval = 10_000
+		checkpointInterval = 1000
 	}
 
 	return &ArchiveTrie{
@@ -420,6 +420,15 @@ func (a *ArchiveTrie) GetCheckpointBlock() (uint64, error) {
 	return 0, fmt.Errorf("archive has no checkpoint")
 }
 
+func GetCheckpointBlock(dir string) (uint64, error) {
+	path := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory, fileNameArchiveRootsCommittedCheckpoint)
+	meta, err := utils.ReadJsonFile[rootListCheckpointData](path)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(meta.NumRoots - 1), nil
+}
+
 func (a *ArchiveTrie) createCheckpoint() error {
 	// Before the checkpoint can be created, all data needs
 	// to be flushed to the underlying storage.
@@ -478,7 +487,8 @@ func RestoreBlockHeight(directory string, config MptConfig, block uint64) (err e
 		return fmt.Errorf("failed to restore checkpoint: %w", err)
 	}
 
-	return truncateRootsFile(rootRestore.rootsFile, int(block+1))
+	// After the checkpoint, restore the block height.
+	return rootRestore.truncate(int(block + 1))
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
@@ -740,6 +750,22 @@ func (r rootListRestorer) getNumRootsInCheckpoint() (int, error) {
 		return 0, err
 	}
 	return meta.NumRoots, nil
+}
+
+func (r rootListRestorer) truncate(length int) error {
+	committed := filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint)
+	meta, err := utils.ReadJsonFile[rootListCheckpointData](committed)
+	if err != nil {
+		return err
+	}
+	if meta.NumRoots < length {
+		return fmt.Errorf("cannot truncate to %d, only %d roots available", length, meta.NumRoots)
+	}
+	meta.NumRoots = length
+	return errors.Join(
+		writeRootListCheckpointData(committed, meta),
+		truncateRootsFile(r.rootsFile, length),
+	)
 }
 
 func truncateRootsFile(path string, length int) error {

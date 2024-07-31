@@ -46,7 +46,7 @@ func TestNodeStatistics_CollectTrieStatisticsWorks(t *testing.T) {
 
 func TestNodeStatistics_CollectForestStatisticsWorks(t *testing.T) {
 	dir := t.TempDir()
-	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to create empty trie: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestNodeStatistics_CollectForestStatisticsWorks(t *testing.T) {
 		t.Errorf("invalid stats for empty archive: %v", stats)
 	}
 
-	archive, err = OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024})
+	archive, err = OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to re-open empty archive: %v", err)
 	}
