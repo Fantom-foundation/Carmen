@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
+	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 	"golang.org/x/exp/slices"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -2165,6 +2166,12 @@ func TestDatabase_GetMemoryFootprint(t *testing.T) {
 }
 
 func TestDatabase_CreateLiveDBGenesis(t *testing.T) {
+	// We need file-based database
+	testConfig.Variant = Variant(gostate.VariantGoFile)
+
+	testNonArchiveConfig = testConfig
+	testNonArchiveConfig.Archive = Archive(state.NoArchive)
+
 	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -2213,7 +2220,11 @@ func TestDatabase_CreateLiveDBGenesis(t *testing.T) {
 	}
 
 	importedDbPath := t.TempDir()
-	if err = io.ImportLiveDb(importedDbPath, b); err != nil {
+	liveDbLocation := filepath.Join(importedDbPath, "live")
+	if err := os.MkdirAll(liveDbLocation, 0755); err != nil {
+		t.Fatalf("cannot create live db location: %v", err)
+	}
+	if err = io.ImportLiveDb(liveDbLocation, b); err != nil {
 		t.Fatalf("cannot import live db: %v", err)
 	}
 

@@ -263,7 +263,6 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 				return root, hash, err
 			}
 			if hashType == genesis.EthereumHash {
-				fmt.Printf("hash %x\n", hash)
 				stateHash = hash
 				hashFound = true
 			}
