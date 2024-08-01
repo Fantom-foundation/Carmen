@@ -68,7 +68,7 @@ func TestIO_ExportAndImportAsArchive(t *testing.T) {
 		t.Fatalf("verification of imported DB failed: %v", err)
 	}
 
-	db, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	db, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to open recovered DB: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestCheckEmptyDirectory_FailsIfDirectoryContainsADirectory(t *testing.T) {
 func TestIO_ExportBlockFromArchive(t *testing.T) {
 	// Create a small Archive from which we export LiveDB genesis.
 	sourceDir := t.TempDir()
-	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}

@@ -21,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
@@ -45,6 +46,16 @@ type ArchiveTrie struct {
 	addMutex     sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
 	errorMutex   sync.RWMutex
 	archiveError error // a non-nil error will be stored here should it occur during any archive operation
+
+	// Check-point support for DB healing.
+	checkpointCoordinator checkpoint.Coordinator
+	checkpointInterval    int
+}
+
+// ArchiveConfig is the configuration for the archive trie.
+type ArchiveConfig struct {
+	// The number of blocks after which a checkpoint is created.
+	CheckpointInterval int
 }
 
 const (
@@ -59,6 +70,7 @@ func OpenArchiveTrie(
 	directory string,
 	config MptConfig,
 	cacheConfig NodeCacheConfig,
+	archiveConfig ArchiveConfig,
 ) (*ArchiveTrie, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
@@ -68,24 +80,55 @@ func OpenArchiveTrie(
 	if err != nil {
 		return nil, err
 	}
+
 	forestConfig := ForestConfig{Mode: Immutable, NodeCacheConfig: cacheConfig}
 	forest, err := OpenFileForest(directory, config, forestConfig)
 	if err != nil {
 		return nil, err
 	}
+
 	head, err := makeTrie(directory, forest)
 	if err != nil {
 		return nil, errors.Join(err, forest.Close())
 	}
+
+	root := NewNodeReference(EmptyId())
+	if roots.length() > 0 {
+		root = roots.get(uint64(roots.length() - 1)).NodeRef
+	}
+	head.root = root
+
 	state, err := newMptState(directory, lock, head)
 	if err != nil {
 		return nil, errors.Join(err, head.Close())
 	}
+
+	checkpointDir := filepath.Join(directory, fileNameArchiveCheckpointDirectory)
+	coordinator, err := checkpoint.NewCoordinator(
+		checkpointDir,
+		forest.accounts,
+		forest.branches,
+		forest.extensions,
+		forest.values,
+		state.codes,
+		roots,
+	)
+	if err != nil {
+		return nil, errors.Join(err, head.Close())
+	}
+
+	checkpointInterval := archiveConfig.CheckpointInterval
+	if checkpointInterval <= 0 {
+		checkpointInterval = 1000
+	}
+
 	return &ArchiveTrie{
-		head:       state,
-		forest:     forest,
-		nodeSource: forest,
-		roots:      roots,
+		head:                  state,
+		forest:                forest,
+		nodeSource:            forest,
+		roots:                 roots,
+		checkpointCoordinator: coordinator,
+		checkpointInterval:    checkpointInterval,
 	}, nil
 }
 
@@ -114,7 +157,8 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	defer a.addMutex.Unlock()
 
 	a.rootsMutex.Lock()
-	if uint64(a.roots.length()) > block {
+	previousRootsLength := a.roots.length()
+	if uint64(previousRootsLength) > block {
 		a.rootsMutex.Unlock()
 		return fmt.Errorf("block %d already present", block)
 	}
@@ -166,6 +210,22 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	a.rootsMutex.Lock()
 	a.roots.append(Root{a.head.Root(), hash})
 	a.rootsMutex.Unlock()
+
+	// Create a new checkpoint if we crossed an interval boundary.
+	shouldCheckpoint := false
+	if previousRootsLength == 0 {
+		shouldCheckpoint = block >= uint64(a.checkpointInterval)
+	} else {
+		oldCheckpointInterval := (previousRootsLength - 1) / a.checkpointInterval
+		newCheckpointInterval := int(block) / a.checkpointInterval
+		shouldCheckpoint = oldCheckpointInterval != newCheckpointInterval
+	}
+	if shouldCheckpoint {
+		if err := a.createCheckpoint(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -350,6 +410,80 @@ func (a *ArchiveTrie) Close() error {
 	return errors.Join(
 		a.CheckErrors(),
 		a.head.closeWithError(a.Flush()))
+}
+
+func (a *ArchiveTrie) createCheckpoint() error {
+	// Before the checkpoint can be created, all data needs
+	// to be flushed to the underlying storage.
+	if err := a.Flush(); err != nil {
+		return err
+	}
+	// The creation of the checkpoint makes the current
+	// state recoverable in case of a crash.
+	_, err := a.checkpointCoordinator.CreateCheckpoint()
+	return err
+}
+
+func GetCheckpointBlock(dir string) (uint64, error) {
+	checkpointDir := filepath.Join(dir, fileNameArchiveCheckpointDirectory)
+	coordinator, err := checkpoint.NewCoordinator(checkpointDir)
+	if err != nil {
+		return 0, err
+	}
+	cp := coordinator.GetCurrentCheckpoint()
+	restorer := getRootListRestorer(dir)
+	numRoots, err := restorer.getNumRootsInCheckpoint(cp)
+	return uint64(numRoots - 1), err
+}
+
+func RestoreBlockHeight(directory string, config MptConfig, block uint64) (err error) {
+
+	// Make sure access to the directory is exclusive.
+	lock, err := LockDirectory(directory)
+	if err != nil {
+		return fmt.Errorf("failed to get exclusive access to directory: %v", err)
+	}
+	defer lock.Release()
+
+	// Check available block height -- stop recovery if there are not enough blocks.
+	checkpointHeight, err := GetCheckpointBlock(directory)
+	if err != nil {
+		return fmt.Errorf("failed to get checkpoint height: %v", err)
+	}
+	if block > uint64(checkpointHeight) {
+		return fmt.Errorf("block %d is beyond the last checkpoint height of %d", block, checkpointHeight)
+	}
+
+	// Mark this directory as dirty at least for the duration of the recovery.
+	if err := markDirty(directory); err != nil {
+		return fmt.Errorf("failed to mark directory %s as dirty: %w", directory, err)
+	}
+	defer func() {
+		// Only remove dirty flag is the recovery was successful.
+		if err == nil {
+			err = markClean(directory)
+		}
+	}()
+
+	// Restore the last checkpoint created by the archive.
+	rootRestorer := getRootListRestorer(directory)
+	accountsDir, branchesDir, extensionsDir, valuesDir := getForestDirectories(directory)
+	restorers := []checkpoint.Restorer{
+		file.GetRestorer(accountsDir),
+		file.GetRestorer(branchesDir),
+		file.GetRestorer(extensionsDir),
+		file.GetRestorer(valuesDir),
+		getCodeRestorer(directory),
+		rootRestorer,
+	}
+
+	checkpointDir := filepath.Join(directory, "checkpoint")
+	if err := checkpoint.Restore(checkpointDir, restorers...); err != nil {
+		return fmt.Errorf("failed to restore checkpoint: %w", err)
+	}
+
+	// After the checkpoint, restore the block height.
+	return rootRestorer.truncate(int(block + 1))
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
@@ -596,14 +730,57 @@ func (r rootListRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
 	}
 
 	if meta.Checkpoint != checkpoint {
-		return fmt.Errorf("checkpoint mismatch, expected %v, got %v", checkpoint, meta.Checkpoint)
+		return fmt.Errorf("unknown checkpoint, have %v, wanted %v", meta.Checkpoint, checkpoint)
 	}
 
 	return truncateRootsFile(r.rootsFile, meta.NumRoots)
 }
 
+func (r rootListRestorer) getNumRootsInCheckpoint(checkpoint checkpoint.Checkpoint) (int, error) {
+	meta, err := utils.ReadJsonFile[rootListCheckpointData](filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint))
+	if err != nil {
+		return 0, err
+	}
+	if meta.Checkpoint == checkpoint {
+		return meta.NumRoots, nil
+	}
+	if meta.Checkpoint+1 == checkpoint {
+		pending, err := utils.ReadJsonFile[rootListCheckpointData](filepath.Join(r.directory, fileNameArchiveRootsPreparedCheckpoint))
+		if err == nil && pending.Checkpoint == checkpoint {
+			return pending.NumRoots, nil
+		}
+	}
+	return 0, fmt.Errorf("checkpoint %v not found", checkpoint)
+}
+
+func (r rootListRestorer) truncate(length int) error {
+	committed := filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint)
+	meta, err := utils.ReadJsonFile[rootListCheckpointData](committed)
+	if err != nil {
+		return err
+	}
+	if meta.NumRoots < length {
+		return fmt.Errorf("cannot truncate to %d, only %d roots available", length, meta.NumRoots)
+	}
+	meta.NumRoots = length
+	return errors.Join(
+		writeRootListCheckpointData(committed, meta),
+		truncateRootsFile(r.rootsFile, length),
+	)
+}
+
 func truncateRootsFile(path string, length int) error {
-	return os.Truncate(path, int64(length*(NodeIdEncoder{}.GetEncodedSize()+32)))
+	state, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	entrySize := int64(NodeIdEncoder{}.GetEncodedSize() + 32)
+	sourceLength := state.Size()
+	targetLength := int64(length) * entrySize
+	if sourceLength < targetLength {
+		return fmt.Errorf("cannot truncate root file to %d elements, only %d elements available", targetLength/entrySize, sourceLength/entrySize)
+	}
+	return os.Truncate(path, targetLength)
 }
 
 type rootListCheckpointData struct {
