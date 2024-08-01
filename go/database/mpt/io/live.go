@@ -229,7 +229,11 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return root, hash, err
 	} else if !bytes.Equal(buffer, stateMagicNumber) {
-		return root, hash, fmt.Errorf("invalid format, wrong magic number")
+		// Specify error if incorrect genesis is passed
+		if bytes.Contains(buffer, archiveMagicNumber[:len(stateMagicNumber)]) {
+			return root, hash, fmt.Errorf("incorrect genesis+command combination\n your genesis is meant to by used with either import or import-archive")
+		}
+		return root, hash, errors.New("invalid format, unknown magic number")
 	}
 
 	// Check the version number.
