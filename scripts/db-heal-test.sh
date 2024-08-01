@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 ###########################
 #--- Dynamic variables ---#
@@ -26,26 +27,26 @@ carmen_root=$(cd ../go && pwd)
 #--- Script ---#
 ################
 
-COMMAND="./build/aida-vm-sdb substate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 0 "$sync_block""
+command="./build/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 0 "$sync_block""
 
 # Run the command in the background and redirect stdout and stderr to a log file
-LOG_FILE="$(pwd)/output.log"
+log_file="$(pwd)/output.log"
 current=$(pwd)
 
 cd $aida_path
-$COMMAND &> "$LOG_FILE" &
-COMMAND_PID=$!
+$command &> "$log_file" &
+command_pid=$!
 cd $current
 
 echo "Starting aida-vm-sdb with interrupt."
 
 # Function to monitor the log file
 monitor_log() {
-  tail -F "$LOG_FILE" | while read LINE; do
+  tail -F "$log_file" | while read LINE; do
     echo "$LINE" | grep -q "block $kill_block"
     if [ $? -eq 0 ]; then
       echo "Interrupting."
-      kill $COMMAND_PID
+      kill $command_pid
       exit 0
     fi
   done
@@ -55,7 +56,7 @@ monitor_log() {
 monitor_log
 
 # Wait for the command to complete
-wait $COMMAND_PID
+wait $command_pid
 
 # Find working dir
 working_dir=$(ls -td "$tmp_path"/*/ | head -1)
@@ -65,6 +66,6 @@ working_dir=$(ls -td "$tmp_path"/*/ | head -1)
 echo "Restoration complete. Syncing to block $final_block."
 
 final_first=$((restore+1))
-(cd $aida_path && ./build/aida-vm-sdb substate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --db-src "$working_dir" "$final_first" "$final_block")
+(cd $aida_path && ./build/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 --db-src "$working_dir" "$final_first" "$final_block")
 
 echo "Sync complete to block $final_block. Final db path: $(ls -td "$tmp_path"/*/ | head -1)."
