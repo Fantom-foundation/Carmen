@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/Fantom-foundation/Carmen/go/carmen"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
@@ -568,14 +569,15 @@ func ExampleHistoricBlockContext_CreateLiveDBGenesis() {
 	}
 
 	importedDbPath := "imported_carmen"
+	liveDbLocation := filepath.Join(importedDbPath, "live")
 
-	err = io.ImportLiveDb(importedDbPath, b)
+	err = io.ImportLiveDb(liveDbLocation, b)
 	if err != nil {
 		log.Fatalf("cannot import live db")
 	}
 
 	// Make sure database is valid
-	importedDb, err := carmen.OpenDatabase(importedDbPath, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	importedDb, err := carmen.OpenDatabase(importedDbPath, carmen.GetCarmenGoS5WithoutArchiveConfiguration(), nil)
 	if err != nil {
 		log.Fatalf("cannot open imported database: %v", err)
 	}
