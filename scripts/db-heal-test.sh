@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 ###########################
 #--- Dynamic variables ---#
@@ -69,3 +68,5 @@ final_first=$((restore+1))
 (cd $aida_path && ./build/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 --db-src "$working_dir" "$final_first" "$final_block")
 
 echo "Sync complete to block $final_block. Final db path: $(ls -td "$tmp_path"/*/ | head -1)."
+
+rm $log_file
