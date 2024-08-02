@@ -30,7 +30,8 @@ type Parameters struct {
 	Directory          string
 	LiveCache          int64 // bytes, approximate, supported only by S5 now
 	ArchiveCache       int64 // bytes, approximate, supported only by S5 now
-	CheckpointInterval CheckpointInterval
+	CheckpointInterval int
+	CheckpointPeriod   time.Duration
 }
 
 // UnsupportedConfiguration is the error returned if unsupported configuration
@@ -92,11 +93,6 @@ const (
 	S4Archive      ArchiveType = "s4"
 	S5Archive      ArchiveType = "s5"
 )
-
-type CheckpointInterval struct {
-	Block int
-	Time  time.Duration
-}
 
 type StateFactory func(params Parameters) (State, error)
 

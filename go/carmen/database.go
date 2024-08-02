@@ -41,19 +41,15 @@ func openDatabase(
 	if err != nil {
 		return nil, err
 	}
+	checkpointInterval, err := properties.GetInteger(CheckpointInterval, 0)
+	if err != nil {
+		return nil, err
+	}
+	checkpointPeriod, err := properties.GetInteger(CheckpointPeriod, 0)
+	if err != nil {
+		return nil, err
+	}
 
-	blockCp, err := properties.GetInteger(BlockCheckpointInterval, 0)
-	if err != nil {
-		return nil, err
-	}
-	timeCp, err := properties.GetInteger(TimeCheckpointInterval, 0)
-	if err != nil {
-		return nil, err
-	}
-	cp := state.CheckpointInterval{
-		Block: blockCp,
-		Time:  time.Duration(timeCp) * time.Minute,
-	}
 	params := state.Parameters{
 		Directory:          directory,
 		Variant:            state.Variant(configuration.Variant),
@@ -61,7 +57,8 @@ func openDatabase(
 		Archive:            state.ArchiveType(configuration.Archive),
 		LiveCache:          int64(liveCache),
 		ArchiveCache:       int64(archiveCache),
-		CheckpointInterval: cp,
+		CheckpointInterval: checkpointInterval,
+		CheckpointPeriod:   time.Duration(checkpointPeriod),
 	}
 	db, err := state.NewState(params)
 	if err != nil {

@@ -946,8 +946,10 @@ func openArchive(params state.Parameters) (archive archive.Archive, cleanup func
 		if err != nil {
 			return nil, nil, err
 		}
-		// todo pass the values ehre
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, getNodeCacheConfig(params.ArchiveCache), mpt.ArchiveConfig{})
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, getNodeCacheConfig(params.ArchiveCache), mpt.ArchiveConfig{
+			CheckpointInterval: params.CheckpointInterval,
+			CheckpointPeriod:   params.CheckpointPeriod,
+		})
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)
