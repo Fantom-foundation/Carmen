@@ -30,7 +30,7 @@ type Parameters struct {
 	Directory          string
 	LiveCache          int64 // bytes, approximate, supported only by S5 now
 	ArchiveCache       int64 // bytes, approximate, supported only by S5 now
-	CheckpointInterval int
+	CheckpointInterval int   // in blocks
 	CheckpointPeriod   time.Duration
 }
 

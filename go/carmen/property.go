@@ -33,13 +33,13 @@ const (
 	// before being flushed into underlying structures later.
 	StorageCache = Property("StorageCache")
 
-	// CheckpointInterval/Period determines how often will Archive create checkpoints.
-	// If either of the period is passed (time or block number) checkpoint is created.
-	// Checkpoints are necessary for resetting a corrupted database to that checkpoint.
+	// CheckpointInterval/Period determines how often an Archive creates checkpoints.
+	// If either of the periods is passed (time or block number) a checkpoint is created.
+	// Checkpoints are necessary for resetting corrupted databases.
 
-	// CheckpointInterval determines how often (in blocks) will Archive create checkpoints.
+	// CheckpointInterval determines how often (in blocks) an Archive creates checkpoints.
 	CheckpointInterval = Property("CheckpointInterval")
-	// CheckpointPeriod determines how often (in minutes) will Archive create checkpoints.
+	// CheckpointPeriod determines how often (in minutes) an Archive creates checkpoints.
 	CheckpointPeriod = Property("CheckpointPeriod")
 )
 

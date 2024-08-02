@@ -58,7 +58,7 @@ func openDatabase(
 		LiveCache:          int64(liveCache),
 		ArchiveCache:       int64(archiveCache),
 		CheckpointInterval: checkpointInterval,
-		CheckpointPeriod:   time.Duration(checkpointPeriod),
+		CheckpointPeriod:   time.Duration(checkpointPeriod) * time.Minute,
 	}
 	db, err := state.NewState(params)
 	if err != nil {

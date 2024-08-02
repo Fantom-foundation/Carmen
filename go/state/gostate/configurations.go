@@ -938,7 +938,10 @@ func openArchive(params state.Parameters) (archive archive.Archive, cleanup func
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig, getNodeCacheConfig(params.ArchiveCache), mpt.ArchiveConfig{})
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig, getNodeCacheConfig(params.ArchiveCache), mpt.ArchiveConfig{
+			CheckpointInterval: params.CheckpointInterval,
+			CheckpointPeriod:   params.CheckpointPeriod,
+		})
 		return arch, nil, err
 
 	case state.S5Archive:
