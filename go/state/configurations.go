@@ -37,7 +37,7 @@ const (
 	// unsupported feature.
 	UnsupportedConfiguration = common.ConstError("unsupported configuration")
 
-	// ExportNotSupported is returned by State implementation if they do not support Export.
+	// ExportNotSupported is returned by State implementation if it does not support Export.
 	ExportNotSupported = common.ConstError("export not supported")
 )
 

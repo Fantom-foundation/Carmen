@@ -11,12 +11,15 @@
 package gostate
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
+	mptio "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -147,8 +150,13 @@ func (s *ArchiveState) Export(out io.Writer) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
-	var rootHash common.Hash
-	rootHash, err := s.archive.Export(s.block, out)
+	trie, ok := s.archive.(*mpt.ArchiveTrie)
+	if !ok {
+		return common.Hash{}, state.ExportNotSupported
+	}
+
+	exportableTrie := mptio.NewExportableArchiveTrie(trie, s.block)
+	rootHash, err := mptio.ExportLive(context.Background(), exportableTrie, out)
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
 		return common.Hash{}, s.archiveError

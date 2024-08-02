@@ -8,7 +8,7 @@
 // On the date above, in accordance with the Business Source License, use of
 // this software will be governed by the GNU Lesser General Public License v3.
 
-package genesis
+package io
 
 import (
 	"encoding/binary"
@@ -20,20 +20,7 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-var StateMagicNumber []byte = []byte("Fantom-World-State")
-
-const FormatVersion = byte(1)
-
-type HashType byte
-
-// So far there is only one hash type supported, the Ethereum hash. But for
-// future situations we might want to support different hash types, like the
-// S4 hash definition. Thus this enum is introduced as a placeholder.
-const (
-	EthereumHash = HashType(0)
-)
-
-func WriteCodes(codes map[common.Hash][]byte, out io.Writer) error {
+func writeCodes(codes map[common.Hash][]byte, out io.Writer) error {
 	// Sort codes for a stable result.
 	hashes := maps.Keys(codes)
 	sort.Slice(hashes, func(i, j int) bool { return hashes[i].Compare(&hashes[j]) < 0 })
@@ -51,7 +38,7 @@ func WriteCodes(codes map[common.Hash][]byte, out io.Writer) error {
 	return nil
 }
 
-func ReadCode(in io.Reader) ([]byte, error) {
+func readCode(in io.Reader) ([]byte, error) {
 	length := []byte{0, 0}
 	if _, err := io.ReadFull(in, length[:]); err != nil {
 		return nil, err

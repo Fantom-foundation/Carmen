@@ -330,43 +330,6 @@ func TestArchive_CreateWitnessProof(t *testing.T) {
 	}
 }
 
-func TestArchive_Export(t *testing.T) {
-	for _, factory := range getArchiveFactories(t) {
-		t.Run(factory.label, func(t *testing.T) {
-			a := factory.getArchive(t.TempDir())
-			defer func() {
-				if err := a.Close(); err != nil {
-					t.Fatalf("failed to close archive; %s", err)
-				}
-			}()
-
-			if err := a.Add(1, common.Update{
-				CreatedAccounts: []common.Address{{1}},
-				Balances: []common.BalanceUpdate{
-					{Account: common.Address{1}, Balance: amount.New(12)},
-				},
-				Slots: []common.SlotUpdate{
-					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
-				},
-			}, nil); err != nil {
-				t.Fatalf("failed to add block: %v", err)
-			}
-			b := bytes.NewBuffer(nil)
-			_, err := a.Export(1, b)
-			if err != nil {
-				if errors.Is(err, archive.ErrExportNotSupported) {
-					t.Skip(err)
-				}
-				t.Fatalf("failed to export; %s", err)
-			}
-
-			if b.Len() <= 0 {
-				t.Error("nothing was exported")
-			}
-		})
-	}
-}
-
 func TestAccountStatusOnly(t *testing.T) {
 	for _, factory := range getArchiveFactories(t) {
 		t.Run(factory.label, func(t *testing.T) {

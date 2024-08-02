@@ -13,7 +13,6 @@ package ldb
 import (
 	"crypto/sha256"
 	"fmt"
-	"io"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
@@ -342,10 +341,6 @@ func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash com
 
 func (a *Archive) CreateWitnessProof(_ uint64, _ common.Address, _ ...common.Key) (witness.Proof, error) {
 	return nil, archive.ErrWitnessProofNotSupported
-}
-
-func (a *Archive) Export(block uint64, out io.Writer) (common.Hash, error) {
-	return common.Hash{}, archive.ErrExportNotSupported
 }
 
 // GetMemoryFootprint provides the size of the archive in memory in bytes

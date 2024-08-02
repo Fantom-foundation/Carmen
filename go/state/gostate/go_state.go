@@ -16,12 +16,11 @@ import (
 	"io"
 	"runtime"
 
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
-
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"golang.org/x/crypto/sha3"
 )
@@ -371,8 +370,6 @@ func (s *GoState) GetProof() (backend.Proof, error) {
 }
 
 func (s *GoState) Export(io.Writer) (common.Hash, error) {
-	// TOOD CAST
-
 	return common.Hash{}, state.ExportNotSupported
 }
 

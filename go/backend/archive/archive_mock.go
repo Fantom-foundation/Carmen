@@ -20,7 +20,6 @@
 package archive
 
 import (
-	io "io"
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
@@ -78,21 +77,6 @@ func (m *MockArchive) Close() error {
 func (mr *MockArchiveMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockArchive)(nil).Close))
-}
-
-// Export mocks base method.
-func (m *MockArchive) Export(block uint64, out io.Writer) (common.Hash, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Export", block, out)
-	ret0, _ := ret[0].(common.Hash)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateLiveDBGenesis indicates an expected call of CreateLiveDBGenesis.
-func (mr *MockArchiveMockRecorder) CreateLiveDBGenesis(block, out any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Export", reflect.TypeOf((*MockArchive)(nil).Export), block, out)
 }
 
 // CreateWitnessProof mocks base method.
