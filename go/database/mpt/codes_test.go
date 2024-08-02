@@ -411,6 +411,57 @@ func TestCodes_Commit_HandlesIoIssues(t *testing.T) {
 	}
 }
 
+func TestCodes_Restore_CanRestoreCommittedAndPendingCheckpoint(t *testing.T) {
+	for _, name := range []string{"committed", "pending"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			codes, err := openCodes(dir)
+			if err != nil {
+				t.Fatalf("failed to open codes: %v", err)
+			}
+			codes.add([]byte("code1"))
+
+			cp1 := checkpoint.Checkpoint(1)
+			if err := codes.Prepare(cp1); err != nil {
+				t.Fatalf("failed to prepare checkpoint: %v", err)
+			}
+			if name == "committed" {
+				if err := codes.Commit(cp1); err != nil {
+					t.Fatalf("failed to commit checkpoint: %v", err)
+				}
+			}
+
+			codes.add([]byte("code2"))
+			if err := codes.Flush(); err != nil {
+				t.Fatalf("failed to flush: %v", err)
+			}
+
+			codes, err = openCodes(dir)
+			if err != nil {
+				t.Fatalf("failed to re-open original codes: %v", err)
+			}
+
+			if want, got := 2, len(codes.codes); want != got {
+				t.Fatalf("expected codes to have %d entries, got %d", want, got)
+			}
+
+			if err := getCodeRestorer(dir).Restore(cp1); err != nil {
+				t.Fatalf("failed to restore checkpoint: %v", err)
+			}
+
+			codes, err = openCodes(dir)
+			if err != nil {
+				t.Fatalf("failed to re-open recovered codes: %v", err)
+			}
+
+			if want, got := 1, len(codes.codes); want != got {
+				t.Fatalf("expected codes to have %d entries, got %d", want, got)
+			}
+		})
+	}
+}
+
 func TestCodes_Restore_InvalidCheckpointMetaDataIsDetected(t *testing.T) {
 	dir := t.TempDir()
 	restorer := getCodeRestorer(dir)

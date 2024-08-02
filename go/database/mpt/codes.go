@@ -220,6 +220,15 @@ func (r codeRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
 	if err != nil {
 		return err
 	}
+
+	// If the given checkpoint is one step in the future, check whether there is a pending checkpoint.
+	if meta.Checkpoint+1 == checkpoint {
+		pending, err := readCodeCheckpointMetaData(filepath.Join(r.directory, fileNameCodesPrepareCheckpoint))
+		if err == nil && pending.Checkpoint == checkpoint {
+			meta = pending
+		}
+	}
+
 	if meta.Checkpoint != checkpoint {
 		return fmt.Errorf("cannot restore checkpoint %d, committed checkpoint is %d", checkpoint, meta.Checkpoint)
 	}

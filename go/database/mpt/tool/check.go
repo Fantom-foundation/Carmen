@@ -75,7 +75,7 @@ func checkLiveDB(dir string, info io.MptInfo) error {
 }
 
 func checkArchive(dir string, info io.MptInfo) error {
-	archive, err := mpt.OpenArchiveTrie(dir, info.Config, mpt.NodeCacheConfig{})
+	archive, err := mpt.OpenArchiveTrie(dir, info.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 	if err != nil {
 		return err
 	}

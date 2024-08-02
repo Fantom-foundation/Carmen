@@ -38,6 +38,7 @@ func main() {
 			&Benchmark,
 			&Block,
 			&StressTestCmd,
+			&Reset,
 		},
 	}
 

@@ -66,3 +66,57 @@ func TestDirectoryLock_CannotLockFile(t *testing.T) {
 	}
 
 }
+
+func TestDirectoryLock_ForceUnlockDirectory_RemovesLock(t *testing.T) {
+	dir := t.TempDir()
+	_, err := LockDirectory(dir)
+	if err != nil {
+		t.Fatalf("failed to acquire lock: %v", err)
+	}
+
+	if err := ForceUnlockDirectory(dir); err != nil {
+		t.Fatalf("failed to force unlock: %v", err)
+	}
+
+	lock, err := LockDirectory(dir)
+	if err != nil {
+		t.Fatalf("failed to acquire lock: %v", err)
+	}
+	if err := lock.Release(); err != nil {
+		t.Fatalf("failed to release lock: %v", err)
+	}
+}
+
+func TestDirectoryLock_ForceUnlockDirectory_IgnoresUnlockedDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := ForceUnlockDirectory(dir); err != nil {
+		t.Fatalf("failed to force unlock: %v", err)
+	}
+
+	lock, err := LockDirectory(dir)
+	if err != nil {
+		t.Fatalf("failed to acquire lock: %v", err)
+	}
+	if err := lock.Release(); err != nil {
+		t.Fatalf("failed to release lock: %v", err)
+	}
+}
+
+func TestDirectoryLock_ForceUnlockDirectory_ReportsErrorIfUnlockingFailed(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := LockDirectory(dir)
+	if err != nil {
+		t.Fatalf("failed to acquire lock: %v", err)
+	}
+
+	// remove permission to delete the lock file
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatalf("failed to remove write permission: %v", err)
+	}
+	defer os.Chmod(dir, 0700)
+
+	if err := ForceUnlockDirectory(dir); err == nil {
+		t.Fatalf("expected error when unlocking failed")
+	}
+}

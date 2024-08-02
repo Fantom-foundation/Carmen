@@ -121,7 +121,7 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
-	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{})
+	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 	if err != nil {
 		return err
 	}
