@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
@@ -80,6 +81,40 @@ func TestArchiveTrie_CanBeReOpened(t *testing.T) {
 		if err := archive.Close(); err != nil {
 			t.Errorf("failed to close the archive: %v", err)
 		}
+	}
+}
+
+func TestArchiveTrie_Open_LastCheckpointTimeIsSelectedRandomly(t *testing.T) {
+
+	config := ArchiveConfig{
+		CheckpointPeriod: 10 * time.Second,
+	}
+
+	deltas := []time.Duration{}
+
+	dir := t.TempDir()
+	for i := 0; i < 10; i++ {
+		archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, config)
+		if err != nil {
+			t.Fatalf("cannot init archive trie: %v", err)
+		}
+		deltas = append(deltas, time.Since(archive.lastCheckpointTime))
+		if err := archive.Close(); err != nil {
+			t.Fatalf("failed to close archive trie: %v", err)
+		}
+	}
+
+	slices.Sort(deltas)
+	min, max := deltas[0], deltas[len(deltas)-1]
+	if min == max {
+		t.Errorf("last checkpoint time should be selected randomly")
+	}
+
+	if min < 0 {
+		t.Errorf("last checkpoint time should be in the past, got %v", min)
+	}
+	if max > config.CheckpointPeriod {
+		t.Errorf("last checkpoint time should be not too far in the past, got %v", max)
 	}
 }
 
@@ -714,6 +749,68 @@ func TestArchiveTrie_Add_CreatesCheckpointPeriodically(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestArchiveTrie_Add_CreatesCheckpointInRequestedTimePeriods(t *testing.T) {
+	dir := t.TempDir()
+	archiveConfig := ArchiveConfig{
+		CheckpointPeriod: 500 * time.Millisecond,
+	}
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, archiveConfig)
+	if err != nil {
+		t.Fatalf("failed to open empty archive: %v", err)
+	}
+	defer archive.Close()
+
+	if err := archive.Add(0, common.Update{}, nil); err != nil {
+		t.Fatalf("failed to apply update: %v", err)
+	}
+
+	// Create a first checkpoint to clear the initial random offset.
+	if err := archive.createCheckpoint(); err != nil {
+		t.Fatalf("failed to create checkpoint: %v", err)
+	}
+
+	if height, err := GetCheckpointBlock(dir); err != nil || height != 0 {
+		t.Fatalf("wrong checkpoint block, want %d, have %d, err %v", 0, height, err)
+	}
+
+	// The next few blocks should not create a checkpoint.
+	for i := 1; i < 5; i++ {
+		if err := archive.Add(uint64(i), common.Update{}, nil); err != nil {
+			t.Fatalf("failed to apply update: %v", err)
+		}
+	}
+
+	if height, err := GetCheckpointBlock(dir); err != nil || height != 0 {
+		t.Fatalf("wrong checkpoint block, want %d, have %d, err %v", 0, height, err)
+	}
+
+	// Only after a sufficient amount of time a single new checkpoint should be created.
+	time.Sleep(archiveConfig.CheckpointPeriod)
+
+	for i := 5; i < 8; i++ {
+		if err := archive.Add(uint64(i), common.Update{}, nil); err != nil {
+			t.Fatalf("failed to apply update: %v", err)
+		}
+	}
+
+	if height, err := GetCheckpointBlock(dir); err != nil || height != 5 {
+		t.Fatalf("wrong checkpoint block, want %d, have %d, err %v", 5, height, err)
+	}
+
+	// The checkpoint should only be created after the next period has passed.
+	time.Sleep(archiveConfig.CheckpointPeriod)
+
+	for i := 8; i < 10; i++ {
+		if err := archive.Add(uint64(i), common.Update{}, nil); err != nil {
+			t.Fatalf("failed to apply update: %v", err)
+		}
+	}
+
+	if height, err := GetCheckpointBlock(dir); err != nil || height != 8 {
+		t.Fatalf("wrong checkpoint block, want %d, have %d, err %v", 8, height, err)
 	}
 }
 
