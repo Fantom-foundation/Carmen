@@ -371,6 +371,8 @@ func (s *GoState) GetProof() (backend.Proof, error) {
 }
 
 func (s *GoState) Export(io.Writer) (common.Hash, error) {
+	// TOOD CAST
+
 	return common.Hash{}, state.ExportNotSupported
 }
 
