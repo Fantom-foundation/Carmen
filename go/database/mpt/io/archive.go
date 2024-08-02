@@ -227,9 +227,9 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return err
 	} else if !bytes.Equal(buffer, archiveMagicNumber) {
-		// Specify error if incorrect genesis is passed
+		// Provide an explicit warning to the user if instead of an archive dump a live-db dump was provided
 		if bytes.Contains(buffer, stateMagicNumber) {
-			return fmt.Errorf("incorrect genesis+command combination\n your genesis is meant to be used with import-live")
+			return fmt.Errorf("incorrect input data format; use the `import` or `import-live-db` sub-command with this type of data")
 		}
 		return errors.New("invalid format, unknown magic number")
 	}

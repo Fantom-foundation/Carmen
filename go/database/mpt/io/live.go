@@ -229,9 +229,9 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return root, hash, err
 	} else if !bytes.Equal(buffer, stateMagicNumber) {
-		// Specify error if incorrect genesis is passed
+		// Provide an explicit warning to the user if instead of a live state dump an archive dump was provided
 		if bytes.Contains(buffer, archiveMagicNumber[:len(stateMagicNumber)]) {
-			return root, hash, fmt.Errorf("incorrect genesis+command combination\n your genesis is meant to by used with either import or import-archive")
+			return root, hash, fmt.Errorf("incorrect input data format\n use the `import-archive` sub-command  with this type of data")
 		}
 		return root, hash, errors.New("invalid format, unknown magic number")
 	}
