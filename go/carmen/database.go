@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -40,13 +41,24 @@ func openDatabase(
 	if err != nil {
 		return nil, err
 	}
+	checkpointInterval, err := properties.GetInteger(CheckpointInterval, 0)
+	if err != nil {
+		return nil, err
+	}
+	checkpointPeriod, err := properties.GetInteger(CheckpointPeriod, 0)
+	if err != nil {
+		return nil, err
+	}
+
 	params := state.Parameters{
-		Directory:    directory,
-		Variant:      state.Variant(configuration.Variant),
-		Schema:       state.Schema(configuration.Schema),
-		Archive:      state.ArchiveType(configuration.Archive),
-		LiveCache:    int64(liveCache),
-		ArchiveCache: int64(archiveCache),
+		Directory:          directory,
+		Variant:            state.Variant(configuration.Variant),
+		Schema:             state.Schema(configuration.Schema),
+		Archive:            state.ArchiveType(configuration.Archive),
+		LiveCache:          int64(liveCache),
+		ArchiveCache:       int64(archiveCache),
+		CheckpointInterval: checkpointInterval,
+		CheckpointPeriod:   time.Duration(checkpointPeriod) * time.Minute,
 	}
 	db, err := state.NewState(params)
 	if err != nil {
