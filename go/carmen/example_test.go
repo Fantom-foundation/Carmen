@@ -12,6 +12,7 @@ package carmen_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -551,13 +552,13 @@ func ExampleHistoricBlockContext_Export() {
 	var rootHash carmen.Hash
 	b := bytes.NewBuffer(nil)
 	if err = db.QueryBlock(uint64(1), func(ctxt carmen.HistoricBlockContext) error {
-		rootHash, err = ctxt.Export(b)
+		rootHash, err = ctxt.Export(context.Background(), b)
 		if err != nil {
 			log.Fatalf("cannot export: %v", err)
 		}
-		return nil
+		return err
 	}); err != nil {
-		log.Fatalf("cannot query block: %v", err)
+		log.Fatalf("failed to export block: %v", err)
 	}
 
 	if err := db.Close(); err != nil {
