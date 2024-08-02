@@ -119,7 +119,7 @@ func OpenArchiveTrie(
 
 	checkpointInterval := archiveConfig.CheckpointInterval
 	if checkpointInterval <= 0 {
-		checkpointInterval = 1000
+		checkpointInterval = 1_000_000
 	}
 
 	return &ArchiveTrie{
