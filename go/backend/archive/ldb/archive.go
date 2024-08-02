@@ -344,8 +344,8 @@ func (a *Archive) CreateWitnessProof(_ uint64, _ common.Address, _ ...common.Key
 	return nil, archive.ErrWitnessProofNotSupported
 }
 
-func (a *Archive) CreateLiveDBGenesis(block uint64, out io.Writer) (common.Hash, error) {
-	return common.Hash{}, archive.ErrGenesisExportNotSupported
+func (a *Archive) Export(block uint64, out io.Writer) (common.Hash, error) {
+	return common.Hash{}, archive.ErrExportNotSupported
 }
 
 // GetMemoryFootprint provides the size of the archive in memory in bytes

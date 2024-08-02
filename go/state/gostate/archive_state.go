@@ -142,13 +142,13 @@ func (s *ArchiveState) GetMemoryFootprint() *common.MemoryFootprint {
 	return common.NewMemoryFootprint(unsafe.Sizeof(*s))
 }
 
-func (s *ArchiveState) CreateLiveDBGenesis(out io.Writer) (common.Hash, error) {
+func (s *ArchiveState) Export(out io.Writer) (common.Hash, error) {
 	if err := s.archiveError; err != nil {
 		return common.Hash{}, err
 	}
 
 	var rootHash common.Hash
-	rootHash, err := s.archive.CreateLiveDBGenesis(s.block, out)
+	rootHash, err := s.archive.Export(s.block, out)
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
 		return common.Hash{}, s.archiveError

@@ -31,10 +31,15 @@ type Parameters struct {
 	ArchiveCache int64 // bytes, approximate, supported only by S5 now
 }
 
-// UnsupportedConfiguration is the error returned if unsupported configuration
-// parameters have been specified. The text may contain further details regarding the
-// unsupported feature.
-const UnsupportedConfiguration = common.ConstError("unsupported configuration")
+const (
+	// UnsupportedConfiguration is the error returned if unsupported configuration
+	// parameters have been specified. The text may contain further details regarding the
+	// unsupported feature.
+	UnsupportedConfiguration = common.ConstError("unsupported configuration")
+
+	// ExportNotSupported is returned by State implementation if they do not support Export.
+	ExportNotSupported = common.ConstError("export not supported")
+)
 
 // NewState is the public interface for creating Carmen state instances. If for the
 // given parameters a state can be constructed, the resulting state is returned. If

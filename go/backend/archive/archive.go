@@ -20,10 +20,11 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
 )
 
-// ErrWitnessProofNotSupported is returned when the archive does not support witness proofs.
 const (
-	ErrWitnessProofNotSupported  = common.ConstError("witness proof not supported")
-	ErrGenesisExportNotSupported = common.ConstError("genesis export not supported")
+	// ErrWitnessProofNotSupported is returned when the archive does not support witness proofs.
+	ErrWitnessProofNotSupported = common.ConstError("witness proof not supported")
+	// ErrExportNotSupported is returned when the archive does not support export.
+	ErrExportNotSupported = common.ConstError("export not supported")
 )
 
 // An Archive retains a history of state mutations in a blockchain on a
@@ -65,8 +66,8 @@ type Archive interface {
 	// CreateWitnessProof creates a witness proof for the given account and keys.
 	CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error)
 
-	// CreateLiveDBGenesis writes a LiveDB genesis for given block into out.
-	CreateLiveDBGenesis(block uint64, out io.Writer) (common.Hash, error)
+	// Export exports a LiveDB for given block into out.
+	Export(block uint64, out io.Writer) (common.Hash, error)
 
 	// MemoryFootprintProvider provides the size of the store in memory in bytes.
 	common.MemoryFootprintProvider

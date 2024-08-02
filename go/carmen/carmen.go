@@ -200,10 +200,10 @@ type HistoricBlockContext interface {
 	// otherwise, the proof is returned.
 	GetProof(address Address, keys ...Key) (WitnessProof, error)
 
-	// CreateLiveDBGenesis writes a LiveDB genesis file for given block into out.
-	// The genesis file is exported from the archive for the
-	// given block and is used to sync LiveDB to that block.
-	CreateLiveDBGenesis(out io.Writer) (Hash, error)
+	// Export writes data LiveDB for given block into out.
+	// Data created by exported can be used to sync a fresh
+	// LiveDB to a certain block.
+	Export(out io.Writer) (Hash, error)
 
 	// Close releases resources held by this context. All modifications made
 	// within this context are discarded. This context is invalid after this

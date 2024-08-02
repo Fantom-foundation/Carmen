@@ -162,15 +162,15 @@ func (c *archiveBlockContext) GetProof(address Address, keys ...Key) (WitnessPro
 	return witnessProof{proof}, nil
 }
 
-func (c *archiveBlockContext) CreateLiveDBGenesis(out io.Writer) (Hash, error) {
+func (c *archiveBlockContext) Export(out io.Writer) (Hash, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	if c.db == nil {
-		return Hash{}, fmt.Errorf("cannot create genesis in invalid block context")
+		return Hash{}, fmt.Errorf("cannot export from invalid block context")
 	}
 
-	h, err := c.archiveState.CreateLiveDBGenesis(out)
+	h, err := c.archiveState.Export(out)
 	if err != nil {
 		return Hash{}, err
 	}

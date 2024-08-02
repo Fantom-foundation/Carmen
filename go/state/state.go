@@ -85,9 +85,9 @@ type State interface {
 	// otherwise, the proof is returned.
 	CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error)
 
-	// CreateLiveDBGenesis writes a LiveDB genesis into out.
+	// Export writes data from LiveDB into out.
 	// If successful, expected root hash is returned.
-	CreateLiveDBGenesis(out io.Writer) (common.Hash, error)
+	Export(out io.Writer) (common.Hash, error)
 
 	// States can be snapshotted.
 	backend.Snapshotable

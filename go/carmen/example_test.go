@@ -519,7 +519,7 @@ func ExampleDatabase_GetMemoryFootprint() {
 	}
 }
 
-func ExampleHistoricBlockContext_CreateLiveDBGenesis() {
+func ExampleHistoricBlockContext_Export() {
 	dir, err := os.MkdirTemp("", "carmen_db_*")
 	if err != nil {
 		log.Fatalf("cannot create temporary directory: %v", err)
@@ -548,13 +548,12 @@ func ExampleHistoricBlockContext_CreateLiveDBGenesis() {
 		log.Fatalf("cannot flush: %v", err)
 	}
 
-	// Export genesis
 	var rootHash carmen.Hash
 	b := bytes.NewBuffer(nil)
 	if err = db.QueryBlock(uint64(1), func(ctxt carmen.HistoricBlockContext) error {
-		rootHash, err = ctxt.CreateLiveDBGenesis(b)
+		rootHash, err = ctxt.Export(b)
 		if err != nil {
-			log.Fatalf("cannot create genesis: %v", err)
+			log.Fatalf("cannot export: %v", err)
 		}
 		return nil
 	}); err != nil {

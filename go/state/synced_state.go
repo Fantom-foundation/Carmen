@@ -172,8 +172,8 @@ func (s *syncedState) CreateWitnessProof(address common.Address, keys ...common.
 	return s.state.CreateWitnessProof(address, keys...)
 }
 
-func (s *syncedState) CreateLiveDBGenesis(out io.Writer) (common.Hash, error) {
+func (s *syncedState) Export(out io.Writer) (common.Hash, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.CreateLiveDBGenesis(out)
+	return s.state.Export(out)
 }

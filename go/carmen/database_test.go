@@ -2165,7 +2165,7 @@ func TestDatabase_GetMemoryFootprint(t *testing.T) {
 	db.GetMemoryFootprint()
 }
 
-func TestDatabase_CreateLiveDBGenesis(t *testing.T) {
+func TestDatabase_Export(t *testing.T) {
 	// We need file-based database
 	testConfig.Variant = Variant(gostate.VariantGoFile)
 
@@ -2206,9 +2206,9 @@ func TestDatabase_CreateLiveDBGenesis(t *testing.T) {
 	}
 
 	b := bytes.NewBuffer(nil)
-	rootHash, err := ctx.CreateLiveDBGenesis(b)
+	rootHash, err := ctx.Export(b)
 	if err != nil {
-		t.Fatalf("cannot create live db genesis: %v", err)
+		t.Fatalf("cannot export live db: %v", err)
 	}
 
 	if err = ctx.Close(); err != nil {

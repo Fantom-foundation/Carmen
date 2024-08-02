@@ -287,8 +287,8 @@ func (cs *CppState) CreateWitnessProof(address common.Address, keys ...common.Ke
 	panic("not implemented")
 }
 
-func (cs *CppState) CreateLiveDBGenesis(out io.Writer) (common.Hash, error) {
-	panic("not implemented")
+func (cs *CppState) Export(out io.Writer) (common.Hash, error) {
+	return common.Hash{}, state.ExportNotSupported
 }
 
 type objectId struct {

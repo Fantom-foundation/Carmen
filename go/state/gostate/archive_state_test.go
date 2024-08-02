@@ -111,7 +111,7 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 				archive.EXPECT().CreateLiveDBGenesis(gomock.Any(), gomock.Any()).Return(injectedErr)
 			},
 			func(stateArchive state.State) error {
-				_, err := stateArchive.CreateLiveDBGenesis(bytes.NewBuffer(nil))
+				_, err := stateArchive.Export(bytes.NewBuffer(nil))
 				return err
 			},
 		},

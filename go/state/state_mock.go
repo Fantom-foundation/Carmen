@@ -95,21 +95,6 @@ func (mr *MockStateMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockState)(nil).Close))
 }
 
-// CreateLiveDBGenesis mocks base method.
-func (m *MockState) CreateLiveDBGenesis(out io.Writer) (common.Hash, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateLiveDBGenesis", out)
-	ret0, _ := ret[0].(common.Hash)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateLiveDBGenesis indicates an expected call of CreateLiveDBGenesis.
-func (mr *MockStateMockRecorder) CreateLiveDBGenesis(out any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateLiveDBGenesis", reflect.TypeOf((*MockState)(nil).CreateLiveDBGenesis), out)
-}
-
 // CreateSnapshot mocks base method.
 func (m *MockState) CreateSnapshot() (backend.Snapshot, error) {
 	m.ctrl.T.Helper()
@@ -158,6 +143,21 @@ func (m *MockState) Exists(address common.Address) (bool, error) {
 func (mr *MockStateMockRecorder) Exists(address any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockState)(nil).Exists), address)
+}
+
+// Export mocks base method.
+func (m *MockState) Export(out io.Writer) (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Export", out)
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Export indicates an expected call of Export.
+func (mr *MockStateMockRecorder) Export(out any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Export", reflect.TypeOf((*MockState)(nil).Export), out)
 }
 
 // Flush mocks base method.

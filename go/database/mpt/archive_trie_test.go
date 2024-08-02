@@ -859,13 +859,13 @@ func TestArchiveTrie_CreateLiveDbGenesis(t *testing.T) {
 				t.Fatalf("failed to add block: %v", err)
 			}
 			b := bytes.NewBuffer(nil)
-			_, err = a.CreateLiveDBGenesis(1, b)
+			_, err = a.Export(1, b)
 			if err != nil {
 				t.Fatalf("failed to create witness proof; %s", err)
 			}
 
 			if b.Len() <= 0 {
-				t.Error("genesis was not exported")
+				t.Error("nothing was exported")
 			}
 		})
 	}

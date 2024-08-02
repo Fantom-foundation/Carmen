@@ -298,7 +298,7 @@ func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 	return mf
 }
 
-func (a *ArchiveTrie) CreateLiveDBGenesis(block uint64, out io.Writer) (common.Hash, error) {
+func (a *ArchiveTrie) Export(block uint64, out io.Writer) (common.Hash, error) {
 	return ExportLive(context.Background(), NewExportableArchiveTrie(a, block), out)
 }
 

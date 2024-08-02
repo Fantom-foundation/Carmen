@@ -330,7 +330,7 @@ func TestArchive_CreateWitnessProof(t *testing.T) {
 	}
 }
 
-func TestArchive_CreateLiveDBGenesis(t *testing.T) {
+func TestArchive_Export(t *testing.T) {
 	for _, factory := range getArchiveFactories(t) {
 		t.Run(factory.label, func(t *testing.T) {
 			a := factory.getArchive(t.TempDir())
@@ -352,16 +352,16 @@ func TestArchive_CreateLiveDBGenesis(t *testing.T) {
 				t.Fatalf("failed to add block: %v", err)
 			}
 			b := bytes.NewBuffer(nil)
-			_, err := a.CreateLiveDBGenesis(1, b)
+			_, err := a.Export(1, b)
 			if err != nil {
-				if errors.Is(err, archive.ErrGenesisExportNotSupported) {
+				if errors.Is(err, archive.ErrExportNotSupported) {
 					t.Skip(err)
 				}
-				t.Fatalf("failed to create witness proof; %s", err)
+				t.Fatalf("failed to export; %s", err)
 			}
 
 			if b.Len() <= 0 {
-				t.Error("genesis was not exported")
+				t.Error("nothing was exported")
 			}
 		})
 	}

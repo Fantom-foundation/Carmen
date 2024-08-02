@@ -370,8 +370,8 @@ func (s *GoState) GetProof() (backend.Proof, error) {
 	return backend.GetComposedProof(proofs), nil
 }
 
-func (s *GoState) CreateLiveDBGenesis(io.Writer) (common.Hash, error) {
-	panic("not implemented")
+func (s *GoState) Export(io.Writer) (common.Hash, error) {
+	return common.Hash{}, state.ExportNotSupported
 }
 
 func (s *GoState) CreateSnapshot() (backend.Snapshot, error) {
