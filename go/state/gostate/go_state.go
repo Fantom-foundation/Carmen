@@ -11,6 +11,7 @@
 package gostate
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -369,7 +370,7 @@ func (s *GoState) GetProof() (backend.Proof, error) {
 	return backend.GetComposedProof(proofs), nil
 }
 
-func (s *GoState) Export(io.Writer) (common.Hash, error) {
+func (s *GoState) Export(context.Context, io.Writer) (common.Hash, error) {
 	return common.Hash{}, state.ExportNotSupported
 }
 

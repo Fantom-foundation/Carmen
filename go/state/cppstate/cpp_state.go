@@ -21,6 +21,7 @@ package cppstate
 */
 import "C"
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -287,7 +288,7 @@ func (cs *CppState) CreateWitnessProof(address common.Address, keys ...common.Ke
 	panic("not implemented")
 }
 
-func (cs *CppState) Export(out io.Writer) (common.Hash, error) {
+func (cs *CppState) Export(context.Context, io.Writer) (common.Hash, error) {
 	return common.Hash{}, state.ExportNotSupported
 }
 

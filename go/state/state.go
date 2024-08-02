@@ -13,6 +13,7 @@ package state
 //go:generate mockgen -source state.go -destination state_mock.go -package state
 
 import (
+	"context"
 	"io"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -87,7 +88,7 @@ type State interface {
 
 	// Export writes data from LiveDB into out.
 	// If successful, expected root hash is returned.
-	Export(out io.Writer) (common.Hash, error)
+	Export(ctx context.Context, out io.Writer) (common.Hash, error)
 
 	// States can be snapshotted.
 	backend.Snapshotable

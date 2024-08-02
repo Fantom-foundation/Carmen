@@ -11,6 +11,7 @@
 package carmen
 
 import (
+	"context"
 	"io"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -203,7 +204,10 @@ type HistoricBlockContext interface {
 	// Export writes data LiveDB for given block into out.
 	// Data created by exported can be used to sync a fresh
 	// LiveDB to a certain block.
-	Export(out io.Writer) (Hash, error)
+	// Cancelling given ctx will gracefully cancel the export.
+	// Bear in mind that cancelling the interrupt will result
+	// in returning error interrupt.ErrCanceled.
+	Export(ctx context.Context, out io.Writer) (Hash, error)
 
 	// Close releases resources held by this context. All modifications made
 	// within this context are discarded. This context is invalid after this

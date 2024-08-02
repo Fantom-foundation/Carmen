@@ -12,6 +12,7 @@ package gostate
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
@@ -192,7 +194,7 @@ func TestArchiveState_Export_ErrorsAreCaught(t *testing.T) {
 
 			test.setup(archive)
 
-			_, err := archive.Export(nil)
+			_, err := archive.Export(context.Background(), nil)
 			if err == nil {
 				t.Fatal("export must fail")
 			}
@@ -237,12 +239,55 @@ func TestArchiveState_Export(t *testing.T) {
 		t.Fatalf("cannot get hash: %v", err)
 	}
 
-	gotHash, err := archive.Export(bytes.NewBuffer(nil))
+	gotHash, err := archive.Export(context.Background(), bytes.NewBuffer(nil))
 	if err != nil {
 		t.Fatalf("cannot export: %v", err)
 	}
 
 	if gotHash != wantHash {
 		t.Errorf("unexpected hash, got: %x, want: %x", gotHash, wantHash)
+	}
+}
+
+func TestArchiveState_Export_CanBeCancelled(t *testing.T) {
+	// Create a small Archive from which we export LiveDB genesis.
+	sourceDir := t.TempDir()
+	trie, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+
+	newAddr := common.AddressFromNumber(1)
+	newAmount := amount.New(1)
+
+	update := common.Update{
+		CreatedAccounts: []common.Address{newAddr},
+		Balances:        []common.BalanceUpdate{{newAddr, newAmount}},
+		Nonces:          []common.NonceUpdate{{newAddr, common.ToNonce(1)}},
+		Codes:           []common.CodeUpdate{{newAddr, []byte{0x1}}},
+		Slots:           []common.SlotUpdate{{newAddr, common.Key{byte(1)}, common.Value{byte(1)}}},
+	}
+
+	err = trie.Add(2, update, nil)
+	if err != nil {
+		t.Fatalf("failed to create block in archive: %v", err)
+	}
+
+	archive := &ArchiveState{
+		archive: trie,
+		block:   2,
+	}
+
+	// Cancel context right after creation
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err = archive.Export(ctx, bytes.NewBuffer(nil))
+	if err == nil {
+		t.Fatalf("export must fail")
+	}
+
+	if !errors.Is(err, interrupt.ErrCanceled) {
+		t.Errorf("unexpected err\ngot: %v\nwant: %v", err, interrupt.ErrCanceled)
 	}
 }

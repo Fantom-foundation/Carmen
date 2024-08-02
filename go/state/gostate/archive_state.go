@@ -145,7 +145,7 @@ func (s *ArchiveState) GetMemoryFootprint() *common.MemoryFootprint {
 	return common.NewMemoryFootprint(unsafe.Sizeof(*s))
 }
 
-func (s *ArchiveState) Export(out io.Writer) (common.Hash, error) {
+func (s *ArchiveState) Export(ctx context.Context, out io.Writer) (common.Hash, error) {
 	if err := s.archiveError; err != nil {
 		return common.Hash{}, err
 	}
@@ -156,7 +156,7 @@ func (s *ArchiveState) Export(out io.Writer) (common.Hash, error) {
 	}
 
 	exportableTrie := mptio.NewExportableArchiveTrie(trie, s.block)
-	rootHash, err := mptio.ExportLive(context.Background(), exportableTrie, out)
+	rootHash, err := mptio.ExportLive(ctx, exportableTrie, out)
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
 		return common.Hash{}, s.archiveError
