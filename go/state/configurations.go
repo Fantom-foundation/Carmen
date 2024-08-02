@@ -13,6 +13,7 @@ package state
 import (
 	"fmt"
 	"maps"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -23,12 +24,13 @@ import (
 
 // Parameters struct defining configuration parameters for state instances.
 type Parameters struct {
-	Variant      Variant
-	Schema       Schema
-	Archive      ArchiveType
-	Directory    string
-	LiveCache    int64 // bytes, approximate, supported only by S5 now
-	ArchiveCache int64 // bytes, approximate, supported only by S5 now
+	Variant            Variant
+	Schema             Schema
+	Archive            ArchiveType
+	Directory          string
+	LiveCache          int64 // bytes, approximate, supported only by S5 now
+	ArchiveCache       int64 // bytes, approximate, supported only by S5 now
+	CheckpointInterval CheckpointInterval
 }
 
 // UnsupportedConfiguration is the error returned if unsupported configuration
@@ -90,6 +92,11 @@ const (
 	S4Archive      ArchiveType = "s4"
 	S5Archive      ArchiveType = "s5"
 )
+
+type CheckpointInterval struct {
+	Block int
+	Time  time.Duration
+}
 
 type StateFactory func(params Parameters) (State, error)
 

@@ -946,6 +946,7 @@ func openArchive(params state.Parameters) (archive archive.Archive, cleanup func
 		if err != nil {
 			return nil, nil, err
 		}
+		// todo pass the values ehre
 		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, getNodeCacheConfig(params.ArchiveCache), mpt.ArchiveConfig{})
 		return arch, nil, err
 	}
