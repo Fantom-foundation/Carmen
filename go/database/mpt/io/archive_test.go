@@ -185,7 +185,7 @@ func TestIO_LiveAndArchive_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {
 	}
 
 	got := err.Error()
-	want := "incorrect genesis+command combination\n your genesis is meant to be used with import-live"
+	want := "incorrect input data format; use the `import` or `import-live-db` sub-command with this type of data"
 	if !strings.EqualFold(got, want) {
 		t.Errorf("unexpected error message\ngot: %v\nwant:%v", got, want)
 	}

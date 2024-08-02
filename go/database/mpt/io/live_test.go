@@ -379,7 +379,7 @@ func TestIO_Live_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {
 	}
 
 	got := err.Error()
-	want := "incorrect genesis+command combination\n your genesis is meant to by used with either import or import-archive"
+	want := "incorrect input data format use the `import-archive` sub-command  with this type of data"
 	if !strings.EqualFold(got, want) {
 		t.Errorf("unexpected error message\ngot: %v\nwant:%v", got, want)
 	}
