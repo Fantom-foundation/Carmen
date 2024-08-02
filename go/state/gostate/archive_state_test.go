@@ -11,6 +11,7 @@
 package gostate
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
 )
@@ -156,5 +158,91 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 				t.Errorf("check should fail")
 			}
 		})
+	}
+}
+
+func TestArchiveState_Export_ErrorsAreCaught(t *testing.T) {
+	injectedErr := errors.New("injectedError")
+	tests := []struct {
+		name          string
+		setup         func(archive *ArchiveState)
+		expectedError error
+	}{
+		{
+			name:          "export-not-supported",
+			setup:         func(archive *ArchiveState) {},
+			expectedError: state.ExportNotSupported,
+		},
+		{
+			name: "injected error",
+			setup: func(archive *ArchiveState) {
+				archive.archiveError = injectedErr
+			},
+			expectedError: injectedErr,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			archive := &ArchiveState{
+				archive: archive.NewMockArchive(ctrl),
+				block:   0,
+			}
+
+			test.setup(archive)
+
+			_, err := archive.Export(nil)
+			if err == nil {
+				t.Fatal("export must fail")
+			}
+
+			if !errors.Is(err, test.expectedError) {
+				t.Fatalf("unexpected err:\ngot: %v\nwant: %v", err, test.expectedError)
+			}
+		})
+	}
+}
+
+func TestArchiveState_Export(t *testing.T) {
+	// Create a small Archive from which we export LiveDB genesis.
+	sourceDir := t.TempDir()
+	trie, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+
+	newAddr := common.AddressFromNumber(1)
+	newAmount := amount.New(1)
+
+	update := common.Update{
+		CreatedAccounts: []common.Address{newAddr},
+		Balances:        []common.BalanceUpdate{{newAddr, newAmount}},
+		Nonces:          []common.NonceUpdate{{newAddr, common.ToNonce(1)}},
+		Codes:           []common.CodeUpdate{{newAddr, []byte{0x1}}},
+		Slots:           []common.SlotUpdate{{newAddr, common.Key{byte(1)}, common.Value{byte(1)}}},
+	}
+
+	err = trie.Add(2, update, nil)
+	if err != nil {
+		t.Fatalf("failed to create block in archive: %v", err)
+	}
+
+	archive := &ArchiveState{
+		archive: trie,
+		block:   2,
+	}
+	wantHash, err := trie.GetHash(2)
+	if err != nil {
+		t.Fatalf("cannot get hash: %v", err)
+	}
+
+	gotHash, err := archive.Export(bytes.NewBuffer(nil))
+	if err != nil {
+		t.Fatalf("cannot export: %v", err)
+	}
+
+	if gotHash != wantHash {
+		t.Errorf("unexpected hash, got: %x, want: %x", gotHash, wantHash)
 	}
 }
