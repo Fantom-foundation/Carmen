@@ -15,9 +15,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -50,12 +52,16 @@ type ArchiveTrie struct {
 	// Check-point support for DB healing.
 	checkpointCoordinator checkpoint.Coordinator
 	checkpointInterval    int
+	checkpointPeriod      time.Duration
+	lastCheckpointTime    time.Time
 }
 
 // ArchiveConfig is the configuration for the archive trie.
 type ArchiveConfig struct {
-	// The number of blocks after which a checkpoint is created.
+	// The number of blocks after which the latest a checkpoint is created.
 	CheckpointInterval int
+	// The system-time period after which the latest a checkpoint is created.
+	CheckpointPeriod time.Duration
 }
 
 const (
@@ -117,10 +123,21 @@ func OpenArchiveTrie(
 		return nil, errors.Join(err, head.Close())
 	}
 
+	// Load the checkpointing configuration and set
+	// default values.
 	checkpointInterval := archiveConfig.CheckpointInterval
 	if checkpointInterval <= 0 {
-		checkpointInterval = 1000
+		checkpointInterval = 1_000_000
 	}
+	checkpointPeriod := archiveConfig.CheckpointPeriod
+	if checkpointPeriod <= 0 {
+		checkpointPeriod = 10 * time.Minute
+	}
+
+	// Pick a random time in the past to introduce an offset
+	// between archive instances started at roughly the same time.
+	lastCheckpointTime := time.Now()
+	lastCheckpointTime = lastCheckpointTime.Add(time.Duration(-1 * float64(checkpointPeriod) * rand.Float64()))
 
 	return &ArchiveTrie{
 		head:                  state,
@@ -129,6 +146,8 @@ func OpenArchiveTrie(
 		roots:                 roots,
 		checkpointCoordinator: coordinator,
 		checkpointInterval:    checkpointInterval,
+		checkpointPeriod:      checkpointPeriod,
+		lastCheckpointTime:    lastCheckpointTime,
 	}, nil
 }
 
@@ -220,6 +239,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 		newCheckpointInterval := int(block) / a.checkpointInterval
 		shouldCheckpoint = oldCheckpointInterval != newCheckpointInterval
 	}
+	shouldCheckpoint = shouldCheckpoint || time.Since(a.lastCheckpointTime) > a.checkpointPeriod
 	if shouldCheckpoint {
 		if err := a.createCheckpoint(); err != nil {
 			return err
@@ -421,6 +441,9 @@ func (a *ArchiveTrie) createCheckpoint() error {
 	// The creation of the checkpoint makes the current
 	// state recoverable in case of a crash.
 	_, err := a.checkpointCoordinator.CreateCheckpoint()
+	if err == nil {
+		a.lastCheckpointTime = time.Now()
+	}
 	return err
 }
 
