@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -171,6 +172,24 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 	}
 }
 
+func TestIO_LiveAndArchive_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {
+	b := bytes.NewBuffer(stateMagicNumber)
+	// fill the buffer with zero data to match the size
+	_, err := b.Write(make([]byte, len(archiveMagicNumber)))
+	if err != nil {
+		t.Fatalf("cannot write magic number: %v", err)
+	}
+	err = importArchive(t.TempDir(), t.TempDir(), b)
+	if err == nil {
+		t.Fatal("import must fail")
+	}
+
+	got := err.Error()
+	want := "incorrect input data format; use the `import` or `import-live-db` sub-command with this type of data"
+	if !strings.EqualFold(got, want) {
+		t.Errorf("unexpected error message\ngot: %v\nwant:%v", got, want)
+	}
+}
 func fillTestBlocksIntoArchive(t *testing.T, archive *mpt.ArchiveTrie) (blockHeight int) {
 
 	addr1 := common.Address{1}

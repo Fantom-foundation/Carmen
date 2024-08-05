@@ -229,7 +229,11 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return root, hash, err
 	} else if !bytes.Equal(buffer, stateMagicNumber) {
-		return root, hash, fmt.Errorf("invalid format, wrong magic number")
+		// Provide an explicit warning to the user if instead of a live state dump an archive dump was provided
+		if bytes.Contains(buffer, archiveMagicNumber[:len(stateMagicNumber)]) {
+			return root, hash, fmt.Errorf("incorrect input data format use the `import-archive` sub-command  with this type of data")
+		}
+		return root, hash, errors.New("invalid format, unknown magic number")
 	}
 
 	// Check the version number.
