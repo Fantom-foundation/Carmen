@@ -544,7 +544,7 @@ func ExampleHistoricBlockContext_Export() {
 		log.Fatalf("cannot add block: %v", err)
 	}
 
-	// block wait until the archive is in sync
+	// flush to sync archive up to latest block
 	if err := db.Flush(); err != nil {
 		log.Fatalf("cannot flush: %v", err)
 	}
@@ -568,7 +568,7 @@ func ExampleHistoricBlockContext_Export() {
 		log.Fatalf("cannot remove dir: %v", err)
 	}
 
-	importedDbPath := "imported_carmen"
+	importedDbPath := filepath.Join(os.TempDir(), "imported_carmen")
 	liveDbLocation := filepath.Join(importedDbPath, "live")
 
 	err = io.ImportLiveDb(liveDbLocation, b)

@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/Fantom-foundation/Carmen/go/state/gostate"
-	"golang.org/x/exp/slices"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -2167,12 +2167,7 @@ func TestDatabase_GetMemoryFootprint(t *testing.T) {
 }
 
 func TestDatabase_Export(t *testing.T) {
-	// We need file-based database
-	testConfig.Variant = Variant(gostate.VariantGoFile)
-
-	testNonArchiveConfig = testConfig
-	testNonArchiveConfig.Archive = Archive(state.NoArchive)
-
+	// Create a test archive from which we export LiveDB
 	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -2229,7 +2224,11 @@ func TestDatabase_Export(t *testing.T) {
 		t.Fatalf("cannot import live db: %v", err)
 	}
 
-	importedDb, err := OpenDatabase(importedDbPath, testNonArchiveConfig, nil)
+	// To import, we need a file-based LiveDB
+	cfg := testNonArchiveConfig
+	cfg.Variant = Variant(gostate.VariantGoFile)
+
+	importedDb, err := OpenDatabase(importedDbPath, cfg, nil)
 	if err != nil {
 		t.Fatalf("cannot open imported database: %v", err)
 	}

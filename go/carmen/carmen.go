@@ -201,12 +201,12 @@ type HistoricBlockContext interface {
 	// otherwise, the proof is returned.
 	GetProof(address Address, keys ...Key) (WitnessProof, error)
 
-	// Export writes data LiveDB for given block into out.
-	// Data created by exported can be used to sync a fresh
+	// Export writes a LiveDB data dump for the given block into out.
+	// The resulting data can be used to sync a fresh
 	// LiveDB to a certain block.
-	// Cancelling given ctx will gracefully cancel the export.
-	// Bear in mind that cancelling the interrupt will result
-	// in returning error interrupt.ErrCanceled.
+	// Cancelling the given ctx will gracefully stop the export.
+	// Bear in mind that cancelling the context will result
+	// in returning an error interrupt.ErrCanceled.
 	Export(ctx context.Context, out io.Writer) (Hash, error)
 
 	// Close releases resources held by this context. All modifications made

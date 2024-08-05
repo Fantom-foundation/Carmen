@@ -54,16 +54,18 @@ const (
 	EthereumHash = HashType(0)
 )
 
-func NewExportableArchiveTrie(trie *mpt.ArchiveTrie, block uint64) MptStateVisitor {
+// NewExportableArchiveTrie allows visiting mpt.ArchiveTrie at given block
+// and getting its properties such as Code Hashes or Root Hash.
+func NewExportableArchiveTrie(trie *mpt.ArchiveTrie, block uint64) mptStateVisitor {
 	return exportableArchiveTrie{
 		trie:  trie,
 		block: block,
 	}
 }
 
-// MptStateVisitor is an interface for Tries that allows for visiting the Trie nodes
+// mptStateVisitor is an interface for Tries that allows for visiting the Trie nodes
 // and furthermore getting its properties such as a root hash and contract codes.
-type MptStateVisitor interface {
+type mptStateVisitor interface {
 	// Visit allows for traverse the whole trie.
 	Visit(visitor mpt.NodeVisitor) error
 	// GetHash returns the hash of the represented Trie.
@@ -140,7 +142,7 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 }
 
 // ExportLive exports given db into out.
-func ExportLive(ctx context.Context, db MptStateVisitor, out io.Writer) (common.Hash, error) {
+func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.Hash, error) {
 	// Start with the magic number.
 	if _, err := out.Write(stateMagicNumber); err != nil {
 		return common.Hash{}, err
@@ -368,7 +370,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 
 // getReferencedCodes returns a map of codes referenced by accounts in the
 // given database. The map is indexed by the code hash.
-func getReferencedCodes(db MptStateVisitor) (map[common.Hash][]byte, error) {
+func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
 	codes := make(map[common.Hash][]byte)
 	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		if n, ok := node.(*mpt.AccountNode); ok {
