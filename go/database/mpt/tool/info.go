@@ -78,13 +78,19 @@ func info(context *cli.Context) error {
 			return fmt.Errorf("error closing forest: %v", err)
 		}
 	} else {
-		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config, mpt.NodeCacheConfig{})
+		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)
+
+			checkpoint, err := mpt.GetCheckpointBlock(dir)
+			if err != nil {
+				fmt.Printf("\tCheckpoint block:  %v\n", err)
+			} else {
+				fmt.Printf("\tCheckpoint block:  %d\n", checkpoint)
+			}
 			return nil
-		} else {
-			fmt.Printf("\tCan be opened:     Yes\n")
 		}
+		fmt.Printf("\tCan be opened:     Yes\n")
 
 		height, empty, err := archive.GetBlockHeight()
 		if err != nil {
@@ -93,6 +99,13 @@ func info(context *cli.Context) error {
 			fmt.Printf("\tBlock height:      empty\n")
 		} else {
 			fmt.Printf("\tBlock height:      %d\n", height)
+		}
+
+		checkpoint, err := mpt.GetCheckpointBlock(dir)
+		if err != nil {
+			fmt.Printf("\tCheckpoint block:  %v\n", err)
+		} else {
+			fmt.Printf("\tCheckpoint block:  %d\n", checkpoint)
 		}
 
 		if err := archive.Close(); err != nil {

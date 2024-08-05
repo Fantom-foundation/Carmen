@@ -22,6 +22,7 @@ package stock
 import (
 	reflect "reflect"
 
+	checkpoint "github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	common "github.com/Fantom-foundation/Carmen/go/common"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -49,6 +50,20 @@ func (m *MockStock[I, V]) EXPECT() *MockStockMockRecorder[I, V] {
 	return m.recorder
 }
 
+// Abort mocks base method.
+func (m *MockStock[I, V]) Abort(arg0 checkpoint.Checkpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Abort", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Abort indicates an expected call of Abort.
+func (mr *MockStockMockRecorder[I, V]) Abort(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Abort", reflect.TypeOf((*MockStock[I, V])(nil).Abort), arg0)
+}
+
 // Close mocks base method.
 func (m *MockStock[I, V]) Close() error {
 	m.ctrl.T.Helper()
@@ -61,6 +76,20 @@ func (m *MockStock[I, V]) Close() error {
 func (mr *MockStockMockRecorder[I, V]) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockStock[I, V])(nil).Close))
+}
+
+// Commit mocks base method.
+func (m *MockStock[I, V]) Commit(arg0 checkpoint.Checkpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Commit", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Commit indicates an expected call of Commit.
+func (mr *MockStockMockRecorder[I, V]) Commit(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockStock[I, V])(nil).Commit), arg0)
 }
 
 // Delete mocks base method.
@@ -135,6 +164,20 @@ func (mr *MockStockMockRecorder[I, V]) GetMemoryFootprint() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemoryFootprint", reflect.TypeOf((*MockStock[I, V])(nil).GetMemoryFootprint))
 }
 
+// GuaranteeCheckpoint mocks base method.
+func (m *MockStock[I, V]) GuaranteeCheckpoint(arg0 checkpoint.Checkpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GuaranteeCheckpoint", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GuaranteeCheckpoint indicates an expected call of GuaranteeCheckpoint.
+func (mr *MockStockMockRecorder[I, V]) GuaranteeCheckpoint(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GuaranteeCheckpoint", reflect.TypeOf((*MockStock[I, V])(nil).GuaranteeCheckpoint), arg0)
+}
+
 // New mocks base method.
 func (m *MockStock[I, V]) New() (I, error) {
 	m.ctrl.T.Helper()
@@ -148,6 +191,20 @@ func (m *MockStock[I, V]) New() (I, error) {
 func (mr *MockStockMockRecorder[I, V]) New() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockStock[I, V])(nil).New))
+}
+
+// Prepare mocks base method.
+func (m *MockStock[I, V]) Prepare(arg0 checkpoint.Checkpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Prepare", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Prepare indicates an expected call of Prepare.
+func (mr *MockStockMockRecorder[I, V]) Prepare(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockStock[I, V])(nil).Prepare), arg0)
 }
 
 // Set mocks base method.

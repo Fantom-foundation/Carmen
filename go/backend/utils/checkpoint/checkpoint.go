@@ -41,9 +41,6 @@ type Coordinator interface {
 	// to the new checkpoint. If any participant fails, all participants are reverted
 	// to retain their current checkpoint.
 	CreateCheckpoint() (Checkpoint, error)
-
-	// Restore transitions all participants to the last checkpoint that was created.
-	Restore() error
 }
 
 // Participant engages in a coordinated creation and restoration of
@@ -73,11 +70,31 @@ type Participant interface {
 	// newly created checkpoint and retain the previous checkpoint as the target
 	// for future restore calls.
 	Abort(Checkpoint) error
+}
 
-	// Restore requests this participant to restore the state to the given
-	// checkpoint -- which may be the last previously committed checkpoint or a
-	// prepared checkpoint that has not been aborted or committed yet.
+// Restorer is able to restore a previously created checkpoint for
+// a participating data structure.
+type Restorer interface {
+	// Restore reverts the participant to the given checkpoint. If the participant
+	// is not able to restore to the given checkpoint, an error is returned.
 	Restore(Checkpoint) error
+}
+
+// Restore restores the given participants to the last checkpoint that was created
+// by a coordinator which was using the given directory for tracking checkpoints.
+func Restore(directory string, participants ...Restorer) error {
+	lastCheckpoint, err := readCheckpointFile(filepath.Join(directory, "committed"))
+	if err != nil {
+		return fmt.Errorf("failed to read checkpoint to be restored: %w", err)
+	}
+
+	errs := []error{}
+	for _, p := range participants {
+		if err := p.Restore(lastCheckpoint); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // coordinator implements the CheckpointCoordinator interface using a two-phase
@@ -186,16 +203,6 @@ func (c *coordinator) CreateCheckpoint() (Checkpoint, error) {
 
 func (c *coordinator) GetCurrentCheckpoint() Checkpoint {
 	return c.lastCheckpoint
-}
-
-func (c *coordinator) Restore() error {
-	var errs []error
-	for _, p := range c.participants {
-		if err := p.Restore(c.lastCheckpoint); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
 }
 
 func createCheckpointFile(path string, checkpoint Checkpoint) error {
