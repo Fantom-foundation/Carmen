@@ -26,7 +26,7 @@ carmen_root=$(cd ../go && pwd)
 #--- Script ---#
 ################
 
-command="./build/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 0 "$sync_block""
+command="./build/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 --carmen-cp-interval "$restore_block" 0 "$sync_block""
 
 # Run the command in the background and redirect stdout and stderr to a log file
 log_file="$(pwd)/output.log"
