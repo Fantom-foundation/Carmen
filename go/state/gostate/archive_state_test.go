@@ -209,7 +209,7 @@ func TestArchiveState_Export_ErrorsAreCaught(t *testing.T) {
 func TestArchiveState_Export(t *testing.T) {
 	// Create a small Archive from which we export LiveDB genesis.
 	sourceDir := t.TempDir()
-	trie, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	trie, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestArchiveState_Export(t *testing.T) {
 func TestArchiveState_Export_CanBeCancelled(t *testing.T) {
 	// Create a small Archive from which we export LiveDB genesis.
 	sourceDir := t.TempDir()
-	trie, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	trie, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
