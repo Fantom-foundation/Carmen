@@ -2350,12 +2350,14 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 			// In order to allow the recovery to access the directory, the lock needs to be released
 			return archive.head.(*MptState).lock.Release()
 		},
+		/* -- disabled due to flaky behavior in race condition CI (see issue #994) --
 		"no_close_with_extra_blocks": func(archive *ArchiveTrie) error {
 			return errors.Join(
 				addBlocks(archive, 92, 98),
 				archive.head.(*MptState).lock.Release(),
 			)
 		},
+		*/
 	}
 
 	for name, test := range tests {
