@@ -544,10 +544,7 @@ func (s *Forest) Flush() error {
 	// Get snapshot of set of dirty Node IDs.
 	ids := make([]NodeId, 0, 1<<16)
 	s.nodeCache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
-		handle := node.GetViewHandle()
-		dirty := handle.Get().IsDirty()
-		handle.Release()
-		if dirty {
+		if node.GetUnprotected().IsDirty() {
 			ids = append(ids, id)
 		}
 	})
@@ -574,6 +571,10 @@ func (s *Forest) flushDirtyIds(ids []NodeId) error {
 		if present {
 			handle := node.GetWriteHandle()
 			node := handle.Get()
+			if !node.IsDirty() {
+				handle.Release()
+				continue
+			}
 			err := s.flushNode(id, node)
 			if err == nil {
 				node.MarkClean()
@@ -941,7 +942,7 @@ func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
-		*write.Get().(*AccountNode) = *node
+		write.Get().Reset()
 		write.Release()
 	}
 	return ref, instance.GetWriteHandle(), err
@@ -957,7 +958,7 @@ func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
-		*write.Get().(*BranchNode) = *node
+		write.Get().Reset()
 		write.Release()
 	}
 	return ref, instance.GetWriteHandle(), err
@@ -973,7 +974,7 @@ func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], err
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
-		*write.Get().(*ExtensionNode) = *node
+		write.Get().Reset()
 		write.Release()
 	}
 	return ref, instance.GetWriteHandle(), err
@@ -989,7 +990,7 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
-		*write.Get().(*ValueNode) = *node
+		write.Get().Reset()
 		write.Release()
 	}
 	return ref, instance.GetWriteHandle(), err

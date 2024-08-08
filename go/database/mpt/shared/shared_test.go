@@ -46,6 +46,14 @@ func TestShared_LifeCycle(t *testing.T) {
 	read3.Release()
 }
 
+func TestShared_GetUnprotectedReturnsSharedValue(t *testing.T) {
+	var data = new(int)
+	shared := MakeShared(data)
+	if got, want := shared.GetUnprotected(), data; got != want {
+		t.Errorf("unexpected shared value, wanted %v, got %v", want, got)
+	}
+}
+
 func TestShared_ReadAccessDoesNotBlocksReadAccess(t *testing.T) {
 	shared := MakeShared(10)
 	read := shared.GetReadHandle()
