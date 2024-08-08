@@ -15,7 +15,6 @@
 //
 //	mockgen -source state.go -destination state_mocks.go -package mpt
 //
-
 // Package mpt is a generated GoMock package.
 package mpt
 
@@ -25,6 +24,7 @@ import (
 	backend "github.com/Fantom-foundation/Carmen/go/backend"
 	common "github.com/Fantom-foundation/Carmen/go/common"
 	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
+	shared "github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -264,6 +264,93 @@ func (m *MockDatabase) VisitTrie(rootRef *NodeReference, visitor NodeVisitor) er
 func (mr *MockDatabaseMockRecorder) VisitTrie(rootRef, visitor any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VisitTrie", reflect.TypeOf((*MockDatabase)(nil).VisitTrie), rootRef, visitor)
+}
+
+// getConfig mocks base method.
+func (m *MockDatabase) getConfig() MptConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getConfig")
+	ret0, _ := ret[0].(MptConfig)
+	return ret0
+}
+
+// getConfig indicates an expected call of getConfig.
+func (mr *MockDatabaseMockRecorder) getConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getConfig", reflect.TypeOf((*MockDatabase)(nil).getConfig))
+}
+
+// getHashFor mocks base method.
+func (m *MockDatabase) getHashFor(arg0 *NodeReference) (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getHashFor", arg0)
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getHashFor indicates an expected call of getHashFor.
+func (mr *MockDatabaseMockRecorder) getHashFor(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHashFor", reflect.TypeOf((*MockDatabase)(nil).getHashFor), arg0)
+}
+
+// getReadAccess mocks base method.
+func (m *MockDatabase) getReadAccess(arg0 *NodeReference) (shared.ReadHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getReadAccess", arg0)
+	ret0, _ := ret[0].(shared.ReadHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getReadAccess indicates an expected call of getReadAccess.
+func (mr *MockDatabaseMockRecorder) getReadAccess(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getReadAccess", reflect.TypeOf((*MockDatabase)(nil).getReadAccess), arg0)
+}
+
+// getViewAccess mocks base method.
+func (m *MockDatabase) getViewAccess(arg0 *NodeReference) (shared.ViewHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getViewAccess", arg0)
+	ret0, _ := ret[0].(shared.ViewHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getViewAccess indicates an expected call of getViewAccess.
+func (mr *MockDatabaseMockRecorder) getViewAccess(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getViewAccess", reflect.TypeOf((*MockDatabase)(nil).getViewAccess), arg0)
+}
+
+// hashAddress mocks base method.
+func (m *MockDatabase) hashAddress(address common.Address) common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "hashAddress", address)
+	ret0, _ := ret[0].(common.Hash)
+	return ret0
+}
+
+// hashAddress indicates an expected call of hashAddress.
+func (mr *MockDatabaseMockRecorder) hashAddress(address any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "hashAddress", reflect.TypeOf((*MockDatabase)(nil).hashAddress), address)
+}
+
+// hashKey mocks base method.
+func (m *MockDatabase) hashKey(arg0 common.Key) common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "hashKey", arg0)
+	ret0, _ := ret[0].(common.Hash)
+	return ret0
+}
+
+// hashKey indicates an expected call of hashKey.
+func (mr *MockDatabaseMockRecorder) hashKey(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "hashKey", reflect.TypeOf((*MockDatabase)(nil).hashKey), arg0)
 }
 
 // setHashesFor mocks base method.

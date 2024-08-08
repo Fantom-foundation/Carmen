@@ -340,13 +340,16 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 }
 
 func (a *ArchiveTrie) CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error) {
-	if a.nodeSource.getConfig().Name != "S5-Archive" {
+	if !a.nodeSource.getConfig().UseHashedPaths {
 		return nil, archive.ErrWitnessProofNotSupported
 	}
-	a.rootsMutex.Lock()
-	ref := a.roots.roots[block].NodeRef
-	a.rootsMutex.Unlock()
-	return CreateWitnessProof(a.nodeSource, &ref, address, keys...)
+
+	view, err := a.getView(block)
+	if err != nil {
+		return nil, err
+	}
+
+	return view.CreateWitnessProof(address, keys...)
 }
 
 // GetDiff computes the difference between the given source and target blocks.
