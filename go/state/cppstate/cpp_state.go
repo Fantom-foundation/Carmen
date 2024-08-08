@@ -21,12 +21,15 @@ package cppstate
 */
 import "C"
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
+	"io"
 	"os"
 	"path/filepath"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -283,6 +286,10 @@ func (cs *CppState) Check() error {
 
 func (cs *CppState) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
 	panic("not implemented")
+}
+
+func (cs *CppState) Export(context.Context, io.Writer) (common.Hash, error) {
+	return common.Hash{}, state.ExportNotSupported
 }
 
 type objectId struct {

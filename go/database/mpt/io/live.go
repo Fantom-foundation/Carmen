@@ -54,6 +54,15 @@ const (
 	EthereumHash = HashType(0)
 )
 
+// NewExportableArchiveTrie allows visiting mpt.ArchiveTrie at given block
+// and getting its properties such as Code Hashes or Root Hash.
+func NewExportableArchiveTrie(trie *mpt.ArchiveTrie, block uint64) mptStateVisitor {
+	return exportableArchiveTrie{
+		trie:  trie,
+		block: block,
+	}
+}
+
 // mptStateVisitor is an interface for Tries that allows for visiting the Trie nodes
 // and furthermore getting its properties such as a root hash and contract codes.
 type mptStateVisitor interface {
@@ -102,7 +111,8 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	}
 	defer db.Close()
 
-	return exportLive(ctx, db, out)
+	_, err = ExportLive(ctx, db, out)
+	return err
 }
 
 // ExportBlockFromArchive exports LiveDB genesis for a single given block from an Archive.
@@ -123,49 +133,50 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 	}
 
 	defer archive.Close()
-	return exportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+	_, err = ExportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+	return err
 }
 
-// exportLive exports given db into out.
-func exportLive(ctx context.Context, db mptStateVisitor, out io.Writer) error {
+// ExportLive exports given db into out.
+func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.Hash, error) {
 	// Start with the magic number.
 	if _, err := out.Write(stateMagicNumber); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Add a version number.
 	if _, err := out.Write([]byte{formatVersion}); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Continue with the full state hash.
 	hash, err := db.GetHash()
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	if _, err := out.Write([]byte{byte('H'), byte(EthereumHash)}); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	if _, err := out.Write(hash[:]); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Write out codes.
 	codes, err := getReferencedCodes(db)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve codes: %v", err)
+		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %v", err)
 	}
 	if err := writeCodes(codes, out); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Write out all accounts and values.
 	visitor := exportVisitor{out: out, ctx: ctx}
 	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
-		return fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
+		return common.Hash{}, fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
 	}
 
-	return nil
+	return hash, nil
 }
 
 // ImportLiveDb creates a fresh StateDB in the given directory and fills it
