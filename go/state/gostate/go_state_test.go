@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -834,4 +835,36 @@ func runAddBlock(block uint64, stateDB state.StateDB) {
 	stateDB.SetNonce(addr, 1)
 	stateDB.EndTransaction()
 	stateDB.EndBlock(block)
+}
+
+func TestState_NotReleasingNonCommittableStateDbInstancesDoesNotLeakResources(t *testing.T) {
+	for _, config := range initGoStates() {
+		t.Run(config.name(), func(t *testing.T) {
+			t.Parallel()
+			s, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to create state; %s", err)
+			}
+			defer s.Close()
+
+			cleared := false
+			db := state.CreateNonCommittableStateDBUsing(s)
+			runtime.SetFinalizer(db, func(any) {
+				cleared = true
+			})
+			db.SetNonce(common.Address{}, 42)
+
+			// release is deliberately skipped
+			db = nil
+
+			// The GC is run multiple times since the finalizer may not be called immediately.
+			for i := 0; i < 10; i++ {
+				runtime.GC()
+			}
+
+			if !cleared {
+				t.Errorf("state DB instance was not freed by garbage collector")
+			}
+		})
+	}
 }
