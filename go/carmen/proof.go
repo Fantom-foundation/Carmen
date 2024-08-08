@@ -12,13 +12,17 @@ package carmen
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
+// Bytes is an alias for immutable.Bytes.
+type Bytes = immutable.Bytes
+
 // CreateWitnessProofFromNodes creates a witness proof from a list of strings.
 // Each string is an RLP node of the witness proof.
-func CreateWitnessProofFromNodes(elements ...string) WitnessProof {
+func CreateWitnessProofFromNodes(elements ...Bytes) WitnessProof {
 	proof := mpt.CreateWitnessProofFromNodes(elements)
 	return witnessProof{proof}
 }
@@ -42,7 +46,7 @@ type WitnessProof interface {
 	IsValid() bool
 
 	// GetElements returns serialised elements of the witness proof.
-	GetElements() []string
+	GetElements() []Bytes
 
 	// GetStorageElements returns serialised elements of the witness proof for a given account
 	// and selected storage locations from this proof.
@@ -52,7 +56,7 @@ type WitnessProof interface {
 	// This method returns a copy that contains only the data necessary for proving storage keys.
 	// The third return parameter indicates whether everything that was requested could be covered.
 	// If so, it is set to true, otherwise it is set to false.
-	GetStorageElements(root Hash, address Address, keys ...Key) ([]string, Hash, bool)
+	GetStorageElements(root Hash, address Address, keys ...Key) ([]Bytes, Hash, bool)
 
 	// GetBalance extracts a balance from the witness proof for the input root hash and the address.
 	// If the witness proof contains the requested account for the input address for the given root hash, it returns its balance.
@@ -109,11 +113,11 @@ func (w witnessProof) Extract(root Hash, address Address, keys ...Key) (WitnessP
 	return witnessProof{proof}, complete
 }
 
-func (w witnessProof) GetElements() []string {
+func (w witnessProof) GetElements() []Bytes {
 	return w.proof.GetElements()
 }
 
-func (w witnessProof) GetStorageElements(root Hash, address Address, keys ...Key) ([]string, Hash, bool) {
+func (w witnessProof) GetStorageElements(root Hash, address Address, keys ...Key) ([]Bytes, Hash, bool) {
 	commonKeys := make([]common.Key, len(keys))
 	for i, k := range keys {
 		commonKeys[i] = common.Key(k)

@@ -11,32 +11,37 @@
 package carmen
 
 import (
-	"slices"
-	"sort"
+	"bytes"
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
+	"golang.org/x/exp/slices"
 	"testing"
 )
 
 func TestProof_CreateWitnessProofFromNodes(t *testing.T) {
 	const N = 10
 
-	nodes := make([]string, 0, N)
-	var str string
+	wantElements := make([]Bytes, 0, N)
+	b := make([]byte, 0, N)
 	for i := 0; i < N; i++ {
-		str += string(byte(i))
-		nodes = append(nodes, str)
+		b = append(b, byte(i))
+		wantElements = append(wantElements, immutable.NewBytes(b))
 	}
 
 	// proof will not be valid, but it can be still serialised back and forth
-	proof := CreateWitnessProofFromNodes(nodes...)
+	proof := CreateWitnessProofFromNodes(wantElements...)
 	if proof.IsValid() {
 		t.Errorf("proof should be invalid")
 	}
-	recovered := proof.GetElements()
+	gotElements := proof.GetElements()
 
-	sort.Strings(nodes)
-	sort.Strings(recovered)
+	slices.SortFunc(gotElements, func(a, b Bytes) bool {
+		return bytes.Compare(a.ToBytes(), b.ToBytes()) < 0
+	})
+	slices.SortFunc(wantElements, func(a, b Bytes) bool {
+		return bytes.Compare(a.ToBytes(), b.ToBytes()) < 0
+	})
 
-	if got, want := recovered, nodes; !slices.Equal(got, want) {
+	if got, want := gotElements, wantElements; !slices.Equal(got, want) {
 		t.Errorf("unexpected proof elements: got %v, want %v", got, want)
 	}
 }
