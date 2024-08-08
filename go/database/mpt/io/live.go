@@ -68,7 +68,6 @@ type mptStateVisitor interface {
 type exportableArchiveTrie struct {
 	trie  *mpt.ArchiveTrie
 	block uint64
-	codes map[common.Hash][]byte
 }
 
 func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
@@ -80,10 +79,7 @@ func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
 }
 
 func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
-	if e.codes == nil || len(e.codes) == 0 {
-		e.codes = e.trie.GetCodes()
-	}
-	return e.codes[hash]
+	return e.trie.GetCodeForHash(hash)
 }
 
 // Export opens a LiveDB instance retained in the given directory and writes
