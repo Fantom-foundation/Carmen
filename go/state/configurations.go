@@ -13,6 +13,7 @@ package state
 import (
 	"fmt"
 	"maps"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -23,12 +24,14 @@ import (
 
 // Parameters struct defining configuration parameters for state instances.
 type Parameters struct {
-	Variant      Variant
-	Schema       Schema
-	Archive      ArchiveType
-	Directory    string
-	LiveCache    int64 // bytes, approximate, supported only by S5 now
-	ArchiveCache int64 // bytes, approximate, supported only by S5 now
+	Variant            Variant
+	Schema             Schema
+	Archive            ArchiveType
+	Directory          string
+	LiveCache          int64 // bytes, approximate, supported only by S5 now
+	ArchiveCache       int64 // bytes, approximate, supported only by S5 now
+	CheckpointInterval int   // in blocks
+	CheckpointPeriod   time.Duration
 }
 
 const (

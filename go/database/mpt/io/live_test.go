@@ -365,3 +365,22 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 	}
 
 }
+
+func TestIO_Live_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {
+	b := bytes.NewBuffer(archiveMagicNumber)
+	// fill the buffer with zero data to match the size
+	_, err := b.Write(make([]byte, len(stateMagicNumber)))
+	if err != nil {
+		t.Fatalf("cannot write magic number: %v", err)
+	}
+	_, _, err = runImport(t.TempDir(), b, mpt.MptConfig{})
+	if err == nil {
+		t.Fatal("import must fail")
+	}
+
+	got := err.Error()
+	want := "incorrect input data format use the `import-archive` sub-command  with this type of data"
+	if !strings.EqualFold(got, want) {
+		t.Errorf("unexpected error message\ngot: %v\nwant:%v", got, want)
+	}
+}
