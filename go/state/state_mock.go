@@ -20,6 +20,8 @@
 package state
 
 import (
+	context "context"
+	io "io"
 	reflect "reflect"
 
 	backend "github.com/Fantom-foundation/Carmen/go/backend"
@@ -142,6 +144,21 @@ func (m *MockState) Exists(address common.Address) (bool, error) {
 func (mr *MockStateMockRecorder) Exists(address any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockState)(nil).Exists), address)
+}
+
+// Export mocks base method.
+func (m *MockState) Export(ctx context.Context, out io.Writer) (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Export", ctx, out)
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Export indicates an expected call of Export.
+func (mr *MockStateMockRecorder) Export(ctx, out any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Export", reflect.TypeOf((*MockState)(nil).Export), ctx, out)
 }
 
 // Flush mocks base method.

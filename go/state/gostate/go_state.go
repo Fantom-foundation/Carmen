@@ -11,15 +11,17 @@
 package gostate
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
+	"io"
 	"runtime"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"golang.org/x/crypto/sha3"
 )
@@ -366,6 +368,10 @@ func (s *GoState) GetProof() (backend.Proof, error) {
 		proofs = append(proofs, proof)
 	}
 	return backend.GetComposedProof(proofs), nil
+}
+
+func (s *GoState) Export(context.Context, io.Writer) (common.Hash, error) {
+	return common.Hash{}, state.ExportNotSupported
 }
 
 func (s *GoState) CreateSnapshot() (backend.Snapshot, error) {

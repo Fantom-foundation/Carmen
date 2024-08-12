@@ -11,10 +11,13 @@
 package carmen
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
+	"io"
 	"sync"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
@@ -158,6 +161,21 @@ func (c *archiveBlockContext) GetProof(address Address, keys ...Key) (WitnessPro
 	}
 
 	return witnessProof{proof}, nil
+}
+
+func (c *archiveBlockContext) Export(ctx context.Context, out io.Writer) (Hash, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.db == nil {
+		return Hash{}, fmt.Errorf("cannot export from invalid block context")
+	}
+
+	h, err := c.archiveState.Export(ctx, out)
+	if err != nil {
+		return Hash{}, err
+	}
+	return Hash(h), nil
 }
 
 func (c *archiveBlockContext) Close() error {
