@@ -568,7 +568,10 @@ func ExampleHistoricBlockContext_Export() {
 		log.Fatalf("cannot remove dir: %v", err)
 	}
 
-	importedDbPath := filepath.Join(os.TempDir(), "imported_carmen")
+	importedDbPath, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temp dir: %v", err)
+	}
 	liveDbLocation := filepath.Join(importedDbPath, "live")
 
 	err = io.ImportLiveDb(liveDbLocation, b)
