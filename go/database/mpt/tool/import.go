@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	mptIo "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
@@ -25,33 +24,24 @@ import (
 )
 
 var ImportLiveDbCmd = cli.Command{
-	Action:    doLiveDbImport,
+	Action:    addPerformanceDiagnoses(doLiveDbImport),
 	Name:      "import-live-db",
 	Usage:     "imports a LiveDB instance from a file",
 	ArgsUsage: "<source-file> <target director>",
-	Flags: []cli.Flag{
-		&cpuProfileFlag,
-	},
 }
 
 var ImportArchiveCmd = cli.Command{
-	Action:    doArchiveImport,
+	Action:    addPerformanceDiagnoses(doArchiveImport),
 	Name:      "import-archive",
 	Usage:     "imports an Archive instance from a file",
 	ArgsUsage: "<source-file> <target director>",
-	Flags: []cli.Flag{
-		&cpuProfileFlag,
-	},
 }
 
 var ImportLiveAndArchiveCmd = cli.Command{
-	Action:    doLiveAndArchiveImport,
+	Action:    addPerformanceDiagnoses(doLiveAndArchiveImport),
 	Name:      "import",
 	Usage:     "imports both LiveDB and Archive instance from a file",
 	ArgsUsage: "<source-file> <target director>",
-	Flags: []cli.Flag{
-		&cpuProfileFlag,
-	},
 }
 
 func doLiveDbImport(context *cli.Context) error {
@@ -72,15 +62,6 @@ func doImport(context *cli.Context, runImport func(directory string, in io.Reade
 	}
 	src := context.Args().Get(0)
 	dir := context.Args().Get(1)
-
-	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
-	if strings.TrimSpace(cpuProfileFileName) != "" {
-		if err := startCpuProfiler(cpuProfileFileName); err != nil {
-			return err
-		}
-		defer stopCpuProfiler()
-	}
 
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("error creating output directory: %v", err)

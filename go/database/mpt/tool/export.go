@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
@@ -27,12 +26,11 @@ import (
 )
 
 var ExportCmd = cli.Command{
-	Action:    doExport,
+	Action:    addPerformanceDiagnoses(doExport),
 	Name:      "export",
 	Usage:     "exports a LiveDB or Archive instance into a file",
 	ArgsUsage: "<db director> <target-file>",
 	Flags: []cli.Flag{
-		&cpuProfileFlag,
 		&targetBlockFlag,
 	},
 }
@@ -43,15 +41,6 @@ func doExport(context *cli.Context) error {
 	}
 	dir := context.Args().Get(0)
 	trg := context.Args().Get(1)
-
-	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
-	if strings.TrimSpace(cpuProfileFileName) != "" {
-		if err := startCpuProfiler(cpuProfileFileName); err != nil {
-			return err
-		}
-		defer stopCpuProfiler()
-	}
 
 	// check the type of target database
 	mptInfo, err := io.CheckMptDirectoryAndGetInfo(dir)

@@ -19,7 +19,7 @@ import (
 )
 
 var Info = cli.Command{
-	Action: info,
+	Action: addPerformanceDiagnoses(info),
 	Name:   "info",
 	Usage:  "lists information about a Carmen MTP state repository",
 	Flags: []cli.Flag{

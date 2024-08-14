@@ -23,7 +23,7 @@ import (
 )
 
 var InitArchive = cli.Command{
-	Action:    doArchiveInit,
+	Action:    addPerformanceDiagnoses(doArchiveInit),
 	Name:      "init-archive",
 	Usage:     "initializes an Archive instance from a file",
 	ArgsUsage: "<source-file> <archive target director>",

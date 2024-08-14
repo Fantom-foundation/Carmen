@@ -12,7 +12,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
@@ -21,28 +20,16 @@ import (
 )
 
 var Verify = cli.Command{
-	Action:    verify,
+	Action:    addPerformanceDiagnoses(verify),
 	Name:      "verify",
 	Usage:     "verifies the consistency of an MPT",
 	ArgsUsage: "<director>",
-	Flags: []cli.Flag{
-		&cpuProfileFlag,
-	},
 }
 
 func verify(context *cli.Context) error {
 	// parse the directory argument
 	if context.Args().Len() != 1 {
 		return fmt.Errorf("missing directory storing state")
-	}
-
-	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
-	if strings.TrimSpace(cpuProfileFileName) != "" {
-		if err := startCpuProfiler(cpuProfileFileName); err != nil {
-			return err
-		}
-		defer stopCpuProfiler()
 	}
 
 	dir := context.Args().Get(0)
