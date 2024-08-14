@@ -25,6 +25,8 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
+//go:generate mockgen -source live.go -destination live_mocks.go -package io
+
 // This file provides a pair of import and export functions capable of
 // serializing the content of a LiveDB into a single, payload-only data
 // blob with build-in consistency check which can be utilized for safely
@@ -58,20 +60,46 @@ const (
 // and furthermore getting its properties such as a root hash and contract codes.
 type mptStateVisitor interface {
 	// Visit allows for traverse the whole trie.
-	Visit(visitor mpt.NodeVisitor) error
+	// If pruneStorage is true, the storage nodes are not visited.
+	Visit(visitor noResponseNodeVisitor, pruneStorage bool) error
 	// GetHash returns the hash of the represented Trie.
 	GetHash() (common.Hash, error)
 	// GetCodeForHash returns byte code for given hash.
 	GetCodeForHash(common.Hash) []byte
 }
 
+// noResponseNodeVisitor is a visitor for nodes.
+type noResponseNodeVisitor interface {
+	// Visit is called for each node encountered while visiting a trie.
+	Visit(mpt.Node, mpt.NodeInfo) error
+}
+
+func makeNoResponseVisitor(visit func(mpt.Node, mpt.NodeInfo) error) noResponseNodeVisitor {
+	return &noResponseNodeVisitorFunc{visit}
+}
+
+type noResponseNodeVisitorFunc struct {
+	visit func(mpt.Node, mpt.NodeInfo) error
+}
+
+func (v *noResponseNodeVisitorFunc) Visit(node mpt.Node, info mpt.NodeInfo) error {
+	return v.visit(node, info)
+}
+
+// ExportableArchiveTrie is a wrapper for an ArchiveTrie instance that allows for
+// exporting its content by the ability to visit archive trie nodes.
 type exportableArchiveTrie struct {
 	trie  *mpt.ArchiveTrie
 	block uint64
 }
 
-func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
-	return e.trie.VisitTrie(e.block, visitor)
+func (e exportableArchiveTrie) Visit(visitor noResponseNodeVisitor, pruneStorage bool) error {
+	root, err := e.trie.GetBlockRoot(e.block)
+	if err != nil {
+		return err
+	}
+
+	return visitAll(e.trie.Directory(), root, visitor, pruneStorage)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
@@ -80,6 +108,44 @@ func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
 
 func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
 	return e.trie.GetCodeForHash(hash)
+}
+
+// exportableLiveTrie is a wrapper for a LiveDB instance that allows for
+// exporting its content by the ability to visit archive trie nodes.
+type exportableLiveTrie struct {
+	db *mpt.MptState
+}
+
+func (e *exportableLiveTrie) Visit(visitor noResponseNodeVisitor, pruneStorage bool) error {
+	adapter := &noResponseVisitorAdapter{visitor: visitor, pruneStorage: pruneStorage}
+	return errors.Join(e.db.Visit(adapter), adapter.err)
+}
+
+func (e *exportableLiveTrie) GetHash() (common.Hash, error) {
+	return e.db.GetHash()
+}
+
+func (e *exportableLiveTrie) GetCodeForHash(hash common.Hash) []byte {
+	return e.db.GetCodeForHash(hash)
+}
+
+type noResponseVisitorAdapter struct {
+	visitor      noResponseNodeVisitor
+	pruneStorage bool
+	err          error
+}
+
+func (n *noResponseVisitorAdapter) Visit(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+	if err := n.visitor.Visit(node, info); err != nil {
+		n.err = err
+		return mpt.VisitResponseAbort
+	}
+	if n.pruneStorage {
+		if _, ok := node.(*mpt.AccountNode); ok {
+			return mpt.VisitResponsePrune
+		}
+	}
+	return mpt.VisitResponseContinue
 }
 
 // Export opens a LiveDB instance retained in the given directory and writes
@@ -103,7 +169,7 @@ func Export(ctx context.Context, logger *Log, directory string, out io.Writer) e
 	}
 	defer db.Close()
 
-	_, err = ExportLive(ctx, logger, db, out)
+	_, err = ExportLive(ctx, logger, &exportableLiveTrie{db: db}, out)
 	return err
 }
 
@@ -191,8 +257,8 @@ func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Wri
 	logger.Print("exporting accounts and values")
 	progress := logger.NewProgressTracker("exported %d accounts, %.2f accounts/s", 1_000_000)
 	visitor := exportVisitor{out: out, ctx: ctx, progress: progress}
-	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
-		return common.Hash{}, fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
+	if err := db.Visit(&visitor, false); err != nil {
+		return common.Hash{}, fmt.Errorf("failed exporting content: %v", err)
 	}
 
 	return hash, nil
@@ -394,10 +460,10 @@ func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig
 func getReferencedCodes(ctxt context.Context, logger *Log, db mptStateVisitor) (map[common.Hash][]byte, error) {
 	progress := logger.NewProgressTracker("retrieved %d accounts, %.2f accounts/s", 1000_000)
 	codes := make(map[common.Hash][]byte)
-	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+	err := db.Visit(makeNoResponseVisitor(func(node mpt.Node, info mpt.NodeInfo) error {
 		if n, ok := node.(*mpt.AccountNode); ok {
 			if interrupt.IsCancelled(ctxt) {
-				return mpt.VisitResponseAbort
+				return interrupt.ErrCanceled
 			}
 			progress.Step(1)
 			codeHash := n.Info().CodeHash
@@ -405,14 +471,9 @@ func getReferencedCodes(ctxt context.Context, logger *Log, db mptStateVisitor) (
 			if len(code) > 0 {
 				codes[codeHash] = code
 			}
-			return mpt.VisitResponsePrune // < no need to visit the storage trie
 		}
-		return mpt.VisitResponseContinue
-	}))
-
-	if interrupt.IsCancelled(ctxt) {
-		err = interrupt.ErrCanceled
-	}
+		return nil
+	}), true)
 
 	return codes, err
 }
@@ -421,16 +482,14 @@ func getReferencedCodes(ctxt context.Context, logger *Log, db mptStateVisitor) (
 // account and value node information to a given output writer.
 type exportVisitor struct {
 	out      io.Writer
-	err      error
 	ctx      context.Context
 	progress *ProgressLogger
 }
 
-func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
+func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) error {
 	// outside call to interrupt
 	if interrupt.IsCancelled(e.ctx) {
-		e.err = interrupt.ErrCanceled
-		return mpt.VisitResponseAbort
+		return interrupt.ErrCanceled
 	}
 	switch n := node.(type) {
 	case *mpt.AccountNode:
@@ -438,43 +497,35 @@ func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 		addr := n.Address()
 		info := n.Info()
 		if _, err := e.out.Write([]byte{byte('A')}); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
+			return err
 		}
 		if _, err := e.out.Write(addr[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
+			return err
 		}
 		b := info.Balance.Bytes32()
 		if _, err := e.out.Write(b[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
+			return err
 		}
 		if _, err := e.out.Write(info.Nonce[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
+			return err
 		}
 		if _, err := e.out.Write(info.CodeHash[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
+			return err
 		}
 	case *mpt.ValueNode:
 		key := n.Key()
 		value := n.Value()
 		if _, err := e.out.Write([]byte{byte('S')}); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
+			return err
 		}
 		if _, err := e.out.Write(key[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
+			return err
 		}
 		if _, err := e.out.Write(value[:]); err != nil {
-			e.err = err
-			return mpt.VisitResponseAbort
+			return err
 		}
 	}
-	return mpt.VisitResponseContinue
+	return nil
 }
 
 func checkEmptyDirectory(directory string) error {
