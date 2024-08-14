@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync/atomic"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
@@ -23,8 +25,19 @@ func visitAll(
 	root mpt.NodeId,
 	visitor mpt.NodeVisitor,
 ) error {
+	if false {
+		return visitAll_1(directory, root, visitor)
+	}
+	return visitAll_2(directory, root, visitor)
+}
 
-	fmt.Printf("Visiting all nodes in %s using parallel node fetching\n", directory)
+func visitAll_1(
+	directory string,
+	root mpt.NodeId,
+	visitor mpt.NodeVisitor,
+) error {
+
+	fmt.Printf("Visiting all nodes in %s using parallel node fetching 1\n", directory)
 
 	sourceFactory := &nodeSourceFactory{
 		directory: directory,
@@ -70,6 +83,24 @@ func visitAll(
 		stack = append(stack, res)
 	}
 
+	counter := atomic.Int64{}
+	last := int64(0)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				cur := counter.Load()
+				fmt.Printf("Node rate: %f nodes/s\n", float64(cur-last)/10)
+				last = cur
+			case <-stop:
+				return
+			}
+		}
+	}()
+
 	scheduleLoad(mpt.NewNodeReference(root))
 	for len(stack) > 0 {
 		cur := stack[len(stack)-1]
@@ -82,6 +113,7 @@ func visitAll(
 		close(cur)
 
 		node := res.node
+		counter.Add(1)
 		switch visitor.Visit(node, mpt.NodeInfo{}) {
 		case mpt.VisitResponseAbort:
 			return nil
@@ -108,6 +140,150 @@ func visitAll(
 	}
 
 	return nil
+}
+
+func visitAll_2(
+	directory string,
+	root mpt.NodeId,
+	visitor mpt.NodeVisitor,
+) error {
+
+	fmt.Printf("Visiting all nodes in %s using parallel node fetching 2\n", directory)
+
+	sourceFactory := &nodeSourceFactory{
+		directory: directory,
+	}
+
+	type response struct {
+		nodes []mpt.Node
+		err   error
+	}
+
+	type request struct {
+		id  mpt.NodeId
+		res chan<- response
+	}
+
+	requests := make(chan request, 100)
+	defer close(requests)
+
+	// Start goroutines fetching nodes in parallel.
+	for i := 0; i < 16; i++ {
+		source, err := sourceFactory.Open()
+		if err != nil {
+			return err
+		}
+		go func() {
+			defer source.Close()
+			for req := range requests {
+				nodes, err := getLeftMostPath(req.id, source)
+				req.res <- response{nodes, err}
+			}
+		}()
+	}
+
+	stack := []chan response{}
+
+	scheduleLoad := func(ref mpt.NodeReference) {
+		id := ref.Id()
+		if id.IsEmpty() {
+			return
+		}
+		res := make(chan response, 1)
+		requests <- request{id, res}
+		stack = append(stack, res)
+	}
+
+	counter := atomic.Int64{}
+	last := int64(0)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				cur := counter.Load()
+				fmt.Printf("Node rate: %f nodes/s\n", float64(cur-last)/10)
+				last = cur
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	scheduleLoad(mpt.NewNodeReference(root))
+outer:
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		res := <-cur
+		if res.err != nil {
+			return res.err
+		}
+		close(cur)
+
+		for _, node := range res.nodes {
+			counter.Add(1)
+			switch visitor.Visit(node, mpt.NodeInfo{}) {
+			case mpt.VisitResponseAbort:
+				return nil
+			case mpt.VisitResponsePrune:
+				continue outer
+			case mpt.VisitResponseContinue:
+				// nothing to do
+			}
+
+			if branch, ok := node.(*mpt.BranchNode); ok {
+				// add child nodes in reverse order to the stack
+				// ignoring the left-most child
+				leftMost := getLeftMostChild(branch)
+				children := branch.GetChildren()
+				for i := len(children) - 1; i >= 0; i-- {
+					if children[i].Id() != leftMost {
+						scheduleLoad(children[i])
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func getLeftMostPath(id mpt.NodeId, source NodeSource) ([]mpt.Node, error) {
+	path := make([]mpt.Node, 0, 50)
+	for {
+		node, err := source.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		path = append(path, node)
+
+		switch cur := node.(type) {
+		case *mpt.BranchNode:
+			id = getLeftMostChild(cur)
+		case *mpt.ExtensionNode:
+			ref := cur.GetNext()
+			id = ref.Id()
+		case *mpt.AccountNode:
+			ref := cur.GetStorage()
+			id = ref.Id()
+		default:
+			return path, nil
+		}
+	}
+}
+
+func getLeftMostChild(branch *mpt.BranchNode) mpt.NodeId {
+	for _, child := range branch.GetChildren() {
+		id := child.Id()
+		if !id.IsEmpty() {
+			return id
+		}
+	}
+	panic("no left-most child")
 }
 
 type nodeSourceFactory struct {
