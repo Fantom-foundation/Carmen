@@ -58,7 +58,7 @@ const (
 // and furthermore getting its properties such as a root hash and contract codes.
 type mptStateVisitor interface {
 	// Visit allows for traverse the whole trie.
-	Visit(visitor mpt.NodeVisitor) error
+	Visit(visitor mpt.NodeVisitor, cutAtAccounts bool) error
 	// GetHash returns the hash of the represented Trie.
 	GetHash() (common.Hash, error)
 	// GetCodeForHash returns byte code for given hash.
@@ -66,12 +66,17 @@ type mptStateVisitor interface {
 }
 
 type exportableArchiveTrie struct {
-	trie  *mpt.ArchiveTrie
-	block uint64
+	directory string
+	trie      *mpt.ArchiveTrie
+	block     uint64
 }
 
-func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
-	return e.trie.VisitTrie(e.block, visitor)
+func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor, cutAtAccounts bool) error {
+	root, err := e.trie.GetBlockRoot(e.block)
+	if err != nil {
+		return err
+	}
+	return visitAll(e.directory, root, visitor, cutAtAccounts)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
@@ -125,7 +130,56 @@ func ExportBlockFromArchive(ctx context.Context, logger *Log, directory string, 
 	}
 
 	defer archive.Close()
-	_, err = ExportLive(ctx, logger, exportableArchiveTrie{trie: archive, block: block}, out)
+	_, err = ExportLive(ctx, logger, exportableArchiveTrie{
+		directory: directory,
+		trie:      archive,
+		block:     block,
+	}, out)
+	return err
+}
+
+// ExportBlockFromOnlineArchive exports LiveDB view for a single given block from an Archive.
+// This method exports from the online archive, i.e, an archive that is being updated with new blocks.
+// To ensure the exported data are up-to-date, this method flushes archive to disk before exporting.
+// For this reason, this method should not be called often, as it would hammer performance.
+// Expected usage is, for instance, the creation of database dump once in many blocks to backup the state.
+func ExportBlockFromOnlineArchive(ctx context.Context, archive *mpt.ArchiveTrie, out io.Writer, block uint64) error {
+	// before doing anything, flush the archive to ensure the data is up-to-date
+	if err := archive.Flush(); err != nil {
+		return err
+	}
+	_, err := ExportLive(ctx, exportableArchiveTrie{
+		directory: archive.Directory(),
+		trie:      archive,
+		block:     block,
+	}, out)
+	return err
+}
+
+// ExportBlockFromOnlineArchive exports LiveDB view for a single given block from an Archive.
+// This method exports from the online archive, i.e, an archive that is being updated with new blocks.
+// To ensure the exported data are up-to-date, this method flushes archive to disk before exporting.
+// For this reason, this method should not be called often, as it would hammer performance.
+// Expected usage is, for instance, the creation of database dump once in many blocks to backup the state.
+func ExportBlockFromOnlineArchive(ctx context.Context, archive *mpt.ArchiveTrie, out io.Writer, block uint64) error {
+	logger := NewLog()
+	logger.Printf("exporting block %d from online archive", block)
+	defer func() {
+		logger.Printf("exported block %d from online archive", block)
+	}()
+
+	logger.Printf("flushing archive")
+	// before doing anything, flush the archive to ensure the data is up-to-date
+	if err := archive.Flush(); err != nil {
+		return err
+	}
+
+	logger.Printf("exporting")
+	_, err := ExportLive(ctx, logger, exportableArchiveTrie{
+		directory: archive.Directory(),
+		trie:      archive,
+		block:     block,
+	}, out)
 	return err
 }
 
@@ -179,7 +233,7 @@ func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Wri
 
 	// Write out codes.
 	logger.Print("exporting codes")
-	codes, err := getReferencedCodes(ctx, logger, db)
+	codes, err := getReferencedCodes(ctx, logger,db)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %w", err)
 	}
@@ -191,7 +245,7 @@ func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Wri
 	logger.Print("exporting accounts and values")
 	progress := logger.NewProgressTracker("exported %d accounts, %.2f accounts/s", 1_000_000)
 	visitor := exportVisitor{out: out, ctx: ctx, progress: progress}
-	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
+	if err := db.Visit(&visitor, false); err != nil || visitor.err != nil {
 		return common.Hash{}, fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
 	}
 
@@ -408,12 +462,11 @@ func getReferencedCodes(ctxt context.Context, logger *Log, db mptStateVisitor) (
 			return mpt.VisitResponsePrune // < no need to visit the storage trie
 		}
 		return mpt.VisitResponseContinue
-	}))
+	}), true)
 
 	if interrupt.IsCancelled(ctxt) {
 		err = interrupt.ErrCanceled
 	}
-
 	return codes, err
 }
 
