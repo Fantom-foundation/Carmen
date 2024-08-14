@@ -249,6 +249,13 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	return nil
 }
 
+func (a *ArchiveTrie) GetBlockRoot(block uint64) (NodeId, error) {
+	if block >= uint64(a.roots.length()) {
+		return EmptyId(), fmt.Errorf("block %d not present in archive", block)
+	}
+	return a.roots.get(block).NodeRef.id, nil
+}
+
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
 	a.rootsMutex.Lock()
 	length := uint64(a.roots.length())

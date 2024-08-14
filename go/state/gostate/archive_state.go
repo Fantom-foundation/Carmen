@@ -18,8 +18,6 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt"
-	mptio "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -146,23 +144,26 @@ func (s *ArchiveState) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *ArchiveState) Export(ctx context.Context, out io.Writer) (common.Hash, error) {
-	if err := s.archiveError; err != nil {
-		return common.Hash{}, err
-	}
+	panic("fix me")
+	/*
+		if err := s.archiveError; err != nil {
+			return common.Hash{}, err
+		}
 
-	trie, ok := s.archive.(*mpt.ArchiveTrie)
-	if !ok {
-		return common.Hash{}, state.ExportNotSupported
-	}
+		trie, ok := s.archive.(*mpt.ArchiveTrie)
+		if !ok {
+			return common.Hash{}, state.ExportNotSupported
+		}
 
-	exportableTrie := mptio.NewExportableArchiveTrie(trie, s.block)
-	rootHash, err := mptio.ExportLive(ctx, exportableTrie, out)
-	if err != nil {
-		s.archiveError = errors.Join(s.archiveError, err)
-		return common.Hash{}, s.archiveError
-	}
+		exportableTrie := mptio.NewExportableArchiveTrie(trie, s.block)
+		rootHash, err := mptio.ExportLive(ctx, exportableTrie, out)
+		if err != nil {
+			s.archiveError = errors.Join(s.archiveError, err)
+			return common.Hash{}, s.archiveError
+		}
 
-	return rootHash, s.archiveError
+		return rootHash, s.archiveError
+	*/
 }
 
 func (s *ArchiveState) Flush() error {

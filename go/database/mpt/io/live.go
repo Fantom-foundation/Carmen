@@ -56,10 +56,11 @@ const (
 
 // NewExportableArchiveTrie allows visiting mpt.ArchiveTrie at given block
 // and getting its properties such as Code Hashes or Root Hash.
-func NewExportableArchiveTrie(trie *mpt.ArchiveTrie, block uint64) mptStateVisitor {
+func NewExportableArchiveTrie(directory string, trie *mpt.ArchiveTrie, block uint64) mptStateVisitor {
 	return exportableArchiveTrie{
-		trie:  trie,
-		block: block,
+		directory: directory,
+		trie:      trie,
+		block:     block,
 	}
 }
 
@@ -75,12 +76,17 @@ type mptStateVisitor interface {
 }
 
 type exportableArchiveTrie struct {
-	trie  *mpt.ArchiveTrie
-	block uint64
+	directory string
+	trie      *mpt.ArchiveTrie
+	block     uint64
 }
 
 func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
-	return e.trie.VisitTrie(e.block, visitor)
+	root, err := e.trie.GetBlockRoot(e.block)
+	if err != nil {
+		return err
+	}
+	return visitAll(e.directory, root, visitor)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
@@ -133,7 +139,11 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 	}
 
 	defer archive.Close()
-	_, err = ExportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+	_, err = ExportLive(ctx, exportableArchiveTrie{
+		directory: directory,
+		trie:      archive,
+		block:     block,
+	}, out)
 	return err
 }
 
