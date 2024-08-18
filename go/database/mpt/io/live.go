@@ -54,6 +54,15 @@ const (
 	EthereumHash = HashType(0)
 )
 
+// NewExportableArchiveTrie allows visiting mpt.ArchiveTrie at given block
+// and getting its properties such as Code Hashes or Root Hash.
+func NewExportableArchiveTrie(trie *mpt.ArchiveTrie, block uint64) mptStateVisitor {
+	return exportableArchiveTrie{
+		trie:  trie,
+		block: block,
+	}
+}
+
 // mptStateVisitor is an interface for Tries that allows for visiting the Trie nodes
 // and furthermore getting its properties such as a root hash and contract codes.
 type mptStateVisitor interface {
@@ -68,7 +77,6 @@ type mptStateVisitor interface {
 type exportableArchiveTrie struct {
 	trie  *mpt.ArchiveTrie
 	block uint64
-	codes map[common.Hash][]byte
 }
 
 func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
@@ -80,10 +88,7 @@ func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
 }
 
 func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
-	if e.codes == nil || len(e.codes) == 0 {
-		e.codes = e.trie.GetCodes()
-	}
-	return e.codes[hash]
+	return e.trie.GetCodeForHash(hash)
 }
 
 // Export opens a LiveDB instance retained in the given directory and writes
@@ -106,7 +111,8 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	}
 	defer db.Close()
 
-	return exportLive(ctx, db, out)
+	_, err = ExportLive(ctx, db, out)
+	return err
 }
 
 // ExportBlockFromArchive exports LiveDB genesis for a single given block from an Archive.
@@ -127,49 +133,50 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 	}
 
 	defer archive.Close()
-	return exportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+	_, err = ExportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+	return err
 }
 
-// exportLive exports given db into out.
-func exportLive(ctx context.Context, db mptStateVisitor, out io.Writer) error {
+// ExportLive exports given db into out.
+func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.Hash, error) {
 	// Start with the magic number.
 	if _, err := out.Write(stateMagicNumber); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Add a version number.
 	if _, err := out.Write([]byte{formatVersion}); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Continue with the full state hash.
 	hash, err := db.GetHash()
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	if _, err := out.Write([]byte{byte('H'), byte(EthereumHash)}); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	if _, err := out.Write(hash[:]); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Write out codes.
 	codes, err := getReferencedCodes(db)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve codes: %v", err)
+		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %v", err)
 	}
 	if err := writeCodes(codes, out); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Write out all accounts and values.
 	visitor := exportVisitor{out: out, ctx: ctx}
 	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
-		return fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
+		return common.Hash{}, fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
 	}
 
-	return nil
+	return hash, nil
 }
 
 // ImportLiveDb creates a fresh StateDB in the given directory and fills it
@@ -229,7 +236,11 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return root, hash, err
 	} else if !bytes.Equal(buffer, stateMagicNumber) {
-		return root, hash, fmt.Errorf("invalid format, wrong magic number")
+		// Provide an explicit warning to the user if instead of a live state dump an archive dump was provided
+		if bytes.Contains(buffer, archiveMagicNumber[:len(stateMagicNumber)]) {
+			return root, hash, fmt.Errorf("incorrect input data format use the `import-archive` sub-command  with this type of data")
+		}
+		return root, hash, errors.New("invalid format, unknown magic number")
 	}
 
 	// Check the version number.

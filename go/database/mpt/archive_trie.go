@@ -292,7 +292,11 @@ func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte
 	if err != nil {
 		return nil, a.addError(err)
 	}
-	return a.head.GetCodeForHash(info.CodeHash), nil
+	return a.GetCodeForHash(info.CodeHash), nil
+}
+
+func (a *ArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
+	return a.head.GetCodeForHash(hash)
 }
 
 func (a *ArchiveTrie) GetCodes() map[common.Hash][]byte {

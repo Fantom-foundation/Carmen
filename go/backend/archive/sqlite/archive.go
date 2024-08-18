@@ -15,8 +15,9 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
