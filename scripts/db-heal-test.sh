@@ -4,12 +4,18 @@
 #--- Dynamic variables ---#
 ###########################
 
-number_of_iterations=1000
-
 # Aida paths
-aida_path='/home/petr/Aida'
-aida_db_path='/var/data/aida-db'
-tmp_path='/var/data/tmp'
+aida_path=''
+aida_db_path=''
+tmp_path=''
+
+number_of_iterations=$1
+
+if [ -z "$1" ]; then
+  echo "Arg 1 not set - Setting number of iterations to 100."
+  number_of_iterations=100
+fi
+
 
 # Block variables
 first_block=0
