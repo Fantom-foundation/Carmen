@@ -18,6 +18,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
@@ -389,9 +390,11 @@ func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
 // exportVisitor is an internal utility used by the Export function to write
 // account and value node information to a given output writer.
 type exportVisitor struct {
-	out io.Writer
-	err error
-	ctx context.Context
+	out     io.Writer
+	err     error
+	ctx     context.Context
+	counter uint64
+	last    time.Time
 }
 
 func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
@@ -400,6 +403,16 @@ func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 		e.err = interrupt.ErrCanceled
 		return mpt.VisitResponseAbort
 	}
+	if e.counter == 0 {
+		e.last = time.Now()
+	}
+	e.counter++
+	if (e.counter % 100_000) == 0 {
+		rate := 100_000 / time.Since(e.last).Seconds()
+		fmt.Printf("Exported speed %.2f nodes/s\n", rate)
+		e.last = time.Now()
+	}
+
 	switch n := node.(type) {
 	case *mpt.AccountNode:
 		addr := n.Address()
