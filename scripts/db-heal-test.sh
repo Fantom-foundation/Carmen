@@ -107,6 +107,12 @@ for ((i=1; i<=number_of_iterations; i++)); do
   # Wait for the command to complete
   wait $command_pid
 
+
+  # Re-find working dir - Aida copies db-src
+  working_dir=$(ls -td "$tmp_path"/*/ | head -1)
+  archive="${working_dir}archive"
+  live="${working_dir}live"
+
 done
 
 rm $log_file
