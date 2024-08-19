@@ -373,7 +373,15 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 // given database. The map is indexed by the code hash.
 func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
 	codes := make(map[common.Hash][]byte)
+	counter := uint64(0)
+	last := time.Now()
 	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		counter++
+		if (counter % 100_000) == 0 {
+			rate := 100_000 / time.Since(last).Seconds()
+			fmt.Printf("Exported speed %.2f nodes/s\n", rate)
+			last = time.Now()
+		}
 		if n, ok := node.(*mpt.AccountNode); ok {
 			codeHash := n.Info().CodeHash
 			code := db.GetCodeForHash(codeHash)
