@@ -72,6 +72,9 @@ live="${working_dir}live"
 
 echo "Testing db created, starting loop."
 
+# Save last working dir to remove it
+last_working_dir=""
+
 for ((i=1; i<=number_of_iterations; i++)); do
   # Restore Archive
   (cd $carmen_root && go run ./database/mpt/tool reset --force-unlock "$archive" "$restore_block")
@@ -107,6 +110,10 @@ for ((i=1; i<=number_of_iterations; i++)); do
   # Wait for the command to complete
   wait $command_pid
 
+  # Remove unused dir and save current dir to be deleted next iteration.
+  echo "Removing previous database"$last_working_dir""
+  rm -rf "$last_working_dir"
+  last_working_dir="$working_dir"
 
   # Re-find working dir - Aida copies db-src
   working_dir=$(ls -td "$tmp_path"/*/ | head -1)
