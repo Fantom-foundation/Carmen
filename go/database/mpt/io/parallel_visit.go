@@ -26,6 +26,7 @@ func visitAll(
 	directory string,
 	root mpt.NodeId,
 	visitor mpt.NodeVisitor,
+	cutAtAccounts bool,
 ) error {
 	if false {
 		return visitAll_1(directory, root, visitor)
@@ -36,7 +37,7 @@ func visitAll(
 	if false {
 		return visitAll_3(directory, root, visitor)
 	}
-	return visitAll_4(directory, root, visitor)
+	return visitAll_4(directory, root, visitor, cutAtAccounts)
 }
 
 func visitAll_1(
@@ -550,6 +551,7 @@ func visitAll_4(
 	directory string,
 	root mpt.NodeId,
 	visitor mpt.NodeVisitor,
+	cutAtAccounts bool,
 ) error {
 	const TipHeight = 3
 	const NumWorker = 16
@@ -567,7 +569,7 @@ func visitAll_4(
 	defer source.Close()
 
 	// Start by consuming the first 3 layers of the trie.
-	patch, err := getTrieTip(root, source, TipHeight)
+	patch, err := getTrieTip(root, source, TipHeight, cutAtAccounts)
 	if err != nil {
 		return err
 	}
@@ -625,7 +627,7 @@ func visitAll_4(
 		go func() {
 			defer source.Close()
 			for req := range requests {
-				trie, err := getSubTrie(req.id, source)
+				trie, err := getSubTrie(req.id, source, cutAtAccounts)
 				if err == nil {
 					if len(trie.nodes) > 4000 {
 						fmt.Printf("Fetched sub-trie with %d nodes\n", len(trie.nodes))
@@ -720,6 +722,7 @@ func getTrieTip(
 	id mpt.NodeId,
 	source NodeSource,
 	maxDepth int,
+	cutAtAccounts bool,
 ) (
 	triePatch,
 	error,
@@ -772,8 +775,10 @@ func getTrieTip(
 			next := node.GetNext()
 			consume(next.Id())
 		case *mpt.AccountNode:
-			storage := node.GetStorage()
-			consume(storage.Id())
+			if !cutAtAccounts {
+				storage := node.GetStorage()
+				consume(storage.Id())
+			}
 		}
 	}
 	return triePatch{
@@ -788,7 +793,7 @@ type subTrie struct {
 	nodes map[mpt.NodeId]mpt.Node
 }
 
-func getSubTrie(root mpt.NodeId, source NodeSource) (subTrie, error) {
+func getSubTrie(root mpt.NodeId, source NodeSource, cutAtAccounts bool) (subTrie, error) {
 	nodes := make(map[mpt.NodeId]mpt.Node)
 	stack := make([]mpt.NodeId, 0, 50)
 	stack = append(stack, root)
@@ -816,10 +821,12 @@ func getSubTrie(root mpt.NodeId, source NodeSource) (subTrie, error) {
 			next := node.GetNext()
 			stack = append(stack, next.Id())
 		case *mpt.AccountNode:
-			storage := node.GetStorage()
-			id := storage.Id()
-			if !id.IsEmpty() {
-				stack = append(stack, id)
+			if !cutAtAccounts {
+				storage := node.GetStorage()
+				id := storage.Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
 			}
 		}
 	}

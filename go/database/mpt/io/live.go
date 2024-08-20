@@ -68,7 +68,7 @@ func NewExportableArchiveTrie(directory string, trie *mpt.ArchiveTrie, block uin
 // and furthermore getting its properties such as a root hash and contract codes.
 type mptStateVisitor interface {
 	// Visit allows for traverse the whole trie.
-	Visit(visitor mpt.NodeVisitor) error
+	Visit(visitor mpt.NodeVisitor, cutAtAccounts bool) error
 	// GetHash returns the hash of the represented Trie.
 	GetHash() (common.Hash, error)
 	// GetCodeForHash returns byte code for given hash.
@@ -81,12 +81,12 @@ type exportableArchiveTrie struct {
 	block     uint64
 }
 
-func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
+func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor, cutAtAccounts bool) error {
 	root, err := e.trie.GetBlockRoot(e.block)
 	if err != nil {
 		return err
 	}
-	return visitAll(e.directory, root, visitor)
+	return visitAll(e.directory, root, visitor, cutAtAccounts)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
@@ -117,7 +117,8 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	}
 	defer db.Close()
 
-	_, err = ExportLive(ctx, db, out)
+	panic("fix me")
+	//_, err = ExportLive(ctx, db, out)
 	return err
 }
 
@@ -182,7 +183,7 @@ func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.
 
 	// Write out all accounts and values.
 	visitor := exportVisitor{out: out, ctx: ctx}
-	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
+	if err := db.Visit(&visitor, false); err != nil || visitor.err != nil {
 		return common.Hash{}, fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
 	}
 
@@ -392,7 +393,7 @@ func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
 			return mpt.VisitResponsePrune // < no need to visit the storage trie
 		}
 		return mpt.VisitResponseContinue
-	}))
+	}), true)
 	return codes, err
 }
 
