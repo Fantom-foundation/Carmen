@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# This script is used to test db recovery feature and requires Aida and AidaDb.
+# To use this script you need to fill Aida paths under Dynamic variables where
+# aida_path is path to Aida root
+# aida_db_path is path to AidaDb
+# tmp_path is path to tmp directory where database will be created
+
 ###########################
 #--- Dynamic variables ---#
 ###########################
@@ -39,7 +45,7 @@ log_file="$(pwd)/output.log"
 current=$(pwd)
 
 # First iteration has different command
-cmd="./build/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 --carmen-cp-interval 200 "$first_block" "$last_block""
+cmd="go run ./cmd/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 --carmen-cp-interval 200 "$first_block" "$last_block""
 cd $aida_path
 $cmd &> "$log_file" &
 command_pid=$!
@@ -97,7 +103,7 @@ for ((i=1; i<=number_of_iterations; i++)); do
   kill_block=$((kill_block + 1000))
 
   echo "Syncing to block "$last_block"..."
-  command="./build/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 --carmen-cp-interval 200 --db-src "$working_dir" --skip-priming "$first_block" "$last_block""
+  command="go run ./cmd/aida-vm-sdb substate --validate --db-tmp "$tmp_path" --carmen-schema 5 --db-impl carmen --aida-db "$aida_db_path" --no-heartbeat-logging --track-progress --archive --archive-variant s5 --archive-query-rate 200 --carmen-cp-interval 200 --db-src "$working_dir" --skip-priming "$first_block" "$last_block""
 
   cd $aida_path
   $command &> "$log_file" &
@@ -122,6 +128,8 @@ for ((i=1; i<=number_of_iterations; i++)); do
 
 done
 
+# Clear anything leftover
 rm $log_file
+rm $working_dir
 
 exit 0
