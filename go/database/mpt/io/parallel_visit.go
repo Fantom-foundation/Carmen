@@ -33,7 +33,10 @@ func visitAll(
 	if false {
 		return visitAll_2(directory, root, visitor)
 	}
-	return visitAll_3(directory, root, visitor)
+	if false {
+		return visitAll_3(directory, root, visitor)
+	}
+	return visitAll_4(directory, root, visitor)
 }
 
 func visitAll_1(
@@ -539,6 +542,330 @@ func (p *triePatch) visit(
 		}
 	}
 	return mpt.VisitResponseContinue, nil
+}
+
+// -- Variant 4 --
+
+func visitAll_4(
+	directory string,
+	root mpt.NodeId,
+	visitor mpt.NodeVisitor,
+) error {
+	const TipHeight = 3
+	const NumWorker = 16
+
+	fmt.Printf("Visiting all nodes in %s using parallel node fetching 4\n", directory)
+
+	sourceFactory := &nodeSourceFactory{
+		directory: directory,
+	}
+
+	source, err := sourceFactory.Open()
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	// Start by consuming the first 3 layers of the trie.
+	patch, err := getTrieTip(root, source, TipHeight)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Fetched tip with %d leaves\n", len(patch.leaves))
+
+	//fmt.Printf("Leaves: %v\n", patch.leaves)
+
+	type response struct {
+		trie subTrie
+		err  error
+	}
+
+	type request struct {
+		id  mpt.NodeId
+		res chan<- response
+	}
+
+	// Create a job scheduling requests to resolve sub-tries
+	// and producing results in order.
+	requests := make(chan request, 2*NumWorker)
+	defer close(requests)
+	responses := make(chan chan response, 2*NumWorker)
+
+	stopFeeder := make(chan struct{})
+	feederStopped := make(chan struct{})
+	defer func() {
+		close(stopFeeder)
+		<-feederStopped
+	}()
+	go func() {
+		defer close(responses)
+		defer close(feederStopped)
+		for _, leave := range patch.leaves {
+			res := make(chan response, 1)
+			select {
+			case requests <- request{leave, res}:
+			case <-stopFeeder:
+				return
+			}
+			select {
+			case responses <- res:
+			case <-stopFeeder:
+				return
+			}
+		}
+	}()
+
+	// Start goroutines fetching sub-tries in parallel.
+	for i := 0; i < NumWorker; i++ {
+		source, err := sourceFactory.Open()
+		if err != nil {
+			return err
+		}
+		go func() {
+			defer source.Close()
+			for req := range requests {
+				trie, err := getSubTrie(req.id, source)
+				if err == nil {
+					if len(trie.nodes) > 4000 {
+						fmt.Printf("Fetched sub-trie with %d nodes\n", len(trie.nodes))
+					}
+				} else {
+					fmt.Printf("Failed to fetch sub-trie: %v\n", err)
+				}
+				req.res <- response{trie, err}
+			}
+		}()
+	}
+
+	// Start a progress counter.
+	counter := atomic.Int64{}
+	last := int64(0)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				cur := counter.Load()
+				fmt.Printf("Node rate: %f nodes/s\n", float64(cur-last)/10)
+				last = cur
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	countingVisitor := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		counter.Add(1)
+		return visitor.Visit(node, info)
+	})
+
+	stack := make([]mpt.NodeId, 0, 50)
+	stack = append(stack, patch.root)
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		node, found := patch.nodes[cur]
+		if !found {
+			//fmt.Printf("Fetching node %v\n", cur)
+			res := <-<-responses
+			if res.err != nil {
+				return res.err
+			}
+			if res.trie.root != cur {
+				panic(fmt.Sprintf("unexpected node, wanted %v, got %v", cur, res.trie.root))
+			}
+			if err := res.trie.visit(countingVisitor); err != nil {
+				return err
+			}
+			continue
+		}
+
+		switch countingVisitor.Visit(node, mpt.NodeInfo{Id: cur}) {
+		case mpt.VisitResponseAbort:
+			return nil
+		case mpt.VisitResponsePrune:
+			continue
+		}
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			children := node.GetChildren()
+			for i := len(children) - 1; i >= 0; i-- {
+				id := children[i].Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			stack = append(stack, next.Id())
+		case *mpt.AccountNode:
+			storage := node.GetStorage()
+			id := storage.Id()
+			if !id.IsEmpty() {
+				stack = append(stack, id)
+			}
+		}
+	}
+
+	return nil
+
+}
+
+func getTrieTip(
+	id mpt.NodeId,
+	source NodeSource,
+	maxDepth int,
+) (
+	triePatch,
+	error,
+) {
+	nodes := make(map[mpt.NodeId]mpt.Node)
+	leaves := make([]mpt.NodeId, 0, int(math.Pow(16, float64(maxDepth+1))))
+
+	type entry struct {
+		id    mpt.NodeId
+		depth int
+	}
+
+	queue := []entry{{id, 0}}
+	for len(queue) > 0 {
+		cur := queue[len(queue)-1]
+		queue = queue[:len(queue)-1]
+
+		node, err := source.Get(cur.id)
+		if err != nil {
+			return triePatch{}, err
+		}
+		nodes[cur.id] = node
+
+		consume := func(id mpt.NodeId) {
+			if !id.IsEmpty() {
+				queue = append(queue, entry{id, cur.depth + 1})
+			}
+		}
+		if cur.depth >= maxDepth {
+			consume = func(id mpt.NodeId) {
+				if !id.IsEmpty() {
+					leaves = append(leaves, id)
+				}
+			}
+		}
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			children := node.GetChildren()
+			if cur.depth >= maxDepth {
+				for _, child := range children {
+					consume(child.Id())
+				}
+			} else {
+				for i := len(children) - 1; i >= 0; i-- {
+					consume(children[i].Id())
+				}
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			consume(next.Id())
+		case *mpt.AccountNode:
+			storage := node.GetStorage()
+			consume(storage.Id())
+		}
+	}
+	return triePatch{
+		root:   id,
+		nodes:  nodes,
+		leaves: leaves,
+	}, nil
+}
+
+type subTrie struct {
+	root  mpt.NodeId
+	nodes map[mpt.NodeId]mpt.Node
+}
+
+func getSubTrie(root mpt.NodeId, source NodeSource) (subTrie, error) {
+	nodes := make(map[mpt.NodeId]mpt.Node)
+	stack := make([]mpt.NodeId, 0, 50)
+	stack = append(stack, root)
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		node, err := source.Get(cur)
+		if err != nil {
+			return subTrie{}, err
+		}
+
+		nodes[cur] = node
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			children := node.GetChildren()
+			for i := len(children) - 1; i >= 0; i-- {
+				id := children[i].Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			stack = append(stack, next.Id())
+		case *mpt.AccountNode:
+			storage := node.GetStorage()
+			id := storage.Id()
+			if !id.IsEmpty() {
+				stack = append(stack, id)
+			}
+		}
+	}
+	return subTrie{root, nodes}, nil
+}
+
+func (t *subTrie) visit(visitor mpt.NodeVisitor) error {
+	stack := make([]mpt.NodeId, 0, 50)
+	stack = append(stack, t.root)
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		node, found := t.nodes[cur]
+		if !found {
+			panic("node not found")
+		}
+
+		switch visitor.Visit(node, mpt.NodeInfo{Id: cur}) {
+		case mpt.VisitResponseAbort:
+			return nil
+		case mpt.VisitResponsePrune:
+			continue
+		}
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			children := node.GetChildren()
+			for i := len(children) - 1; i >= 0; i-- {
+				id := children[i].Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			stack = append(stack, next.Id())
+		case *mpt.AccountNode:
+			storage := node.GetStorage()
+			id := storage.Id()
+			if !id.IsEmpty() {
+				stack = append(stack, id)
+			}
+		}
+	}
+	return nil
 }
 
 // ----------------------------------------------------------------------------
