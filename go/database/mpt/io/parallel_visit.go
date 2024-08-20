@@ -3,6 +3,7 @@ package io
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sync/atomic"
 	"time"
@@ -28,7 +29,10 @@ func visitAll(
 	if false {
 		return visitAll_1(directory, root, visitor)
 	}
-	return visitAll_2(directory, root, visitor)
+	if false {
+		return visitAll_2(directory, root, visitor)
+	}
+	return visitAll_3(directory, root, visitor)
 }
 
 func visitAll_1(
@@ -285,6 +289,246 @@ func getLeftMostChild(branch *mpt.BranchNode) mpt.NodeId {
 	}
 	panic("no left-most child")
 }
+
+// -- Variant 3 --
+
+func visitAll_3(
+	directory string,
+	root mpt.NodeId,
+	visitor mpt.NodeVisitor,
+) error {
+
+	const PatchDepth = 3
+	const NumWorkers = 16
+	maxLeaves := int(math.Pow(16, PatchDepth+1))
+
+	fmt.Printf("Visiting all nodes in %s using parallel node fetching 3\n", directory)
+
+	sourceFactory := &nodeSourceFactory{
+		directory: directory,
+	}
+
+	type response struct {
+		patch triePatch
+		err   error
+	}
+
+	type request struct {
+		id  mpt.NodeId
+		res chan<- response
+	}
+
+	requests := make(chan request, 10*maxLeaves)
+	defer close(requests)
+
+	// Start goroutines fetching nodes in parallel.
+	for i := 0; i < NumWorkers; i++ {
+		source, err := sourceFactory.Open()
+		if err != nil {
+			return err
+		}
+		go func() {
+			defer source.Close()
+			for req := range requests {
+				patch, err := getTriePatch(req.id, source, PatchDepth)
+				if err == nil && len(patch.leaves) > 4000 {
+					fmt.Printf("Fetched %d nodes and %d leaves\n", len(patch.nodes), len(patch.leaves))
+				}
+
+				/*
+					if err == nil {
+						fmt.Printf("Fetched %d nodes and %d leaves\n", len(patch.nodes), len(patch.leaves))
+					} else {
+						fmt.Printf("Failed to fetch patch for %v: %v\n", req.id, err)
+					}
+				*/
+				req.res <- response{patch, err}
+			}
+		}()
+	}
+
+	jobs := map[mpt.NodeId]chan response{}
+	scheduleLoad := func(id mpt.NodeId) {
+		if id.IsEmpty() {
+			return
+		}
+		res := make(chan response, 1)
+		requests <- request{id, res}
+		jobs[id] = res
+	}
+
+	counter := atomic.Int64{}
+	last := int64(0)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				cur := counter.Load()
+				fmt.Printf("Node rate: %f nodes/s\n", float64(cur-last)/10)
+				last = cur
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	scheduleLoad(root)
+	res := <-jobs[root]
+	delete(jobs, root)
+	if res.err != nil {
+		return res.err
+	}
+	for _, leave := range res.patch.leaves {
+		scheduleLoad(leave)
+	}
+
+	visit := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		counter.Add(1)
+		return visitor.Visit(node, info)
+	})
+
+	_, err := res.patch.visit(visit, func(id mpt.NodeId) (*triePatch, error) {
+		res := <-jobs[id]
+		delete(jobs, id)
+		if res.err != nil {
+			return nil, res.err
+		}
+		for _, leave := range res.patch.leaves {
+			scheduleLoad(leave)
+		}
+		return &res.patch, nil
+	})
+
+	return err
+}
+
+type triePatch struct {
+	root   mpt.NodeId
+	nodes  map[mpt.NodeId]mpt.Node
+	leaves []mpt.NodeId
+}
+
+func getTriePatch(
+	id mpt.NodeId,
+	source NodeSource,
+	maxDepth int,
+) (
+	triePatch,
+	error,
+) {
+	nodes := make(map[mpt.NodeId]mpt.Node)
+	leaves := make([]mpt.NodeId, 0, int(math.Pow(16, float64(maxDepth+1))))
+
+	type entry struct {
+		id    mpt.NodeId
+		depth int
+	}
+
+	queue := []entry{{id, 0}}
+	for len(queue) > 0 {
+		cur := queue[len(queue)-1]
+		queue = queue[:len(queue)-1]
+
+		node, err := source.Get(cur.id)
+		if err != nil {
+			return triePatch{}, err
+		}
+		nodes[cur.id] = node
+
+		consume := func(id mpt.NodeId) {
+			if !id.IsEmpty() {
+				queue = append(queue, entry{id, cur.depth + 1})
+			}
+		}
+		if cur.depth >= maxDepth {
+			consume = func(id mpt.NodeId) {
+				if !id.IsEmpty() {
+					leaves = append(leaves, id)
+				}
+			}
+		}
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			for _, child := range node.GetChildren() {
+				consume(child.Id())
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			consume(next.Id())
+		case *mpt.AccountNode:
+			storage := node.GetStorage()
+			consume(storage.Id())
+		}
+	}
+	return triePatch{
+		root:   id,
+		nodes:  nodes,
+		leaves: leaves,
+	}, nil
+}
+
+func (p *triePatch) visit(
+	visitor mpt.NodeVisitor,
+	source func(mpt.NodeId) (*triePatch, error),
+) (mpt.VisitResponse, error) {
+	stack := []mpt.NodeId{p.root}
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		node, found := p.nodes[cur]
+		if !found {
+			patch, err := source(cur)
+			if err != nil {
+				return mpt.VisitResponseAbort, err
+			}
+			res, err := patch.visit(visitor, source)
+			if err != nil {
+				return mpt.VisitResponseAbort, err
+			}
+			if res == mpt.VisitResponseAbort {
+				return mpt.VisitResponseAbort, nil
+			}
+			continue
+		}
+
+		switch visitor.Visit(node, mpt.NodeInfo{Id: cur}) {
+		case mpt.VisitResponseAbort:
+			return mpt.VisitResponseAbort, nil
+		case mpt.VisitResponsePrune:
+			continue
+		}
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			children := node.GetChildren()
+			for i := len(children) - 1; i >= 0; i-- {
+				id := children[i].Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			stack = append(stack, next.Id())
+		case *mpt.AccountNode:
+			storage := node.GetStorage()
+			id := storage.Id()
+			if !id.IsEmpty() {
+				stack = append(stack, id)
+			}
+		}
+	}
+	return mpt.VisitResponseContinue, nil
+}
+
+// ----------------------------------------------------------------------------
+//                               NodeSource
+// ----------------------------------------------------------------------------
 
 type nodeSourceFactory struct {
 	directory string
