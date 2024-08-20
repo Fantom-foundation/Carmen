@@ -553,7 +553,7 @@ func visitAll_4(
 	visitor mpt.NodeVisitor,
 	cutAtAccounts bool,
 ) error {
-	const TipHeight = 3
+	const TipHeight = 4
 	const NumWorker = 16
 
 	fmt.Printf("Visiting all nodes in %s using parallel node fetching 4\n", directory)
@@ -575,7 +575,6 @@ func visitAll_4(
 	}
 
 	fmt.Printf("Fetched tip with %d leaves\n", len(patch.leaves))
-
 	//fmt.Printf("Leaves: %v\n", patch.leaves)
 
 	type response struct {
@@ -583,59 +582,50 @@ func visitAll_4(
 		err  error
 	}
 
-	type request struct {
-		id  mpt.NodeId
-		res chan<- response
+	// Allocate buffers for requests and responses.
+	requests := make([]mpt.NodeId, len(patch.leaves))
+	responses := make([]chan response, len(patch.leaves))
+	for i, leave := range patch.leaves {
+		requests[i] = leave
+		responses[i] = make(chan response, 1)
 	}
 
-	// Create a job scheduling requests to resolve sub-tries
-	// and producing results in order.
-	requests := make(chan request, 2*NumWorker)
-	defer close(requests)
-	responses := make(chan chan response, 2*NumWorker)
+	const CapacityLimit = 500_000_000
+	capacityMutex := sync.Mutex{}
+	capacityCond := sync.NewCond(&capacityMutex)
+	capacity := int32(0)
+	nextJob := 0
 
-	stopFeeder := make(chan struct{})
-	feederStopped := make(chan struct{})
-	defer func() {
-		close(stopFeeder)
-		<-feederStopped
-	}()
-	go func() {
-		defer close(responses)
-		defer close(feederStopped)
-		for _, leave := range patch.leaves {
-			res := make(chan response, 1)
-			select {
-			case requests <- request{leave, res}:
-			case <-stopFeeder:
-				return
-			}
-			select {
-			case responses <- res:
-			case <-stopFeeder:
-				return
-			}
-		}
-	}()
-
-	// Start goroutines fetching sub-tries in parallel.
+	var wg sync.WaitGroup
+	wg.Add(NumWorker)
 	for i := 0; i < NumWorker; i++ {
-		source, err := sourceFactory.Open()
-		if err != nil {
-			return err
-		}
 		go func() {
+			source, err := sourceFactory.Open()
+			if err != nil {
+				panic(err)
+			}
 			defer source.Close()
-			for req := range requests {
-				trie, err := getSubTrie(req.id, source, cutAtAccounts)
-				if err == nil {
-					if len(trie.nodes) > 4000 {
-						fmt.Printf("Fetched sub-trie with %d nodes\n", len(trie.nodes))
-					}
-				} else {
-					fmt.Printf("Failed to fetch sub-trie: %v\n", err)
+			defer wg.Done()
+			// TODO: stop this loop on failure
+			capacityMutex.Lock()
+			for {
+				for capacity >= CapacityLimit {
+					capacityCond.Wait()
 				}
-				req.res <- response{trie, err}
+				if nextJob >= len(requests) {
+					capacityMutex.Unlock()
+					return
+				}
+				job := nextJob
+				nextJob += 1
+				capacityMutex.Unlock()
+
+				trie, err := getSubTrie(requests[job], source, cutAtAccounts)
+				responses[job] <- response{trie, err}
+
+				capacityMutex.Lock()
+				capacity += int32(len(trie.nodes))
+				//fmt.Printf("Capacity: %d (+%d)\n", capacity, len(trie.nodes))
 			}
 		}()
 	}
@@ -664,6 +654,7 @@ func visitAll_4(
 		return visitor.Visit(node, info)
 	})
 
+	nextSubTrie := 0
 	stack := make([]mpt.NodeId, 0, 50)
 	stack = append(stack, patch.root)
 	for len(stack) > 0 {
@@ -673,7 +664,10 @@ func visitAll_4(
 		node, found := patch.nodes[cur]
 		if !found {
 			//fmt.Printf("Fetching node %v\n", cur)
-			res := <-<-responses
+			c := responses[nextSubTrie]
+			res := <-c
+			close(c)
+			nextSubTrie += 1
 			if res.err != nil {
 				return res.err
 			}
@@ -683,6 +677,12 @@ func visitAll_4(
 			if err := res.trie.visit(countingVisitor); err != nil {
 				return err
 			}
+
+			capacityMutex.Lock()
+			capacity -= int32(len(res.trie.nodes))
+			//fmt.Printf("Capacity: %d (-%d)\n", capacity, len(res.trie.nodes))
+			capacityCond.Broadcast()
+			capacityMutex.Unlock()
 			continue
 		}
 
