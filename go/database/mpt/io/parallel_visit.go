@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -318,8 +319,10 @@ func visitAll_3(
 		res chan<- response
 	}
 
-	requests := make(chan request, 10*maxLeaves)
-	defer close(requests)
+	requests := make([]request, 0, 10*maxLeaves)
+	requestsMutex := sync.Mutex{}
+	done := atomic.Bool{}
+	defer done.Store(true)
 
 	// Start goroutines fetching nodes in parallel.
 	for i := 0; i < NumWorkers; i++ {
@@ -329,7 +332,17 @@ func visitAll_3(
 		}
 		go func() {
 			defer source.Close()
-			for req := range requests {
+			for !done.Load() {
+				requestsMutex.Lock()
+				if len(requests) == 0 {
+					requestsMutex.Unlock()
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+				req := requests[len(requests)-1]
+				requests = requests[:len(requests)-1]
+				requestsMutex.Unlock()
+
 				patch, err := getTriePatch(req.id, source, PatchDepth)
 				if err == nil && len(patch.leaves) > 4000 {
 					fmt.Printf("Fetched %d nodes and %d leaves\n", len(patch.nodes), len(patch.leaves))
@@ -353,7 +366,9 @@ func visitAll_3(
 			return
 		}
 		res := make(chan response, 1)
-		requests <- request{id, res}
+		requestsMutex.Lock()
+		requests = append(requests, request{id, res})
+		requestsMutex.Unlock()
 		jobs[id] = res
 	}
 
