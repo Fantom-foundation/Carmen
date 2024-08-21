@@ -172,14 +172,16 @@ func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.
 		return common.Hash{}, err
 	}
 
-	// Write out codes.
-	codes, err := getReferencedCodes(db)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %v", err)
-	}
-	if err := writeCodes(codes, out); err != nil {
-		return common.Hash{}, err
-	}
+	/*
+		// Write out codes.
+		codes, err := getReferencedCodes(db)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("failed to retrieve codes: %v", err)
+		}
+		if err := writeCodes(codes, out); err != nil {
+			return common.Hash{}, err
+		}
+	*/
 
 	// Write out all accounts and values.
 	visitor := exportVisitor{out: out, ctx: ctx}

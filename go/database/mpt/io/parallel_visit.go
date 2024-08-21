@@ -850,7 +850,7 @@ func (t *subTrie) visit(visitor mpt.NodeVisitor) error {
 
 		node, found := t.nodes[cur]
 		if !found {
-			panic("node not found")
+			panic(fmt.Sprintf("node %v not found", cur))
 		}
 
 		switch visitor.Visit(node, mpt.NodeInfo{Id: cur}) {
@@ -1110,7 +1110,12 @@ func visitAll_5(
 	}
 
 	// Start a team of workers just fetching storage trie tips.
-	tipRequest := make(chan int, 10*NumWorker)
+	const CapacityLimit = 500_000_000
+	capacityMutex := sync.Mutex{}
+	capacityCond := sync.NewCond(&capacityMutex)
+	capacity := int32(0)
+	nextJob := 0
+
 	for i := 0; i < NumWorker; i++ {
 		go func() {
 			source, err := sourceFactory.Open()
@@ -1118,19 +1123,33 @@ func visitAll_5(
 				panic(err)
 			}
 			defer source.Close()
-			for i := range tipRequest {
-				id := accountInfos[i].storageId
+			// TODO: stop this loop on failure
+			capacityMutex.Lock()
+			for {
+				for capacity >= CapacityLimit {
+					capacityCond.Wait()
+				}
+				if nextJob >= len(storageTips) {
+					capacityMutex.Unlock()
+					return
+				}
+				job := nextJob
+				nextJob += 1
+				capacityMutex.Unlock()
+
+				id := accountInfos[job].storageId
 				if id.IsEmpty() {
+					capacityMutex.Lock()
 					continue
 				}
 				tip, err := getTrieTip(id, source, TipHeight, false)
-				storageTips[i] <- tipResponse{tip, err}
+				storageTips[job] <- tipResponse{tip, err}
+
+				capacityMutex.Lock()
+				capacity += int32(len(tip.nodes))
+				//fmt.Printf("Capacity: %d (+%d)\n", capacity, len(tip.nodes))
 			}
 		}()
-	}
-
-	for i := 0; i < cap(tipRequest) && i < len(accountInfos); i++ {
-		tipRequest <- i
 	}
 
 	countingVisitor := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
@@ -1140,11 +1159,6 @@ func visitAll_5(
 
 	// Consume the storage of accounts in order.
 	for i, accountInfo := range accountInfos {
-		// allow tip-pre-fetching workers to continue one more step
-		if next := i + cap(tipRequest); next < len(accountInfos) {
-			tipRequest <- next
-		}
-
 		// re-load the account node for the visitor
 		node, err := source.Get(accountInfo.accountId)
 		if err != nil {
@@ -1166,6 +1180,12 @@ func visitAll_5(
 		if err := visitTrieUnderTip(tip, sourceFactory, countingVisitor); err != nil {
 			return err
 		}
+
+		capacityMutex.Lock()
+		capacity -= int32(len(tip.nodes))
+		capacityCond.Broadcast()
+		//fmt.Printf("Capacity: %d (-%d)\n", capacity, len(tip.nodes))
+		capacityMutex.Unlock()
 	}
 
 	return nil
