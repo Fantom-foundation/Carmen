@@ -1110,7 +1110,7 @@ func visitAll_5(
 	}
 
 	// Start a team of workers just fetching storage trie tips.
-	const CapacityLimit = 500_000_000
+	const CapacityLimit = 10_000_000
 	capacityMutex := sync.Mutex{}
 	capacityCond := sync.NewCond(&capacityMutex)
 	capacity := int32(0)
@@ -1211,7 +1211,7 @@ func visitTrieUnderTip(
 		responses[i] = make(chan response, 1)
 	}
 
-	const CapacityLimit = 500_000_000
+	const CapacityLimit = 10_000_000
 	capacityMutex := sync.Mutex{}
 	capacityCond := sync.NewCond(&capacityMutex)
 	capacity := int32(0)
