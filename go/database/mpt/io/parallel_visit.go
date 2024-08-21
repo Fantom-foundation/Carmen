@@ -1068,18 +1068,14 @@ func visitAll_5(
 		storageId mpt.NodeId
 	}
 
-	accountInfos := make([]accountInfo, 0, 5_000_000)
+	accountIds := make([]mpt.NodeId, 0, 5_000_000)
 	accountIdsCollector := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		counter.Add(1)
-		if account, ok := node.(*mpt.AccountNode); ok {
+		if _, ok := node.(*mpt.AccountNode); ok {
 			if cutAtAccounts {
 				visitor.Visit(node, info)
 			}
-			ref := account.GetStorage()
-			accountInfos = append(accountInfos, accountInfo{
-				accountId: info.Id,
-				storageId: ref.Id(),
-			})
+			accountIds = append(accountIds, info.Id)
 			return mpt.VisitResponsePrune
 		}
 		return mpt.VisitResponseContinue
@@ -1089,7 +1085,7 @@ func visitAll_5(
 		return err
 	}
 
-	fmt.Printf("Loaded %d accounts\n", len(accountInfos))
+	fmt.Printf("Loaded %d accounts\n", len(accountIds))
 
 	if cutAtAccounts {
 		return nil
@@ -1098,19 +1094,18 @@ func visitAll_5(
 	// Step 2: load all account storages.
 
 	type tipResponse struct {
-		tip triePatch
-		err error
+		node mpt.Node
+		tip  triePatch
+		err  error
 	}
 
-	storageTips := make([]chan tipResponse, len(accountInfos))
-	for i, accountInfo := range accountInfos {
-		if !accountInfo.storageId.IsEmpty() {
-			storageTips[i] = make(chan tipResponse, 1)
-		}
+	storageTips := make([]chan tipResponse, len(accountIds))
+	for i := range accountIds {
+		storageTips[i] = make(chan tipResponse, 1)
 	}
 
 	// Start a team of workers just fetching storage trie tips.
-	const CapacityLimit = 100_000
+	const CapacityLimit = 1_000
 	capacityMutex := sync.Mutex{}
 	capacityCond := sync.NewCond(&capacityMutex)
 	capacity := int32(0)
@@ -1137,13 +1132,18 @@ func visitAll_5(
 				nextJob += 1
 				capacityMutex.Unlock()
 
-				id := accountInfos[job].storageId
-				if id.IsEmpty() {
-					capacityMutex.Lock()
-					continue
+				accountId := accountIds[job]
+				node, err := source.Get(accountId)
+				if err != nil {
+					storageTips[job] <- tipResponse{nil, triePatch{}, err}
 				}
-				tip, err := getTrieTip(id, source, TipHeight, false)
-				storageTips[job] <- tipResponse{tip, err}
+				ref := node.(*mpt.AccountNode).GetStorage()
+				id := ref.Id()
+				tip := triePatch{}
+				if !id.IsEmpty() {
+					tip, err = getTrieTip(id, source, TipHeight, false)
+				}
+				storageTips[job] <- tipResponse{node, tip, err}
 
 				capacityMutex.Lock()
 				capacity += int32(len(tip.nodes))
@@ -1158,23 +1158,24 @@ func visitAll_5(
 	})
 
 	// Consume the storage of accounts in order.
-	for i, accountInfo := range accountInfos {
-		// re-load the account node for the visitor
-		node, err := source.Get(accountInfo.accountId)
-		if err != nil {
-			return err
-		}
-		countingVisitor.Visit(node, mpt.NodeInfo{Id: accountInfo.accountId})
-
-		if accountInfo.storageId.IsEmpty() {
-			continue
-		}
-
-		// Get the tip of the storage trie.
+	for i, accountId := range accountIds {
+		// Get the account node fetched async plus a potential storage
+		// tree tip to consume the storage state.
 		res := <-storageTips[i]
+		close(storageTips[i])
 		if res.err != nil {
 			return res.err
 		}
+
+		// visit the account first
+		countingVisitor.Visit(res.node, mpt.NodeInfo{Id: accountId})
+
+		ref := res.node.(*mpt.AccountNode).GetStorage()
+		storageId := ref.Id()
+		if storageId.IsEmpty() {
+			continue
+		}
+
 		tip := res.tip
 
 		if err := visitTrieUnderTip(tip, sourceFactory, countingVisitor); err != nil {
@@ -1211,7 +1212,7 @@ func visitTrieUnderTip(
 		responses[i] = make(chan response, 1)
 	}
 
-	const CapacityLimit = 100_000
+	const CapacityLimit = 10_000
 	capacityMutex := sync.Mutex{}
 	capacityCond := sync.NewCond(&capacityMutex)
 	capacity := int32(0)
