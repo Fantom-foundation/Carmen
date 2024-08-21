@@ -37,8 +37,13 @@ func visitAll(
 	if false {
 		return visitAll_3(directory, root, visitor)
 	}
-	//return visitAll_4(directory, root, visitor, cutAtAccounts)
-	return visitAll_4_stats(directory, root, cutAtAccounts)
+	if false {
+		return visitAll_4(directory, root, visitor, cutAtAccounts)
+	}
+	if false {
+		return visitAll_4_stats(directory, root, cutAtAccounts)
+	}
+	return visitAll_5(directory, root, visitor, cutAtAccounts)
 }
 
 func visitAll_1(
@@ -999,6 +1004,270 @@ func getSubTrieSize(root mpt.NodeId, source NodeSource, cutAtAccounts bool) (int
 		}
 	}
 	return counter, nil
+}
+
+// -- Variant 5 --
+
+// -- Variant 4 --
+
+func visitAll_5(
+	directory string,
+	root mpt.NodeId,
+	visitor mpt.NodeVisitor,
+	cutAtAccounts bool,
+) error {
+	const TipHeight = 4
+	const NumWorker = 16
+
+	fmt.Printf("Visiting all nodes in %s using parallel node fetching 5\n", directory)
+
+	sourceFactory := &nodeSourceFactory{
+		directory: directory,
+	}
+
+	source, err := sourceFactory.Open()
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	// Step 1: load all accounts.
+
+	// Start by loading the tip of the trie.
+	patch, err := getTrieTip(root, source, TipHeight, true)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Fetched tip with %d leaves\n", len(patch.leaves))
+	//fmt.Printf("Leaves: %v\n", patch.leaves)
+
+	// Start a progress counter.
+	counter := atomic.Int64{}
+	last := int64(0)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		start := time.Now()
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				cur := counter.Load()
+				duration := time.Since(start).Seconds()
+				fmt.Printf("Node rate: %.1f nodes/s / overall %.1f nodes/s\n", float64(cur-last)/10, float64(cur)/duration)
+				last = cur
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	accounts := make([]mpt.AccountNode, 0, 5_000_000)
+	accountCollector := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		counter.Add(1)
+		if account, ok := node.(*mpt.AccountNode); ok {
+			accounts = append(accounts, *account)
+			return mpt.VisitResponsePrune
+		}
+		return mpt.VisitResponseContinue
+	})
+
+	if err := visitTrieUnderTip(patch, sourceFactory, accountCollector); err != nil {
+		return err
+	}
+
+	fmt.Printf("Loaded %d accounts\n", len(patch.leaves))
+
+	// Step 2: load all account storages.
+
+	type tipResponse struct {
+		tip triePatch
+		err error
+	}
+
+	storageTips := make([]chan tipResponse, len(accounts))
+	for i, account := range accounts {
+		ref := account.GetStorage()
+		storageRoot := ref.Id()
+		if !storageRoot.IsEmpty() {
+			storageTips[i] = make(chan tipResponse, 1)
+		}
+	}
+
+	// Start a team of workers just fetching storage trie tips.
+	tipRequest := make(chan int, 10*NumWorker)
+	for i := 0; i < NumWorker; i++ {
+		go func() {
+			source, err := sourceFactory.Open()
+			if err != nil {
+				panic(err)
+			}
+			defer source.Close()
+			for i := range tipRequest {
+				ref := accounts[i].GetStorage()
+				id := ref.Id()
+				if id.IsEmpty() {
+					continue
+				}
+				tip, err := getTrieTip(id, source, TipHeight, false)
+				storageTips[i] <- tipResponse{tip, err}
+			}
+		}()
+	}
+
+	for i := 0; i < 10*NumWorker && i < len(accounts); i++ {
+		tipRequest <- i
+	}
+
+	countingVisitor := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		counter.Add(1)
+		return visitor.Visit(node, info)
+	})
+
+	// Consume the storage of accounts in order.
+	for i, account := range accounts {
+		if i < len(accounts) {
+			tipRequest <- i
+		}
+
+		countingVisitor.Visit(&account, mpt.NodeInfo{})
+
+		ref := account.GetStorage()
+		storageRoot := ref.Id()
+		if storageRoot.IsEmpty() {
+			continue
+		}
+
+		// Get the tip of the storage trie.
+		res := <-storageTips[i]
+		if res.err != nil {
+			return res.err
+		}
+		tip := res.tip
+
+		if err := visitTrieUnderTip(tip, sourceFactory, countingVisitor); err != nil {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
+func visitTrieUnderTip(
+	tip triePatch,
+	sourceFactory *nodeSourceFactory,
+	visitor mpt.NodeVisitor,
+) error {
+	const NumWorker = 16
+
+	type response struct {
+		trie subTrie
+		err  error
+	}
+
+	// Allocate buffers for requests and responses.
+	requests := tip.leaves
+	responses := make([]chan response, len(tip.leaves))
+	for i := range requests {
+		responses[i] = make(chan response, 1)
+	}
+
+	const CapacityLimit = 500_000_000
+	capacityMutex := sync.Mutex{}
+	capacityCond := sync.NewCond(&capacityMutex)
+	capacity := int32(0)
+	nextJob := 0
+
+	var wg sync.WaitGroup
+	wg.Add(NumWorker)
+	for i := 0; i < NumWorker; i++ {
+		go func() {
+			source, err := sourceFactory.Open()
+			if err != nil {
+				panic(err)
+			}
+			defer source.Close()
+			defer wg.Done()
+			// TODO: stop this loop on failure
+			capacityMutex.Lock()
+			for {
+				for capacity >= CapacityLimit {
+					capacityCond.Wait()
+				}
+				if nextJob >= len(requests) {
+					capacityMutex.Unlock()
+					return
+				}
+				job := nextJob
+				nextJob += 1
+				capacityMutex.Unlock()
+
+				trie, err := getSubTrie(requests[job], source, true)
+				responses[job] <- response{trie, err}
+
+				capacityMutex.Lock()
+				capacity += int32(len(trie.nodes))
+				//fmt.Printf("Capacity: %d (+%d)\n", capacity, len(trie.nodes))
+			}
+		}()
+	}
+
+	nextSubTrie := 0
+	stack := make([]mpt.NodeId, 0, 50)
+	stack = append(stack, tip.root)
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		node, found := tip.nodes[cur]
+		if !found {
+			//fmt.Printf("Fetching node %v\n", cur)
+			c := responses[nextSubTrie]
+			res := <-c
+			close(c)
+			nextSubTrie += 1
+			if res.err != nil {
+				return res.err
+			}
+			if res.trie.root != cur {
+				panic(fmt.Sprintf("unexpected node, wanted %v, got %v", cur, res.trie.root))
+			}
+			if err := res.trie.visit(visitor); err != nil {
+				return err
+			}
+
+			capacityMutex.Lock()
+			capacity -= int32(len(res.trie.nodes))
+			//fmt.Printf("Capacity: %d (-%d)\n", capacity, len(res.trie.nodes))
+			capacityCond.Broadcast()
+			capacityMutex.Unlock()
+			continue
+		}
+
+		switch visitor.Visit(node, mpt.NodeInfo{Id: cur}) {
+		case mpt.VisitResponseAbort:
+			return nil
+		case mpt.VisitResponsePrune:
+			continue
+		}
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			children := node.GetChildren()
+			for i := len(children) - 1; i >= 0; i-- {
+				id := children[i].Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			stack = append(stack, next.Id())
+		}
+	}
+	return nil
 }
 
 // ----------------------------------------------------------------------------
