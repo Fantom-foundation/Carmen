@@ -1077,7 +1077,13 @@ func visitAll_5(
 		return err
 	}
 
-	fmt.Printf("Loaded %d accounts\n", len(patch.leaves))
+	fmt.Printf("Loaded %d accounts\n", len(accounts))
+
+	if cutAtAccounts {
+		for _, account := range accounts {
+			visitor.Visit(&account, mpt.NodeInfo{})
+		}
+	}
 
 	// Step 2: load all account storages.
 
