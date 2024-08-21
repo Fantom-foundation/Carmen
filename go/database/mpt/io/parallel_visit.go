@@ -1083,6 +1083,7 @@ func visitAll_5(
 		for _, account := range accounts {
 			visitor.Visit(&account, mpt.NodeInfo{})
 		}
+		return nil
 	}
 
 	// Step 2: load all account storages.
