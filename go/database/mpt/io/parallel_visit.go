@@ -37,7 +37,8 @@ func visitAll(
 	if false {
 		return visitAll_3(directory, root, visitor)
 	}
-	return visitAll_4(directory, root, visitor, cutAtAccounts)
+	//return visitAll_4(directory, root, visitor, cutAtAccounts)
+	return visitAll_4_stats(directory, root, cutAtAccounts)
 }
 
 func visitAll_1(
@@ -636,12 +637,14 @@ func visitAll_4(
 	stop := make(chan struct{})
 	defer close(stop)
 	go func() {
+		start := time.Now()
 		ticker := time.NewTicker(10 * time.Second)
 		for {
 			select {
 			case <-ticker.C:
 				cur := counter.Load()
-				fmt.Printf("Node rate: %f nodes/s\n", float64(cur-last)/10)
+				duration := time.Since(start).Seconds()
+				fmt.Printf("Node rate: %.1f nodes/s / overall %.1f nodes/s\n", float64(cur-last)/10, float64(cur)/duration)
 				last = cur
 			case <-stop:
 				return
@@ -873,6 +876,129 @@ func (t *subTrie) visit(visitor mpt.NodeVisitor) error {
 		}
 	}
 	return nil
+}
+
+func visitAll_4_stats(
+	directory string,
+	root mpt.NodeId,
+	cutAtAccounts bool,
+) error {
+	const TipHeight = 4
+	const NumWorker = 16
+
+	fmt.Printf("Visiting all nodes in %s using parallel node fetching 4 (stats)\n", directory)
+
+	sourceFactory := &nodeSourceFactory{
+		directory: directory,
+	}
+
+	source, err := sourceFactory.Open()
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	// Start by consuming the first 3 layers of the trie.
+	patch, err := getTrieTip(root, source, TipHeight, cutAtAccounts)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Fetched tip with %d leaves\n", len(patch.leaves))
+	//fmt.Printf("Leaves: %v\n", patch.leaves)
+
+	type response struct {
+		numNodes int
+		err      error
+	}
+
+	// Allocate buffers for requests and responses.
+	requests := make([]mpt.NodeId, len(patch.leaves))
+	responses := make([]response, len(patch.leaves))
+	for i, leave := range patch.leaves {
+		requests[i] = leave
+	}
+
+	nextJob := atomic.Int32{}
+
+	var wg sync.WaitGroup
+	wg.Add(NumWorker)
+	for i := 0; i < NumWorker; i++ {
+		go func() {
+			source, err := sourceFactory.Open()
+			if err != nil {
+				panic(err)
+			}
+			defer source.Close()
+			defer wg.Done()
+			for {
+				job := nextJob.Add(1) - 1
+				if job >= int32(len(requests)) {
+					return
+				}
+				size, err := getSubTrieSize(requests[job], source, cutAtAccounts)
+				responses[job] = response{size, err}
+				if err != nil {
+					fmt.Printf("Failed to fetch subtrie for job %d: %v\n", job, err)
+				} else {
+					fmt.Printf("Fetched subtrie for job %d with %d nodes\n", job, size)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	for i := 0; i < len(responses); i++ {
+		res := responses[i]
+		if res.err != nil {
+			fmt.Printf("%d, %v\n", i, res.err)
+		} else {
+			fmt.Printf("%d, %d\n", i, res.numNodes)
+		}
+	}
+
+	return nil
+}
+
+func getSubTrieSize(root mpt.NodeId, source NodeSource, cutAtAccounts bool) (int, error) {
+	counter := 0
+	stack := make([]mpt.NodeId, 0, 50)
+	stack = append(stack, root)
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		node, err := source.Get(cur)
+		if err != nil {
+			return 0, err
+		}
+
+		counter++
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			children := node.GetChildren()
+			for i := len(children) - 1; i >= 0; i-- {
+				id := children[i].Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			stack = append(stack, next.Id())
+		case *mpt.AccountNode:
+			if !cutAtAccounts {
+				storage := node.GetStorage()
+				id := storage.Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		}
+	}
+	return counter, nil
 }
 
 // ----------------------------------------------------------------------------
