@@ -1063,26 +1063,35 @@ func visitAll_5(
 		}
 	}()
 
-	accounts := make([]mpt.AccountNode, 0, 5_000_000)
-	accountCollector := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+	type accountInfo struct {
+		accountId mpt.NodeId
+		storageId mpt.NodeId
+	}
+
+	accountInfos := make([]accountInfo, 0, 5_000_000)
+	accountIdsCollector := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		counter.Add(1)
 		if account, ok := node.(*mpt.AccountNode); ok {
-			accounts = append(accounts, *account)
+			if cutAtAccounts {
+				visitor.Visit(node, info)
+			}
+			ref := account.GetStorage()
+			accountInfos = append(accountInfos, accountInfo{
+				accountId: info.Id,
+				storageId: ref.Id(),
+			})
 			return mpt.VisitResponsePrune
 		}
 		return mpt.VisitResponseContinue
 	})
 
-	if err := visitTrieUnderTip(patch, sourceFactory, accountCollector); err != nil {
+	if err := visitTrieUnderTip(patch, sourceFactory, accountIdsCollector); err != nil {
 		return err
 	}
 
-	fmt.Printf("Loaded %d accounts\n", len(accounts))
+	fmt.Printf("Loaded %d accounts\n", len(accountInfos))
 
 	if cutAtAccounts {
-		for _, account := range accounts {
-			visitor.Visit(&account, mpt.NodeInfo{})
-		}
 		return nil
 	}
 
@@ -1093,11 +1102,9 @@ func visitAll_5(
 		err error
 	}
 
-	storageTips := make([]chan tipResponse, len(accounts))
-	for i, account := range accounts {
-		ref := account.GetStorage()
-		storageRoot := ref.Id()
-		if !storageRoot.IsEmpty() {
+	storageTips := make([]chan tipResponse, len(accountInfos))
+	for i, accountInfo := range accountInfos {
+		if !accountInfo.storageId.IsEmpty() {
 			storageTips[i] = make(chan tipResponse, 1)
 		}
 	}
@@ -1112,8 +1119,7 @@ func visitAll_5(
 			}
 			defer source.Close()
 			for i := range tipRequest {
-				ref := accounts[i].GetStorage()
-				id := ref.Id()
+				id := accountInfos[i].storageId
 				if id.IsEmpty() {
 					continue
 				}
@@ -1123,7 +1129,7 @@ func visitAll_5(
 		}()
 	}
 
-	for i := 0; i < cap(tipRequest) && i < len(accounts); i++ {
+	for i := 0; i < cap(tipRequest) && i < len(accountInfos); i++ {
 		tipRequest <- i
 	}
 
@@ -1133,16 +1139,20 @@ func visitAll_5(
 	})
 
 	// Consume the storage of accounts in order.
-	for i, account := range accounts {
-		if next := i + cap(tipRequest); next < len(accounts) {
+	for i, accountInfo := range accountInfos {
+		// allow tip-pre-fetching workers to continue one more step
+		if next := i + cap(tipRequest); next < len(accountInfos) {
 			tipRequest <- next
 		}
 
-		countingVisitor.Visit(&account, mpt.NodeInfo{})
+		// re-load the account node for the visitor
+		node, err := source.Get(accountInfo.accountId)
+		if err != nil {
+			return err
+		}
+		countingVisitor.Visit(node, mpt.NodeInfo{Id: accountInfo.accountId})
 
-		ref := account.GetStorage()
-		storageRoot := ref.Id()
-		if storageRoot.IsEmpty() {
+		if accountInfo.storageId.IsEmpty() {
 			continue
 		}
 
