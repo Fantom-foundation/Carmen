@@ -1116,7 +1116,7 @@ func visitAll_5(
 		}()
 	}
 
-	for i := 0; i < 10*NumWorker && i < len(accounts); i++ {
+	for i := 0; i < cap(tipRequest) && i < len(accounts); i++ {
 		tipRequest <- i
 	}
 
@@ -1127,8 +1127,8 @@ func visitAll_5(
 
 	// Consume the storage of accounts in order.
 	for i, account := range accounts {
-		if i < len(accounts) {
-			tipRequest <- i
+		if next := i + cap(tipRequest); next < len(accounts) {
+			tipRequest <- next
 		}
 
 		countingVisitor.Visit(&account, mpt.NodeInfo{})
