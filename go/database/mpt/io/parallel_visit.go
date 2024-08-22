@@ -11,6 +11,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/io/heap"
 )
 
 type NodeSourceFactory interface {
@@ -43,7 +44,10 @@ func visitAll(
 	if false {
 		return visitAll_4_stats(directory, root, cutAtAccounts)
 	}
-	return visitAll_5(directory, root, visitor, cutAtAccounts)
+	if false {
+		return visitAll_5(directory, root, visitor, cutAtAccounts)
+	}
+	return visitAll_6(directory, root, visitor, cutAtAccounts)
 }
 
 func visitAll_1(
@@ -1008,8 +1012,6 @@ func getSubTrieSize(root mpt.NodeId, source NodeSource, cutAtAccounts bool) (int
 
 // -- Variant 5 --
 
-// -- Variant 4 --
-
 func visitAll_5(
 	directory string,
 	root mpt.NodeId,
@@ -1306,6 +1308,269 @@ func visitTrieUnderTip(
 		}
 	}
 	return nil
+}
+
+// -- Variant 6 --
+
+func visitAll_6(
+	directory string,
+	root mpt.NodeId,
+	visitor mpt.NodeVisitor,
+	cutAtAccounts bool,
+) error {
+
+	sourceFactory := &nodeSourceFactory{
+		directory: directory,
+	}
+
+	// The idea is to have workers processing a common queue of needed
+	// nodes sorted by their position in the depth-first traversal of the
+	// trie. The workers will fetch the nodes and put them into a shared
+	// map of nodes. The main thread will consume the nodes from the map
+	// and visit them.
+
+	type request struct {
+		position *position
+		id       mpt.NodeId
+	}
+
+	requestsMutex := sync.Mutex{}
+	requests := heap.New(func(a, b request) int {
+		return a.position.compare(b.position)
+	})
+
+	type response struct {
+		node mpt.Node
+		err  error
+	}
+	responsesMutex := sync.Mutex{}
+	responses := map[mpt.NodeId]response{}
+
+	done := atomic.Bool{}
+	defer done.Store(true)
+
+	requests.Add(request{nil, root})
+
+	const NumWorker = 16
+	for i := 0; i < NumWorker; i++ {
+		go func() {
+			source, err := sourceFactory.Open()
+			if err != nil {
+				panic(err)
+			}
+			defer source.Close()
+			for !done.Load() {
+				// TODO: implement throttling
+				// get the next job
+				requestsMutex.Lock()
+				req, present := requests.Pop()
+				requestsMutex.Unlock()
+
+				// process the request
+				if !present {
+					continue
+				}
+
+				// fetch the node and put it into the responses
+				fmt.Printf("Fetching %v ...\n", req.position)
+				node, err := source.Get(req.id)
+				responsesMutex.Lock()
+				responses[req.id] = response{node, err}
+				responsesMutex.Unlock()
+
+				// if there was a fetch error, stop the workers
+				if err != nil {
+					done.Store(true)
+					return
+				}
+
+				// derive child nodes to be fetched
+				switch node := node.(type) {
+				case *mpt.BranchNode:
+					children := node.GetChildren()
+					requestsMutex.Lock()
+					for i, child := range children {
+						id := child.Id()
+						if id.IsEmpty() {
+							continue
+						}
+						pos := req.position.Child(byte(i))
+						requests.Add(request{pos, child.Id()})
+					}
+					requestsMutex.Unlock()
+				case *mpt.ExtensionNode:
+					next := node.GetNext()
+					requestsMutex.Lock()
+					pos := req.position.Child(0)
+					requests.Add(request{pos, next.Id()})
+					requestsMutex.Unlock()
+				case *mpt.AccountNode:
+					if !cutAtAccounts {
+						storage := node.GetStorage()
+						id := storage.Id()
+						if !id.IsEmpty() {
+							requestsMutex.Lock()
+							pos := req.position.Child(0)
+							requests.Add(request{pos, id})
+							requestsMutex.Unlock()
+						}
+					}
+				}
+			}
+		}()
+	}
+
+	// Perform depth-first iteration through the trie.
+	source, err := sourceFactory.Open()
+	if err != nil {
+		return err
+	}
+	stack := []mpt.NodeId{root}
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		responsesMutex.Lock()
+		res, found := responses[cur]
+		if found {
+			delete(responses, cur)
+		}
+		responsesMutex.Unlock()
+
+		var node mpt.Node
+		var err error
+		if found {
+			node, err = res.node, res.err
+		} else {
+			fmt.Printf("Missing %v, need to fetch it\n", cur)
+			node, err = source.Get(cur)
+		}
+
+		if err != nil {
+			return nil
+		}
+
+		switch visitor.Visit(node, mpt.NodeInfo{Id: cur}) {
+		case mpt.VisitResponseAbort:
+			return nil
+		case mpt.VisitResponsePrune:
+			continue
+		}
+
+		switch node := node.(type) {
+		case *mpt.BranchNode:
+			children := node.GetChildren()
+			for i := len(children) - 1; i >= 0; i-- {
+				id := children[i].Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		case *mpt.ExtensionNode:
+			next := node.GetNext()
+			stack = append(stack, next.Id())
+		case *mpt.AccountNode:
+			if !cutAtAccounts {
+				storage := node.GetStorage()
+				id := storage.Id()
+				if !id.IsEmpty() {
+					stack = append(stack, id)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+type position struct {
+	parent *position
+	pos    byte
+	len    byte
+}
+
+func newPosition(pos []byte) *position {
+	var res *position
+	for i, step := range pos {
+		res = &position{
+			parent: res,
+			pos:    step,
+			len:    byte(i),
+		}
+	}
+	return res
+}
+
+func (p *position) String() string {
+	if p == nil {
+		return ""
+	}
+	if p.parent == nil {
+		return fmt.Sprintf("%d", p.pos)
+	}
+	return fmt.Sprintf("%s.%d", p.parent.String(), p.pos)
+}
+
+func (p *position) Child(step byte) *position {
+	len := byte(0)
+	if p != nil {
+		len = p.len
+	}
+	return &position{
+		parent: p,
+		pos:    step,
+		len:    len + 1,
+	}
+}
+
+func (a *position) compare(b *position) int {
+	if a == b {
+		return 0
+	}
+	if a == nil {
+		return -1
+	}
+	if b == nil {
+		return 1
+	}
+
+	// make sure a is the shorter one
+	if a.len > b.len {
+		return b.compare(a) * -1
+	}
+
+	// reduce the length of b to match a
+	bIsLonger := a.len < b.len
+	for a.len < b.len {
+		b = b.parent
+	}
+
+	// compare the common part
+	prefixResult := a._compare(b)
+	if prefixResult != 0 {
+		return prefixResult
+	}
+	if bIsLonger {
+		return -1
+	}
+	return 0
+}
+
+func (a *position) _compare(b *position) int {
+	if a == b {
+		return 0
+	}
+	prefixResult := a.parent._compare(b.parent)
+	if prefixResult != 0 {
+		return prefixResult
+	}
+	if a.pos < b.pos {
+		return -1
+	}
+	if a.pos > b.pos {
+		return 1
+	}
+	return 0
 }
 
 // ----------------------------------------------------------------------------
