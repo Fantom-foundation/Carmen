@@ -1336,7 +1336,7 @@ func visitAll_6(
 
 	requestsMutex := sync.Mutex{}
 	requests := heap.New(func(a, b request) int {
-		return a.position.compare(b.position)
+		return b.position.compare(a.position)
 	})
 
 	type response struct {
@@ -1372,7 +1372,7 @@ func visitAll_6(
 				}
 
 				// fetch the node and put it into the responses
-				fmt.Printf("Fetching %v ...\n", req.position)
+				fmt.Printf("Fetching %v (%v) ...\n", req.position, req.id)
 				node, err := source.Get(req.id)
 				responsesMutex.Lock()
 				responses[req.id] = response{node, err}
