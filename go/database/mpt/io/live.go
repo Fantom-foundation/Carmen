@@ -95,7 +95,7 @@ func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
 // state of the LiveDB.
-func Export(ctx context.Context, directory string, out io.Writer) error {
+func Export(ctx context.Context, logger *Log, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -105,13 +105,14 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of LiveDB instances, found %v in directory", info.Mode)
 	}
 
+	logger.Printf("opening liveDb: %s", directory)
 	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.NodeCacheConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to open LiveDB: %v", err)
 	}
 	defer db.Close()
 
-	_, err = ExportLive(ctx, db, out)
+	_, err = ExportLive(ctx, logger, db, out)
 	return err
 }
 
@@ -133,12 +134,12 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 	}
 
 	defer archive.Close()
-	_, err = ExportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+	_, err = ExportLive(ctx, nil, exportableArchiveTrie{trie: archive, block: block}, out)
 	return err
 }
 
 // ExportLive exports given db into out.
-func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.Hash, error) {
+func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Writer) (common.Hash, error) {
 	// Start with the magic number.
 	if _, err := out.Write(stateMagicNumber); err != nil {
 		return common.Hash{}, err
@@ -162,7 +163,8 @@ func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.
 	}
 
 	// Write out codes.
-	codes, err := getReferencedCodes(db)
+	logger.Print("exporting codes")
+	codes, err := getReferencedCodes(ctx, logger, db)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %v", err)
 	}
@@ -171,7 +173,9 @@ func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.
 	}
 
 	// Write out all accounts and values.
-	visitor := exportVisitor{out: out, ctx: ctx}
+	logger.Print("exporting accounts and values")
+	progress := logger.NewProgressTracker("exported %d accounts, %.2f accounts/s", 1_000_000)
+	visitor := exportVisitor{out: out, ctx: ctx, progress: progress}
 	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
 		return common.Hash{}, fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
 	}
@@ -370,10 +374,15 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 
 // getReferencedCodes returns a map of codes referenced by accounts in the
 // given database. The map is indexed by the code hash.
-func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
+func getReferencedCodes(ctxt context.Context, logger *Log, db mptStateVisitor) (map[common.Hash][]byte, error) {
+	progress := logger.NewProgressTracker("retrieved %d accounts, %.2f accounts/s", 1000_000)
 	codes := make(map[common.Hash][]byte)
 	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		if n, ok := node.(*mpt.AccountNode); ok {
+			if interrupt.IsCancelled(ctxt) {
+				return mpt.VisitResponseAbort
+			}
+			progress.Step(1)
 			codeHash := n.Info().CodeHash
 			code := db.GetCodeForHash(codeHash)
 			if len(code) > 0 {
@@ -383,15 +392,21 @@ func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
 		}
 		return mpt.VisitResponseContinue
 	}))
+
+	if interrupt.IsCancelled(ctxt) {
+		err = interrupt.ErrCanceled
+	}
+
 	return codes, err
 }
 
 // exportVisitor is an internal utility used by the Export function to write
 // account and value node information to a given output writer.
 type exportVisitor struct {
-	out io.Writer
-	err error
-	ctx context.Context
+	out      io.Writer
+	err      error
+	ctx      context.Context
+	progress *ProgressLogger
 }
 
 func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
@@ -402,6 +417,7 @@ func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 	}
 	switch n := node.(type) {
 	case *mpt.AccountNode:
+		e.progress.Step(1)
 		addr := n.Address()
 		info := n.Info()
 		if _, err := e.out.Write([]byte{byte('A')}); err != nil {

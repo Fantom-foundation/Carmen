@@ -15,13 +15,11 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
+	mptIo "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
+	"github.com/urfave/cli/v2"
 	"io"
 	"os"
 	"strings"
-	"time"
-
-	mptIo "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
-	"github.com/urfave/cli/v2"
 )
 
 var ImportLiveDbCmd = cli.Command{
@@ -86,8 +84,8 @@ func doImport(context *cli.Context, runImport func(directory string, in io.Reade
 		return fmt.Errorf("error creating output directory: %v", err)
 	}
 
-	start := time.Now()
-	logFromStart(start, "import started")
+	logger := mptIo.NewLog()
+	logger.Print("import started")
 	file, err := os.Open(src)
 	if err != nil {
 		return err
@@ -97,7 +95,7 @@ func doImport(context *cli.Context, runImport func(directory string, in io.Reade
 		return err
 	}
 	defer func() {
-		logFromStart(start, "import done")
+		logger.Printf("import done")
 	}()
 	return errors.Join(
 		runImport(dir, in),

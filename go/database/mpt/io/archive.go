@@ -16,14 +16,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"io"
 	"os"
 	"path"
 	"sort"
-
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
-	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
-	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -57,7 +56,7 @@ var archiveMagicNumber []byte = []byte("Fantom-Archive-State")
 
 const archiveFormatVersion = byte(1)
 
-func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
+func ExportArchive(ctx context.Context, logger *Log, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -67,6 +66,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
+	logger.Printf("opening archive: %s", directory)
 	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 	if err != nil {
 		return err
@@ -83,6 +83,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	}
 
 	// Write out codes.
+	logger.Printf("exporting codes")
 	codes := archive.GetCodes()
 	if err = writeCodes(codes, out); err != nil {
 		return err
@@ -98,7 +99,10 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	}
 
 	// Encode diff of each individual block.
+	logger.Printf("exporting blocks")
+	tracker := logger.NewProgressTracker("processed %d blocks, rate: %f blocks/s", 1_000_000)
 	for block := uint64(0); block <= maxBlock; block++ {
+		tracker.Step(1)
 		if interrupt.IsCancelled(ctx) {
 			return errors.Join(interrupt.ErrCanceled, archive.Close())
 		}
