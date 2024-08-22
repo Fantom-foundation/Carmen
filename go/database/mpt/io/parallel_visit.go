@@ -1344,6 +1344,7 @@ func visitAll_6(
 		err  error
 	}
 	responsesMutex := sync.Mutex{}
+	responsesCond := sync.NewCond(&responsesMutex)
 	responses := map[mpt.NodeId]response{}
 
 	done := atomic.Bool{}
@@ -1374,8 +1375,10 @@ func visitAll_6(
 				// fetch the node and put it into the responses
 				fmt.Printf("Fetching %v (%v) ...\n", req.position, req.id)
 				node, err := source.Get(req.id)
+
 				responsesMutex.Lock()
 				responses[req.id] = response{node, err}
+				responsesCond.Signal()
 				responsesMutex.Unlock()
 
 				// if there was a fetch error, stop the workers
@@ -1421,43 +1424,37 @@ func visitAll_6(
 	}
 
 	// Perform depth-first iteration through the trie.
-	source, err := sourceFactory.Open()
-	if err != nil {
-		return err
-	}
 	stack := []mpt.NodeId{root}
 	for len(stack) > 0 {
 		cur := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 
+		var res response
 		responsesMutex.Lock()
-		res, found := responses[cur]
-		if found {
-			delete(responses, cur)
+		for {
+			found := false
+			res, found = responses[cur]
+			if found {
+				delete(responses, cur)
+				break
+			}
+			fmt.Printf("Waiting for %v ...\n", cur)
+			responsesCond.Wait()
 		}
 		responsesMutex.Unlock()
 
-		var node mpt.Node
-		var err error
-		if found {
-			node, err = res.node, res.err
-		} else {
-			fmt.Printf("Missing %v, need to fetch it\n", cur)
-			node, err = source.Get(cur)
-		}
-
-		if err != nil {
+		if res.err != nil {
 			return nil
 		}
 
-		switch visitor.Visit(node, mpt.NodeInfo{Id: cur}) {
+		switch visitor.Visit(res.node, mpt.NodeInfo{Id: cur}) {
 		case mpt.VisitResponseAbort:
 			return nil
 		case mpt.VisitResponsePrune:
 			continue
 		}
 
-		switch node := node.(type) {
+		switch node := res.node.(type) {
 		case *mpt.BranchNode:
 			children := node.GetChildren()
 			for i := len(children) - 1; i >= 0; i-- {
@@ -1479,6 +1476,8 @@ func visitAll_6(
 			}
 		}
 	}
+
+	fmt.Printf("Lost %d nodes\n", len(responses))
 
 	return nil
 }
