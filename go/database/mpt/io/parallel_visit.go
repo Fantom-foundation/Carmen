@@ -1318,6 +1318,7 @@ func visitAll_6(
 	visitor mpt.NodeVisitor,
 	cutAtAccounts bool,
 ) error {
+	fmt.Printf("Visiting all nodes in %s using parallel node fetching 6\n", directory)
 
 	const debug = true
 
