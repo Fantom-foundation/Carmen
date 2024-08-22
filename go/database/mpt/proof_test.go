@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"reflect"
 	"testing"
 
@@ -1245,7 +1246,7 @@ func TestWitnessProof_String(t *testing.T) {
 }
 
 func TestProof_Equals(t *testing.T) {
-	proof := CreateWitnessProofFromNodes([]string{"a"})
+	proof := CreateWitnessProofFromNodes([]immutable.Bytes{immutable.NewBytes([]byte{0xA})})
 
 	if proof.Equals(nil) {
 		t.Errorf("proofs should not be equal")
@@ -1255,7 +1256,7 @@ func TestProof_Equals(t *testing.T) {
 		t.Errorf("proofs should be equal")
 	}
 
-	other := CreateWitnessProofFromNodes([]string{"a"})
+	other := CreateWitnessProofFromNodes([]immutable.Bytes{immutable.NewBytes([]byte{0xA})})
 	if !proof.Equals(other) {
 		t.Errorf("proofs should be equal")
 	}

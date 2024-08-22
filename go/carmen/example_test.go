@@ -325,7 +325,7 @@ func ExampleHistoricBlockContext_GetProof() {
 
 	// ------- Query witness proofs for each block -------
 
-	completeProof := make(map[string]struct{}, 1024)
+	completeProof := make(map[carmen.Bytes]struct{}, 1024)
 	// proof each address and key from each block, and merge all in one proof
 	for i := 0; i < N; i++ {
 		if err := db.QueryBlock(uint64(i), func(ctxt carmen.HistoricBlockContext) error {
@@ -448,7 +448,7 @@ func ExampleWitnessProof_GetStorageElements() {
 
 	// ------- Query witness proofs from a block -------
 
-	var elements []string
+	var elements []carmen.Bytes
 	// proof each address and key from each block, and merge all in one proof
 	if err := db.QueryBlock(0, func(ctxt carmen.HistoricBlockContext) error {
 		proof, err := ctxt.GetProof(carmen.Address{1}, carmen.Key{1})
