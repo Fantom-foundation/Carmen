@@ -1319,6 +1319,8 @@ func visitAll_6(
 	cutAtAccounts bool,
 ) error {
 
+	const debug = true
+
 	sourceFactory := &nodeSourceFactory{
 		directory: directory,
 	}
@@ -1373,13 +1375,18 @@ func visitAll_6(
 				}
 
 				// fetch the node and put it into the responses
-				fmt.Printf("Fetching %v (%v) ...\n", req.position, req.id)
+				if debug {
+					fmt.Printf("Fetching %v (%v) ...\n", req.position, req.id)
+				}
 				node, err := source.Get(req.id)
 
 				responsesMutex.Lock()
 				responses[req.id] = response{node, err}
 				responsesCond.Signal()
 				responsesMutex.Unlock()
+				if debug {
+					fmt.Printf("Fetched %v (%v) ...\n", req.position, req.id)
+				}
 
 				// if there was a fetch error, stop the workers
 				if err != nil {
@@ -1438,7 +1445,9 @@ func visitAll_6(
 				delete(responses, cur)
 				break
 			}
-			fmt.Printf("Waiting for %v ...\n", cur)
+			if debug {
+				fmt.Printf("Waiting for %v (buffer size %d)...\n", cur, len(responses))
+			}
 			responsesCond.Wait()
 		}
 		responsesMutex.Unlock()
