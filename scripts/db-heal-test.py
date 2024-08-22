@@ -104,11 +104,16 @@ live = working_dir / 'live'
 
 print("Testing db created, starting loop.")
 
-# Save last working dir to remove it
-last_working_dir = None
 
 for i in range(1, number_of_iterations + 1):
-    # Dumb carmens logs into a file to avoid spamming
+    last_working_dir = working_dir
+
+    # Find working dir - Aida copies db-src
+    working_dir = max(Path(tmp_path).iterdir(), key=os.path.getmtime)
+    archive = working_dir / 'archive'
+    live = working_dir / 'live'
+
+    # Dumb carmen's logs into a file to avoid spamming
     c = open(carmen_log_file, 'w')
 
     # Restore Archive
@@ -199,13 +204,6 @@ for i in range(1, number_of_iterations + 1):
     if last_working_dir:
         print(f"Removing previous database {last_working_dir}")
         shutil.rmtree(last_working_dir, ignore_errors=True)
-
-    last_working_dir = working_dir
-
-    # Re-find working dir - Aida copies db-src
-    working_dir = max(Path(tmp_path).iterdir(), key=os.path.getmtime)
-    archive = working_dir / 'archive'
-    live = working_dir / 'live'
 
 # Clear anything leftover
 
