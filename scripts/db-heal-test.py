@@ -205,11 +205,13 @@ for i in range(1, number_of_iterations + 1):
         print(f"Removing previous database {last_working_dir}")
         shutil.rmtree(last_working_dir, ignore_errors=True)
 
+    genesis.unlink(missing_ok=True)
 # Clear anything leftover
 
 print(f"Clearing last database {working_dir} and log files.")
 aida_log_file.unlink(missing_ok=True)
 carmen_log_file.unlink(missing_ok=True)
 shutil.rmtree(working_dir, ignore_errors=True)
+
 
 sys.exit(0)
