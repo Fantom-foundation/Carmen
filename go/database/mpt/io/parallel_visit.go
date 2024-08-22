@@ -1430,6 +1430,32 @@ func visitAll_6(
 		}()
 	}
 
+	// Start a progress counter.
+	counter := atomic.Int64{}
+	last := int64(0)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		start := time.Now()
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				cur := counter.Load()
+				duration := time.Since(start).Seconds()
+				fmt.Printf("Node rate: %.1f nodes/s / overall %.1f nodes/s\n", float64(cur-last)/10, float64(cur)/duration)
+				last = cur
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	countingVisitor := mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		counter.Add(1)
+		return visitor.Visit(node, info)
+	})
+
 	// Perform depth-first iteration through the trie.
 	stack := []mpt.NodeId{root}
 	for len(stack) > 0 {
@@ -1456,7 +1482,7 @@ func visitAll_6(
 			return nil
 		}
 
-		switch visitor.Visit(res.node, mpt.NodeInfo{Id: cur}) {
+		switch countingVisitor.Visit(res.node, mpt.NodeInfo{Id: cur}) {
 		case mpt.VisitResponseAbort:
 			return nil
 		case mpt.VisitResponsePrune:
