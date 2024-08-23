@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"slices"
 	"sort"
@@ -46,11 +47,11 @@ type WitnessProof struct {
 
 // CreateWitnessProofFromNodes creates a witness proof from a list of strings.
 // Each string is an RLP node of the witness proof.
-func CreateWitnessProofFromNodes(nodes []string) WitnessProof {
+func CreateWitnessProofFromNodes(nodes []immutable.Bytes) WitnessProof {
 	db := make(proofDb, len(nodes))
 	for _, n := range nodes {
-		h := common.Keccak256([]byte(n))
-		db[h] = []byte(n)
+		b := n.ToBytes()
+		db[common.Keccak256(b)] = b
 	}
 
 	return WitnessProof{db}
@@ -259,19 +260,19 @@ func (p WitnessProof) String() string {
 }
 
 // GetElements returns serialised elements of the witness proof.
-func (p WitnessProof) GetElements() []string {
-	res := make([]string, 0, len(p.proofDb))
+func (p WitnessProof) GetElements() []immutable.Bytes {
+	res := make([]immutable.Bytes, 0, len(p.proofDb))
 	for _, v := range p.proofDb {
-		res = append(res, string(v))
+		res = append(res, immutable.NewBytes(v))
 	}
 	return res
 }
 
-func (p WitnessProof) GetStorageElements(root common.Hash, address common.Address, keys ...common.Key) ([]string, common.Hash, bool) {
+func (p WitnessProof) GetStorageElements(root common.Hash, address common.Address, keys ...common.Key) ([]immutable.Bytes, common.Hash, bool) {
 	visitor := &proofCollectingVisitor{}
 	found, complete, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
 	if err != nil || !found {
-		return []string{}, common.Hash{}, complete
+		return []immutable.Bytes{}, common.Hash{}, complete
 	}
 
 	storageRoot := visitor.visitedAccount.storageHash
