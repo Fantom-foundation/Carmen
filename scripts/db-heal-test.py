@@ -104,17 +104,16 @@ live = working_dir / 'live'
 
 print("Testing db created, starting loop.")
 
-# Dumb carmen's logs into a file to avoid spamming
-c = open(carmen_log_file, 'r+')
-
 for i in range(1, number_of_iterations + 1):
-    c.seek(0)
     last_working_dir = working_dir
 
     # Find working dir - Aida copies db-src
     working_dir = max(Path(tmp_path).iterdir(), key=os.path.getmtime)
     archive = working_dir / 'archive'
     live = working_dir / 'live'
+
+    # Dumb carmen's logs into a file to avoid spamming
+    c = open(carmen_log_file, 'r+')
 
     # Restore Archive
     result = subprocess.run(
@@ -206,7 +205,6 @@ for i in range(1, number_of_iterations + 1):
         shutil.rmtree(last_working_dir, ignore_errors=True)
 
     genesis.unlink(missing_ok=True)
-    c.truncate()
 # Clear anything leftover
 
 print(f"Clearing last database {working_dir} and log files.")
