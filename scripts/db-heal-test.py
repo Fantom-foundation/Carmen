@@ -108,6 +108,7 @@ print("Testing db created, starting loop.")
 c = open(carmen_log_file, 'r+')
 
 for i in range(1, number_of_iterations + 1):
+    c.seek(0)
     last_working_dir = working_dir
 
     # Find working dir - Aida copies db-src
@@ -205,6 +206,7 @@ for i in range(1, number_of_iterations + 1):
         shutil.rmtree(last_working_dir, ignore_errors=True)
 
     genesis.unlink(missing_ok=True)
+    c.truncate()
 # Clear anything leftover
 
 print(f"Clearing last database {working_dir} and log files.")
