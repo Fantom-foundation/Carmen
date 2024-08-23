@@ -172,18 +172,17 @@ for i in range(1, number_of_iterations + 1):
     print(f"Iteration {i}/{number_of_iterations}")
     # We restored to block X, although we need to start the app at +1 block because X is already done
     first_block = restore_block + 1
-    last_block += incremental_block
-    restore_block += incremental_block
-    kill_block += incremental_block
+    restore_block += i+incremental_block
+    kill_block += i+1+incremental_block
 
-    print(f"Syncing to block {last_block}...")
+    print(f"Starting at block {first_block}, killing at block {kill_block}...")
     command = [
         './build/aida-vm-sdb', 'substate', '--validate',
         '--db-tmp', tmp_path, '--carmen-schema', '5', '--db-impl', 'carmen',
         '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
         '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
-        '--carmen-cp-interval', '200', '--db-src', str(working_dir),
-        '--skip-priming', str(first_block), str(last_block)
+        '--carmen-cp-interval', '1', '--db-src', str(working_dir),
+        '--skip-priming', str(first_block), '50000000'  # Choose big last block, its getting killed anyway
     ]
 
     os.chdir(aida_path)
