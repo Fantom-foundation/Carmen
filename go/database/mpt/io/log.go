@@ -64,9 +64,15 @@ func (p *ProgressLogger) Step(increment int) {
 	if p.steps >= p.window {
 		now := time.Now()
 
-		p.log.Printf(p.format, p.counter, float64(p.steps)/now.Sub(p.start).Seconds())
+		count := p.counter / p.window * p.window // round down to the nearest window size
+		p.log.Printf(p.format, count, float64(p.steps)/now.Sub(p.start).Seconds())
 
 		p.steps = 0
 		p.start = now
 	}
+}
+
+// GetCounter returns the current value of the progress counter.
+func (p *ProgressLogger) GetCounter() int {
+	return p.counter
 }
