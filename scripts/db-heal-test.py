@@ -113,7 +113,7 @@ for i in range(1, number_of_iterations + 1):
     live = working_dir / 'live'
 
     # Dumb carmen's logs into a file to avoid spamming
-    c = open(carmen_log_file, 'r+')
+    c = open(carmen_log_file, 'w+')
 
     # Restore Archive
     result = subprocess.run(
