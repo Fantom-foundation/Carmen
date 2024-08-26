@@ -2411,7 +2411,7 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 				}
 
 				// Check that the archive can be verified.
-				if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+				if err := VerifyArchiveTrie(context.Background(), dir, S5ArchiveConfig, nil); err != nil {
 					t.Fatalf("failed to verify archive after reset to block %d: %v", block, err)
 				}
 
@@ -2469,7 +2469,7 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 			}
 
 			// Check that the restored and extended archive can be verified.
-			if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, S5ArchiveConfig, nil); err != nil {
 				t.Fatalf("failed to verify archive: %v", err)
 			}
 
