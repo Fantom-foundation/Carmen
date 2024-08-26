@@ -118,7 +118,7 @@ func Export(ctx context.Context, logger *Log, directory string, out io.Writer) e
 
 // ExportBlockFromArchive exports LiveDB genesis for a single given block from an Archive.
 // Note: block must be <= of Archive block height.
-func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer, block uint64) error {
+func ExportBlockFromArchive(ctx context.Context, logger *Log, directory string, out io.Writer, block uint64) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -134,7 +134,7 @@ func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer
 	}
 
 	defer archive.Close()
-	_, err = ExportLive(ctx, nil, exportableArchiveTrie{trie: archive, block: block}, out)
+	_, err = ExportLive(ctx, logger, exportableArchiveTrie{trie: archive, block: block}, out)
 	return err
 }
 
@@ -166,7 +166,7 @@ func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Wri
 	logger.Print("exporting codes")
 	codes, err := getReferencedCodes(ctx, logger, db)
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %v", err)
+		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %w", err)
 	}
 	if err := writeCodes(codes, out); err != nil {
 		return common.Hash{}, err

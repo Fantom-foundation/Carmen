@@ -156,7 +156,7 @@ func (s *ArchiveState) Export(ctx context.Context, out io.Writer) (common.Hash, 
 	}
 
 	exportableTrie := mptio.NewExportableArchiveTrie(trie, s.block)
-	rootHash, err := mptio.ExportLive(ctx, nil, exportableTrie, out)
+	rootHash, err := mptio.ExportLive(ctx, mptio.NewLog(), exportableTrie, out)
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
 		return common.Hash{}, s.archiveError

@@ -330,7 +330,7 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 	for i := 0; i < M; i++ {
 		// Export live database from archive.
 		buffer := new(bytes.Buffer)
-		if err := ExportBlockFromArchive(context.Background(), sourceDir, buffer, uint64(i)); err != nil {
+		if err := ExportBlockFromArchive(context.Background(), NewLog(), sourceDir, buffer, uint64(i)); err != nil {
 			t.Fatalf("failed to export Archive: %v", err)
 		}
 

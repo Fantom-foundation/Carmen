@@ -33,7 +33,7 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 	}
 
 	exportBlockFromArchive := func(ctx context.Context, _ *Log, dir string, out io.Writer) error {
-		return ExportBlockFromArchive(ctx, dir, out, 3)
+		return ExportBlockFromArchive(ctx, NewLog(), dir, out, 3)
 	}
 
 	tests := map[string]testFuncs{

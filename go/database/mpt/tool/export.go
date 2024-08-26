@@ -74,7 +74,7 @@ func doExport(context *cli.Context) error {
 		if context.IsSet(targetBlockFlag.Name) {
 			// Passed Archive and chosen block to export
 			blkNumber := context.Uint64(targetBlockFlag.Name)
-			exportErr = io.ExportBlockFromArchive(ctx, dir, out, blkNumber)
+			exportErr = io.ExportBlockFromArchive(ctx, logger, dir, out, blkNumber)
 		} else {
 			// Passed Archive without a chosen block
 			exportErr = io.ExportArchive(ctx, logger, dir, out)
