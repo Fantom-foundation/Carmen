@@ -209,7 +209,7 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 
 	// Export database to buffer.
 	var buffer bytes.Buffer
-	if err := Export(context.Background(), sourceDir, &buffer); err != nil {
+	if err := Export(context.Background(), NewLog(), sourceDir, &buffer); err != nil {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 
@@ -330,7 +330,7 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 	for i := 0; i < M; i++ {
 		// Export live database from archive.
 		buffer := new(bytes.Buffer)
-		if err := ExportBlockFromArchive(context.Background(), sourceDir, buffer, uint64(i)); err != nil {
+		if err := ExportBlockFromArchive(context.Background(), NewLog(), sourceDir, buffer, uint64(i)); err != nil {
 			t.Fatalf("failed to export Archive: %v", err)
 		}
 

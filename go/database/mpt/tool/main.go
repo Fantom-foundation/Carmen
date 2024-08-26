@@ -12,9 +12,8 @@ package main
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/urfave/cli/v2"
+	"os"
 )
 
 // Run using

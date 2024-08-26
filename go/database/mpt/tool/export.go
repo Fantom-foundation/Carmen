@@ -15,15 +15,12 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"log"
-	"os"
-	"strings"
-	"time"
-
 	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
+	"os"
+	"strings"
 )
 
 var ExportCmd = cli.Command{
@@ -59,8 +56,8 @@ func doExport(context *cli.Context) error {
 		return err
 	}
 
-	start := time.Now()
-	logFromStart(start, "export started")
+	logger := io.NewLog()
+	logger.Print("export started")
 
 	file, err := os.Create(trg)
 	if err != nil {
@@ -77,14 +74,14 @@ func doExport(context *cli.Context) error {
 		if context.IsSet(targetBlockFlag.Name) {
 			// Passed Archive and chosen block to export
 			blkNumber := context.Uint64(targetBlockFlag.Name)
-			exportErr = io.ExportBlockFromArchive(ctx, dir, out, blkNumber)
+			exportErr = io.ExportBlockFromArchive(ctx, logger, dir, out, blkNumber)
 		} else {
-			// Passed Archive without chosen block
-			exportErr = io.ExportArchive(ctx, dir, out)
+			// Passed Archive without a chosen block
+			exportErr = io.ExportArchive(ctx, logger, dir, out)
 		}
 	} else {
 		// Passed LiveDB
-		exportErr = io.Export(ctx, dir, out)
+		exportErr = io.Export(ctx, logger, dir, out)
 	}
 
 	if err = errors.Join(
@@ -95,12 +92,6 @@ func doExport(context *cli.Context) error {
 	); err != nil {
 		return err
 	}
-	logFromStart(start, "export done")
+	logger.Print("export done")
 	return nil
-}
-
-func logFromStart(start time.Time, msg string) {
-	now := time.Now()
-	t := uint64(now.Sub(start).Seconds())
-	log.Printf("[t=%4d:%02d] - %s.\n", t/60, t%60, msg)
 }

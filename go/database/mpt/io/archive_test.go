@@ -13,13 +13,12 @@ package io
 import (
 	"bytes"
 	"context"
-	"path"
-	"strings"
-	"testing"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
+	"path"
+	"strings"
+	"testing"
 )
 
 func TestIO_Archive_ExportAndImport(t *testing.T) {
@@ -47,7 +46,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 
 	// Export the archive into a buffer.
 	buffer := new(bytes.Buffer)
-	if err := ExportArchive(context.Background(), sourceDir, buffer); err != nil {
+	if err := ExportArchive(context.Background(), NewLog(), sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 	genesis := buffer.Bytes()
@@ -113,7 +112,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 
 	// Export the archive into a buffer.
 	buffer := new(bytes.Buffer)
-	if err := ExportArchive(context.Background(), sourceDir, buffer); err != nil {
+	if err := ExportArchive(context.Background(), NewLog(), sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 	genesis := buffer.Bytes()
