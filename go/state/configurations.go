@@ -13,6 +13,7 @@ package state
 import (
 	"fmt"
 	"maps"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -23,18 +24,25 @@ import (
 
 // Parameters struct defining configuration parameters for state instances.
 type Parameters struct {
-	Variant      Variant
-	Schema       Schema
-	Archive      ArchiveType
-	Directory    string
-	LiveCache    int64 // bytes, approximate, supported only by S5 now
-	ArchiveCache int64 // bytes, approximate, supported only by S5 now
+	Variant            Variant
+	Schema             Schema
+	Archive            ArchiveType
+	Directory          string
+	LiveCache          int64 // bytes, approximate, supported only by S5 now
+	ArchiveCache       int64 // bytes, approximate, supported only by S5 now
+	CheckpointInterval int   // in blocks
+	CheckpointPeriod   time.Duration
 }
 
-// UnsupportedConfiguration is the error returned if unsupported configuration
-// parameters have been specified. The text may contain further details regarding the
-// unsupported feature.
-const UnsupportedConfiguration = common.ConstError("unsupported configuration")
+const (
+	// UnsupportedConfiguration is the error returned if unsupported configuration
+	// parameters have been specified. The text may contain further details regarding the
+	// unsupported feature.
+	UnsupportedConfiguration = common.ConstError("unsupported configuration")
+
+	// ExportNotSupported is returned by State implementation if it does not support Export.
+	ExportNotSupported = common.ConstError("export not supported")
+)
 
 // NewState is the public interface for creating Carmen state instances. If for the
 // given parameters a state can be constructed, the resulting state is returned. If

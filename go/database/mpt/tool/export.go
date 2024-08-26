@@ -33,6 +33,7 @@ var ExportCmd = cli.Command{
 	ArgsUsage: "<db director> <target-file>",
 	Flags: []cli.Flag{
 		&cpuProfileFlag,
+		&targetBlockFlag,
 	},
 }
 
@@ -58,11 +59,6 @@ func doExport(context *cli.Context) error {
 		return err
 	}
 
-	export := io.Export
-	if mptInfo.Mode == mpt.Immutable {
-		export = io.ExportArchive
-	}
-
 	start := time.Now()
 	logFromStart(start, "export started")
 
@@ -75,8 +71,24 @@ func doExport(context *cli.Context) error {
 
 	ctx := interrupt.CancelOnInterrupt(context.Context)
 
+	var exportErr error
+
+	if mptInfo.Mode == mpt.Immutable {
+		if context.IsSet(targetBlockFlag.Name) {
+			// Passed Archive and chosen block to export
+			blkNumber := context.Uint64(targetBlockFlag.Name)
+			exportErr = io.ExportBlockFromArchive(ctx, dir, out, blkNumber)
+		} else {
+			// Passed Archive without chosen block
+			exportErr = io.ExportArchive(ctx, dir, out)
+		}
+	} else {
+		// Passed LiveDB
+		exportErr = io.Export(ctx, dir, out)
+	}
+
 	if err = errors.Join(
-		export(ctx, dir, out),
+		exportErr,
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),

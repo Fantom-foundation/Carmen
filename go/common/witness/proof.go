@@ -13,6 +13,7 @@ package witness
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 )
 
@@ -23,12 +24,29 @@ import (
 // the full state to extract information.
 type Proof interface {
 
+	// Extract extracts a sub-proof for a given account and selected storage locations from this proof.
+	// It returns a copy that contains only the data necessary for proving the given address and storage keys.
+	// The resulting proof covers proofs for the intersection of the requested properties (account information and slots)
+	// and the properties covered by this proof. The second return parameter indicates whether everything that
+	// was requested could be covered. If so it is set to true, otherwise it is set to false.
+	Extract(root common.Hash, address common.Address, keys ...common.Key) (Proof, bool)
+
 	// IsValid checks that this proof is self-consistent. If the result is true, the proof can be used
 	// for extracting verified information. If false, the proof is corrupted and should be discarded.
 	IsValid() bool
 
 	// GetElements returns serialised elements of the witness proof.
-	GetElements() []string
+	GetElements() []immutable.Bytes
+
+	// GetStorageElements returns serialised elements of the witness proof for a given account
+	// and selected storage locations from this proof.
+	// The resulting elements contains only the storage part of the account.
+	// For this reason, the second parameter of this method returns the storage root for this storage
+	// as any proving and other operations on the resulting proof must be done related to the storage root.
+	// This method returns a copy that contains only the data necessary for proving storage keys.
+	// The third return parameter indicates whether everything that was requested could be covered.
+	// If so, it is set to true, otherwise it is set to false.
+	GetStorageElements(root common.Hash, address common.Address, keys ...common.Key) ([]immutable.Bytes, common.Hash, bool)
 
 	// GetBalance extracts a balance from the witness proof for the input root hash and the address.
 	// If the witness proof contains the requested account for the input address for the given root hash, it returns its balance.

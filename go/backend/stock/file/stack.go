@@ -13,10 +13,11 @@ package file
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"io"
 	"os"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/common"

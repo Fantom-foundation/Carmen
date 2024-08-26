@@ -37,3 +37,14 @@ func LockDirectory(directory string) (common.LockFile, error) {
 	}
 	return lock, nil
 }
+
+// ForceUnlockDirectory removes the lock file from the given directory.
+// Use this with care, as it may lead to multiple processes writing to
+// the same directory.
+func ForceUnlockDirectory(directory string) error {
+	err := os.Remove(filepath.Join(directory, lockFileName))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}

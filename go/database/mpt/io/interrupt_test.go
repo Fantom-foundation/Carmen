@@ -32,6 +32,10 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 		check func(t *testing.T, sourceDir string)
 	}
 
+	exportBlockFromArchive := func(ctx context.Context, dir string, out io.Writer) error {
+		return ExportBlockFromArchive(ctx, dir, out, 3)
+	}
+
 	tests := map[string]testFuncs{
 		"live": {
 			export:   Export,
@@ -40,6 +44,11 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 		},
 		"archive": {
 			export:   ExportArchive,
+			createDB: createTestArchive,
+			check:    checkCanOpenArchive,
+		},
+		"live-from-archive": {
+			export:   exportBlockFromArchive,
 			createDB: createTestArchive,
 			check:    checkCanOpenArchive,
 		},
@@ -89,7 +98,7 @@ func createTestLive(t *testing.T, sourceDir string) {
 
 func createTestArchive(t *testing.T, sourceDir string) {
 	t.Helper()
-	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -113,7 +122,7 @@ func checkCanOpenLiveDB(t *testing.T, sourceDir string) {
 
 // checkCanOpenLiveDB makes sure Archive is not corrupted and can be opened (and closed)
 func checkCanOpenArchive(t *testing.T, sourceDir string) {
-	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{})
+	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to open archive: %v", err)
 	}

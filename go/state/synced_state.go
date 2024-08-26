@@ -11,8 +11,11 @@
 package state
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
+	"context"
+	"io"
 	"sync"
+
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -168,4 +171,10 @@ func (s *syncedState) CreateWitnessProof(address common.Address, keys ...common.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.state.CreateWitnessProof(address, keys...)
+}
+
+func (s *syncedState) Export(ctx context.Context, out io.Writer) (common.Hash, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.state.Export(ctx, out)
 }

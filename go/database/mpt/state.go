@@ -11,15 +11,8 @@
 package mpt
 
 import (
-	"bufio"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
-	"io"
-	"maps"
-	"os"
-	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
@@ -28,7 +21,6 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"golang.org/x/crypto/sha3"
 )
 
 //go:generate mockgen -source state.go -destination state_mocks.go -package mpt
@@ -118,7 +110,7 @@ type LiveState interface {
 	GetCodeForHash(hash common.Hash) []byte
 
 	// GetCodes retrieves all codes and their hashes.
-	GetCodes() (map[common.Hash][]byte, error)
+	GetCodes() map[common.Hash][]byte
 
 	// UpdateHashes recomputes hash root of this trie.
 	UpdateHashes() (common.Hash, *NodeHashes, error)
@@ -140,18 +132,11 @@ type MptState struct {
 	directory string
 	lock      common.LockFile
 	trie      *LiveTrie
-	code      map[common.Hash][]byte
-	codeDirty bool
-	codeMutex sync.Mutex
-	codefile  string
-	hasher    hash.Hash
+	codes     *codes
 }
 
-var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
-
 func newMptState(directory string, lock common.LockFile, trie *LiveTrie) (*MptState, error) {
-	codefile := directory + "/codes.dat"
-	codes, err := readCodes(codefile)
+	codes, err := openCodes(directory)
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +144,7 @@ func newMptState(directory string, lock common.LockFile, trie *LiveTrie) (*MptSt
 		directory: directory,
 		lock:      lock,
 		trie:      trie,
-		code:      codes,
-		codefile:  codefile,
+		codes:     codes,
 	}, nil
 }
 
@@ -305,17 +289,11 @@ func (s *MptState) GetCode(address common.Address) (value []byte, err error) {
 	if !exists {
 		return nil, nil
 	}
-	s.codeMutex.Lock()
-	res := s.code[info.CodeHash]
-	s.codeMutex.Unlock()
-	return res, nil
+	return s.GetCodeForHash(info.CodeHash), nil
 }
 
 func (s *MptState) GetCodeForHash(hash common.Hash) []byte {
-	s.codeMutex.Lock()
-	res := s.code[hash]
-	s.codeMutex.Unlock()
-	return res
+	return s.codes.getCodeForHash(hash)
 }
 
 func (s *MptState) GetCodeSize(address common.Address) (size int, err error) {
@@ -327,12 +305,6 @@ func (s *MptState) GetCodeSize(address common.Address) (size int, err error) {
 }
 
 func (s *MptState) SetCode(address common.Address, code []byte) (err error) {
-	var codeHash common.Hash
-	if s.hasher == nil {
-		s.hasher = sha3.NewLegacyKeccak256()
-	}
-	codeHash = common.GetHash(s.hasher, code)
-
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err
@@ -340,14 +312,8 @@ func (s *MptState) SetCode(address common.Address, code []byte) (err error) {
 	if !exists && len(code) == 0 {
 		return nil
 	}
-	if info.CodeHash == codeHash {
-		return nil
-	}
+	codeHash := s.codes.add(code)
 	info.CodeHash = codeHash
-	s.codeMutex.Lock()
-	s.code[codeHash] = code
-	s.codeDirty = true
-	s.codeMutex.Unlock()
 	return s.trie.SetAccountInfo(address, info)
 }
 
@@ -383,28 +349,15 @@ func (s *MptState) Visit(visitor NodeVisitor) error {
 	return s.trie.VisitTrie(visitor)
 }
 
-func (s *MptState) GetCodes() (map[common.Hash][]byte, error) {
-	s.codeMutex.Lock()
-	res := maps.Clone(s.code)
-	s.codeMutex.Unlock()
-	return res, nil
+func (s *MptState) GetCodes() map[common.Hash][]byte {
+	return s.codes.getCodes()
 }
 
 // Flush codes and state trie
 func (s *MptState) Flush() error {
-	// flush codes
-	var err error
-	s.codeMutex.Lock()
-	if s.codeDirty {
-		err = writeCodes(s.code, s.codefile)
-		if err == nil {
-			s.codeDirty = false
-		}
-	}
-	s.codeMutex.Unlock()
 	return errors.Join(
+		s.codes.Flush(),
 		s.trie.forest.CheckErrors(),
-		err,
 		s.trie.Flush(),
 	)
 }
@@ -444,13 +397,7 @@ func (s *MptState) RunPostRestoreTasks() error {
 func (s *MptState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
 	mf.AddChild("trie", s.trie.GetMemoryFootprint())
-	var sizeCodes uint
-	s.codeMutex.Lock()
-	for k, v := range s.code {
-		sizeCodes += uint(len(k) + len(v))
-	}
-	s.codeMutex.Unlock()
-	mf.AddChild("codes", common.NewMemoryFootprint(uintptr(sizeCodes)))
+	mf.AddChild("codes", s.codes.GetMemoryFootprint())
 	return mf
 }
 
@@ -464,79 +411,6 @@ func (s *MptState) Root() NodeReference {
 
 func (s *MptState) setHashes(hashes *NodeHashes) error {
 	return s.trie.setHashes(hashes)
-}
-
-// readCodes parses the content of the given file if it exists or returns
-// a an empty code collection if there is no such file.
-func readCodes(filename string) (map[common.Hash][]byte, error) {
-	// If there is no file, initialize and return an empty code collection.
-	if _, err := os.Stat(filename); err != nil {
-		return map[common.Hash][]byte{}, nil
-	}
-
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	reader := bufio.NewReader(file)
-	return parseCodes(reader)
-}
-
-func parseCodes(reader io.Reader) (map[common.Hash][]byte, error) {
-	// If the file exists, parse it and return its content.
-	res := map[common.Hash][]byte{}
-	// The format is simple: [<key>, <length>, <code>]*
-	var hash common.Hash
-	var length [4]byte
-	for {
-		if _, err := io.ReadFull(reader, hash[:]); err != nil {
-			if err == io.EOF {
-				return res, nil
-			}
-			return nil, err
-		}
-		if _, err := io.ReadFull(reader, length[:]); err != nil {
-			return nil, err
-		}
-		size := binary.BigEndian.Uint32(length[:])
-		code := make([]byte, size)
-		if _, err := io.ReadFull(reader, code[:]); err != nil {
-			return nil, err
-		}
-		res[hash] = code
-	}
-}
-
-// writeCodes write the given map of codes to the given file.
-func writeCodes(codes map[common.Hash][]byte, filename string) (err error) {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	writer := bufio.NewWriter(file)
-	return errors.Join(
-		writeCodesTo(codes, writer),
-		writer.Flush(),
-		file.Close())
-}
-
-func writeCodesTo(codes map[common.Hash][]byte, writer io.Writer) (err error) {
-	// The format is simple: [<key>, <length>, <code>]*
-	for key, code := range codes {
-		if _, err := writer.Write(key[:]); err != nil {
-			return err
-		}
-		var length [4]byte
-		binary.BigEndian.PutUint32(length[:], uint32(len(code)))
-		if _, err := writer.Write(length[:]); err != nil {
-			return err
-		}
-		if _, err := writer.Write(code); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // EstimatePerNodeMemoryUsage returns an estimated upper bound for the

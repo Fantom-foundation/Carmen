@@ -54,6 +54,43 @@ const (
 	EthereumHash = HashType(0)
 )
 
+// NewExportableArchiveTrie allows visiting mpt.ArchiveTrie at given block
+// and getting its properties such as Code Hashes or Root Hash.
+func NewExportableArchiveTrie(trie *mpt.ArchiveTrie, block uint64) mptStateVisitor {
+	return exportableArchiveTrie{
+		trie:  trie,
+		block: block,
+	}
+}
+
+// mptStateVisitor is an interface for Tries that allows for visiting the Trie nodes
+// and furthermore getting its properties such as a root hash and contract codes.
+type mptStateVisitor interface {
+	// Visit allows for traverse the whole trie.
+	Visit(visitor mpt.NodeVisitor) error
+	// GetHash returns the hash of the represented Trie.
+	GetHash() (common.Hash, error)
+	// GetCodeForHash returns byte code for given hash.
+	GetCodeForHash(common.Hash) []byte
+}
+
+type exportableArchiveTrie struct {
+	trie  *mpt.ArchiveTrie
+	block uint64
+}
+
+func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
+	return e.trie.VisitTrie(e.block, visitor)
+}
+
+func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
+	return e.trie.GetHash(e.block)
+}
+
+func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
+	return e.trie.GetCodeForHash(hash)
+}
+
 // Export opens a LiveDB instance retained in the given directory and writes
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
@@ -74,44 +111,72 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 	}
 	defer db.Close()
 
+	_, err = ExportLive(ctx, db, out)
+	return err
+}
+
+// ExportBlockFromArchive exports LiveDB genesis for a single given block from an Archive.
+// Note: block must be <= of Archive block height.
+func ExportBlockFromArchive(ctx context.Context, directory string, out io.Writer, block uint64) error {
+	info, err := CheckMptDirectoryAndGetInfo(directory)
+	if err != nil {
+		return fmt.Errorf("error in input directory: %v", err)
+	}
+
+	if info.Config.Name != mpt.S5ArchiveConfig.Name {
+		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
+	}
+
+	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
+	if err != nil {
+		return err
+	}
+
+	defer archive.Close()
+	_, err = ExportLive(ctx, exportableArchiveTrie{trie: archive, block: block}, out)
+	return err
+}
+
+// ExportLive exports given db into out.
+func ExportLive(ctx context.Context, db mptStateVisitor, out io.Writer) (common.Hash, error) {
 	// Start with the magic number.
 	if _, err := out.Write(stateMagicNumber); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Add a version number.
 	if _, err := out.Write([]byte{formatVersion}); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Continue with the full state hash.
 	hash, err := db.GetHash()
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	if _, err := out.Write([]byte{byte('H'), byte(EthereumHash)}); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	if _, err := out.Write(hash[:]); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Write out codes.
 	codes, err := getReferencedCodes(db)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve codes: %v", err)
+		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %v", err)
 	}
 	if err := writeCodes(codes, out); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	// Write out all accounts and values.
 	visitor := exportVisitor{out: out, ctx: ctx}
 	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
-		return fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
+		return common.Hash{}, fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
 	}
 
-	return nil
+	return hash, nil
 }
 
 // ImportLiveDb creates a fresh StateDB in the given directory and fills it
@@ -171,7 +236,11 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return root, hash, err
 	} else if !bytes.Equal(buffer, stateMagicNumber) {
-		return root, hash, fmt.Errorf("invalid format, wrong magic number")
+		// Provide an explicit warning to the user if instead of a live state dump an archive dump was provided
+		if bytes.Contains(buffer, archiveMagicNumber[:len(stateMagicNumber)]) {
+			return root, hash, fmt.Errorf("incorrect input data format use the `import-archive` sub-command  with this type of data")
+		}
+		return root, hash, errors.New("invalid format, unknown magic number")
 	}
 
 	// Check the version number.
@@ -301,7 +370,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 
 // getReferencedCodes returns a map of codes referenced by accounts in the
 // given database. The map is indexed by the code hash.
-func getReferencedCodes(db *mpt.MptState) (map[common.Hash][]byte, error) {
+func getReferencedCodes(db mptStateVisitor) (map[common.Hash][]byte, error) {
 	codes := make(map[common.Hash][]byte)
 	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		if n, ok := node.(*mpt.AccountNode); ok {

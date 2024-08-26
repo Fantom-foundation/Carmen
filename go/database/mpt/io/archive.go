@@ -67,7 +67,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
-	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{})
+	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 	if err != nil {
 		return err
 	}
@@ -83,11 +83,8 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	}
 
 	// Write out codes.
-	codes, err := archive.GetCodes()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve codes: %v", err)
-	}
-	if err := writeCodes(codes, out); err != nil {
+	codes := archive.GetCodes()
+	if err = writeCodes(codes, out); err != nil {
 		return err
 	}
 
@@ -230,7 +227,11 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return err
 	} else if !bytes.Equal(buffer, archiveMagicNumber) {
-		return fmt.Errorf("invalid format, wrong magic number")
+		// Provide an explicit warning to the user if instead of an archive dump a live-db dump was provided
+		if bytes.Contains(buffer, stateMagicNumber) {
+			return fmt.Errorf("incorrect input data format; use the `import` or `import-live-db` sub-command with this type of data")
+		}
+		return errors.New("invalid format, unknown magic number")
 	}
 
 	// Check the version number.
@@ -253,7 +254,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}()
 
 	// Create an empty archive.
-	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{})
+	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to create empty state: %w", err)
 	}

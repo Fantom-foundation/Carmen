@@ -11,11 +11,15 @@
 package gostate
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
+	mptio "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -139,6 +143,26 @@ func (s *ArchiveState) GetHash() (common.Hash, error) {
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
 func (s *ArchiveState) GetMemoryFootprint() *common.MemoryFootprint {
 	return common.NewMemoryFootprint(unsafe.Sizeof(*s))
+}
+
+func (s *ArchiveState) Export(ctx context.Context, out io.Writer) (common.Hash, error) {
+	if err := s.archiveError; err != nil {
+		return common.Hash{}, err
+	}
+
+	trie, ok := s.archive.(*mpt.ArchiveTrie)
+	if !ok {
+		return common.Hash{}, state.ExportNotSupported
+	}
+
+	exportableTrie := mptio.NewExportableArchiveTrie(trie, s.block)
+	rootHash, err := mptio.ExportLive(ctx, exportableTrie, out)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+		return common.Hash{}, s.archiveError
+	}
+
+	return rootHash, s.archiveError
 }
 
 func (s *ArchiveState) Flush() error {

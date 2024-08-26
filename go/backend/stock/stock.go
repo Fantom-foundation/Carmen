@@ -12,9 +12,11 @@ package stock
 
 import (
 	"encoding/binary"
+	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/exp/constraints"
-	"unsafe"
 )
 
 //go:generate mockgen -source stock.go -destination stock_mocks.go -package stock -exclude_interfaces Index
@@ -66,6 +68,11 @@ type Stock[I Index, V any] interface {
 
 	// Also, stocks need to be flush and closable.
 	common.FlushAndCloser
+
+	// Also, stocks are required to support checkpoints. This is necessary
+	// to ensure that a Stock can be in a consistent state after a crash that can
+	// be recovered.
+	checkpoint.Participant
 }
 
 // Index defines the type constraints on Stock index types.

@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -94,5 +95,33 @@ func (s *shadowStock[I, V]) Close() error {
 	return errors.Join(
 		s.primary.Close(),
 		s.secondary.Close(),
+	)
+}
+
+func (s *shadowStock[I, V]) GuaranteeCheckpoint(checkpoint checkpoint.Checkpoint) error {
+	return errors.Join(
+		s.primary.GuaranteeCheckpoint(checkpoint),
+		s.secondary.GuaranteeCheckpoint(checkpoint),
+	)
+}
+
+func (s *shadowStock[I, V]) Prepare(checkpoint checkpoint.Checkpoint) error {
+	return errors.Join(
+		s.primary.Prepare(checkpoint),
+		s.secondary.Prepare(checkpoint),
+	)
+}
+
+func (s *shadowStock[I, V]) Commit(checkpoint checkpoint.Checkpoint) error {
+	return errors.Join(
+		s.primary.Commit(checkpoint),
+		s.secondary.Commit(checkpoint),
+	)
+}
+
+func (s *shadowStock[I, V]) Abort(checkpoint checkpoint.Checkpoint) error {
+	return errors.Join(
+		s.primary.Abort(checkpoint),
+		s.secondary.Abort(checkpoint),
 	)
 }

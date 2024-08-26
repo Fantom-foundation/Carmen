@@ -480,12 +480,11 @@ func (mr *MockLiveStateMockRecorder) GetCodeSize(address any) *gomock.Call {
 }
 
 // GetCodes mocks base method.
-func (m *MockLiveState) GetCodes() (map[common.Hash][]byte, error) {
+func (m *MockLiveState) GetCodes() map[common.Hash][]byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCodes")
 	ret0, _ := ret[0].(map[common.Hash][]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetCodes indicates an expected call of GetCodes.

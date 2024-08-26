@@ -11,14 +11,20 @@
 package carmen
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
+	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -1036,7 +1042,7 @@ func TestDatabase_GetProof_Serialise_Deserialize(t *testing.T) {
 	}
 
 	// proof properties
-	serialized := make([]string, 0, 1024)
+	serialized := make([]Bytes, 0, 1024)
 	for i := 0; i < numBlocks; i++ {
 		block, err := db.GetHistoricContext(uint64(i))
 		if err != nil {
@@ -1098,6 +1104,152 @@ func TestDatabase_GetProof_Serialise_Deserialize(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	// init data
+	const numAccounts = 11
+	const numKeys = 12
+
+	keys := make([]Key, 0, numKeys)
+	for k := 0; k < numKeys; k++ {
+		keys = append(keys, Key{byte(k)})
+	}
+
+	if err := db.AddBlock(0, func(context HeadBlockContext) error {
+		for j := 0; j < numAccounts; j++ {
+			if err := context.RunTransaction(func(tc TransactionContext) error {
+				addr := Address{byte(j)}
+				tc.CreateAccount(addr)
+				tc.SetNonce(addr, uint64(j))
+				for k := 0; k < numKeys; k++ {
+					tc.SetState(addr, keys[k], Value{byte(j), byte(k)})
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("cannot add block: %v", err)
+	}
+
+	if err := db.Flush(); err != nil {
+		t.Fatalf("cannot flush db: %v", err)
+	}
+
+	// collect root
+	var root Hash
+	if err := db.QueryHistoricState(0, func(context QueryContext) {
+		root = context.GetStateHash()
+	}); err != nil {
+		t.Fatalf("cannot query state: %v", err)
+	}
+
+	// extract proofs
+	block, err := db.GetHistoricContext(0)
+	if err != nil {
+		t.Fatalf("cannot get block: %v", err)
+	}
+
+	// proof each account and all keys of the account
+	shadowProofs := make(map[Address]WitnessProof, numAccounts)
+	serialized := make([]Bytes, 0, 1024)
+	for j := 0; j < numAccounts; j++ {
+		addr := Address{byte(j)}
+		proof, err := block.GetProof(addr, keys...)
+		if err != nil {
+			t.Errorf("cannot get proof: %v", err)
+		}
+		// collect both merged proof and each proof
+		serialized = append(serialized, proof.GetElements()...)
+		shadowProofs[addr] = proof
+	}
+	if err := block.Close(); err != nil {
+		t.Fatalf("cannot close block: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("db cannot be closed: %v", err)
+	}
+
+	recovered := CreateWitnessProofFromNodes(serialized...)
+	t.Run("extract subproofs", func(t *testing.T) {
+		for j := 0; j < numAccounts; j++ {
+			addr := Address{byte(j)}
+			want := shadowProofs[addr]
+
+			// extract subproof of an account and its storage
+			// and check it matches the shadow proof
+			got, complete := recovered.Extract(root, addr, keys...)
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+			gotElements := got.GetElements()
+			wantElements := want.GetElements()
+			slices.SortFunc(gotElements, func(a, b Bytes) int {
+				return bytes.Compare(a.ToBytes(), b.ToBytes())
+			})
+			slices.SortFunc(wantElements, func(a, b Bytes) int {
+				return bytes.Compare(a.ToBytes(), b.ToBytes())
+			})
+			if got, want := gotElements, wantElements; !slices.Equal(got, want) {
+				t.Errorf("unexpected proof, wanted %v, got %v", want, got)
+			}
+		}
+	})
+
+	t.Run("extract account and storage nodes", func(t *testing.T) {
+		for j := 0; j < numAccounts; j++ {
+			addr := Address{byte(j)}
+
+			// extract address nodes only
+			gotAccount, complete := recovered.Extract(root, addr)
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+
+			// extract storage nodes only
+			gotStorageElements, _, complete := recovered.GetStorageElements(root, addr, keys...)
+			if !complete {
+				t.Errorf("proof is not complete")
+			}
+			// first block's account has no storage, others do
+			if j > 0 && len(gotStorageElements) == 0 {
+				t.Errorf("no storage elements")
+			}
+
+			// both proofs must be distinct
+			for _, accountElement := range gotAccount.GetElements() {
+				for _, storageElement := range gotStorageElements {
+					if accountElement == storageElement {
+						t.Errorf("account and storage proofs must be distinct")
+					}
+				}
+			}
+
+			// putting nodes together must provide the original proof
+			merged := CreateWitnessProofFromNodes(append(gotStorageElements, gotAccount.GetElements()...)...)
+
+			gotElements := merged.GetElements()
+			wantElements := shadowProofs[addr].GetElements()
+			slices.SortFunc(gotElements, func(a, b Bytes) int {
+				return bytes.Compare(a.ToBytes(), b.ToBytes())
+			})
+			slices.SortFunc(wantElements, func(a, b Bytes) int {
+				return bytes.Compare(a.ToBytes(), b.ToBytes())
+			})
+			if got, want := gotElements, wantElements; !slices.Equal(got, want) {
+				t.Errorf("unexpected proof, wanted %v, got %v", want, got)
+			}
+		}
+	})
 }
 
 func TestDatabase_CloseDB_Unfinished_Proof_CannotCloseDb(t *testing.T) {
@@ -2020,4 +2172,84 @@ func TestDatabase_GetMemoryFootprint(t *testing.T) {
 	}
 
 	db.GetMemoryFootprint()
+}
+
+func TestDatabase_Export(t *testing.T) {
+	// Create a test archive from which we export LiveDB
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	const N = 3
+
+	for i := 0; i < N; i++ {
+		if err = db.AddBlock(uint64(i), func(context HeadBlockContext) error {
+			if err = context.RunTransaction(func(context TransactionContext) error {
+				context.CreateAccount(Address{byte(i)})
+				context.AddBalance(Address{byte(i)}, NewAmount(uint64(i)))
+				context.SetState(Address{byte(i)}, Key{byte(i)}, Value{byte(i)})
+				return nil
+			}); err != nil {
+				t.Fatalf("cannot create transaction: %v", err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("cannot add block: %v", err)
+		}
+	}
+
+	err = db.Flush()
+	if err != nil {
+		t.Fatalf("cannot flush db: %v", err)
+	}
+
+	ctx, err := db.GetHistoricContext(2)
+	if err != nil {
+		t.Fatalf("cannot get historic context: %v", err)
+	}
+
+	b := bytes.NewBuffer(nil)
+	rootHash, err := ctx.Export(context.Background(), b)
+	if err != nil {
+		t.Fatalf("cannot export live db: %v", err)
+	}
+
+	if err = ctx.Close(); err != nil {
+		t.Fatalf("cannot close context: %v", err)
+	}
+
+	if err = db.Close(); err != nil {
+		t.Fatalf("cannot close db: %v", err)
+	}
+
+	importedDbPath := t.TempDir()
+	liveDbLocation := filepath.Join(importedDbPath, "live")
+	if err := os.MkdirAll(liveDbLocation, 0755); err != nil {
+		t.Fatalf("cannot create live db location: %v", err)
+	}
+	if err = io.ImportLiveDb(liveDbLocation, b); err != nil {
+		t.Fatalf("cannot import live db: %v", err)
+	}
+
+	// To import, we need a file-based LiveDB
+	cfg := testNonArchiveConfig
+	cfg.Variant = Variant(gostate.VariantGoFile)
+
+	importedDb, err := OpenDatabase(importedDbPath, cfg, nil)
+	if err != nil {
+		t.Fatalf("cannot open imported database: %v", err)
+	}
+
+	if err = importedDb.QueryHeadState(func(context QueryContext) {
+		if got, want := context.GetStateHash(), rootHash; got != want {
+			t.Errorf("unexpected root hash\ngot: %x\nwant: %x", got, want)
+		}
+	}); err != nil {
+		t.Fatalf("cannot query historic state: %v", err)
+	}
+
+	if err := importedDb.Close(); err != nil {
+		t.Fatalf("cannot close db: %v", err)
+	}
 }
