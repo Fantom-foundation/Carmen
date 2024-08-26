@@ -80,12 +80,7 @@ func VerifyMptState(ctx context.Context, directory string, config MptConfig, roo
 		return err
 	}
 
-	// Check for interrupt after codes verification
-	//if interrupt.IsCancelled(ctx) {
-	//	return interrupt.ErrCanceled
-	//}
-
-	err = verifyForest(ctx, directory, config, roots, source, observer)
+	err = verifyForest(directory, config, roots, source, observer)
 	if err != nil {
 		return err
 	}
@@ -110,15 +105,15 @@ func verifyFileForest(ctx context.Context, directory string, config MptConfig, r
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
-	source, err := openVerificationNodeSource(nil, directory, config)
+	source, err := openVerificationNodeSource(ctx, directory, config)
 	if err != nil {
 		return err
 	}
 	defer source.Close()
-	return verifyForest(ctx, directory, config, roots, source, observer)
+	return verifyForest(directory, config, roots, source, observer)
 }
 
-func verifyForest(ctx context.Context, directory string, config MptConfig, roots []Root, source *verificationNodeSource, observer VerificationObserver) (res error) {
+func verifyForest(directory string, config MptConfig, roots []Root, source *verificationNodeSource, observer VerificationObserver) (res error) {
 	// ------------------------- Meta-Data Checks -----------------------------
 
 	observer.Progress(fmt.Sprintf("Checking forest stored in %s ...", directory))
@@ -138,11 +133,6 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 	if err := file.VerifyStock[uint64](directory+"/values", valueEncoder); err != nil {
 		return err
 	}
-
-	// Check for interrupt after each pass
-	//if interrupt.IsCancelled(ctx) {
-	//	return interrupt.ErrCanceled
-	//}
 
 	// ----------------- First Pass: check Node References --------------------
 
@@ -186,11 +176,6 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 	if err != nil {
 		return err
 	}
-
-	// Check for interrupt after each pass
-	//if interrupt.IsCancelled(ctx) {
-	//	return interrupt.ErrCanceled
-	//}
 
 	// -------------------- Further Passes: node hashes -----------------------
 
@@ -250,11 +235,6 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 		return err
 	}
 
-	// Check for interrupt after each pass
-	//if interrupt.IsCancelled(ctx) {
-	//	return interrupt.ErrCanceled
-	//}
-
 	err = verifyHashes(
 		"branch", source, source.branches, source.branchIds, emptyNodeHash, roots, observer,
 		func(node *BranchNode) (common.Hash, error) { return hash(node) },
@@ -288,11 +268,6 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 		return err
 	}
 
-	// Check for interrupt after each pass
-	//if interrupt.IsCancelled(ctx) {
-	//	return interrupt.ErrCanceled
-	//}
-
 	err = verifyHashes(
 		"extension", source, source.extensions, source.extensionIds, emptyNodeHash, roots, observer,
 		func(node *ExtensionNode) (common.Hash, error) { return hash(node) },
@@ -311,11 +286,6 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 	if err != nil {
 		return err
 	}
-
-	// Check for interrupt after each pass
-	//if interrupt.IsCancelled(ctx) {
-	//	return interrupt.ErrCanceled
-	//}
 
 	err = verifyHashes(
 		"value", source, source.values, source.valueIds, emptyNodeHash, roots, observer,
@@ -713,6 +683,8 @@ type verificationNodeSource struct {
 	// A custom pair of node ID and Node to be overwritten for node resolution.
 	overwriteId   NodeId
 	overwriteNode Node
+
+	numberOfNodesIterated uint64
 }
 
 func openVerificationNodeSource(ctx context.Context, directory string, config MptConfig) (*verificationNodeSource, error) {
@@ -895,10 +867,14 @@ func (s *verificationNodeSource) clearOverride() {
 }
 
 func (s *verificationNodeSource) forAllInnerNodes(check func(Node) error) error {
-	if interrupt.IsCancelled(s.ctx) {
-		return interrupt.ErrCanceled
-	}
-	return s.forNodes(func(_ NodeId, node Node) error { return check(node) }, true, true, true, false)
+	return s.forNodes(func(_ NodeId, node Node) error {
+		// Check only every 1000th node - IsCancelled was proved to slow down the verification
+		if s.numberOfNodesIterated%1000 == 0 && interrupt.IsCancelled(s.ctx) {
+			return interrupt.ErrCanceled
+		}
+		s.numberOfNodesIterated++
+		return check(node)
+	}, true, true, true, false)
 }
 
 func (s *verificationNodeSource) forAllNodes(check func(NodeId, Node) error) error {

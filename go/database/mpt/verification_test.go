@@ -692,12 +692,14 @@ func TestVerification_CanInterrupt(t *testing.T) {
 
 	for name, verify := range tests {
 		runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+			// First count the occurrence
 			counter := &interruptObserver{t: t}
 			if err := verifyFileForest(context.Background(), dir, config, roots, counter); err != nil {
 				t.Errorf("%v: found unexpected error in fresh forest: %v", name, err)
 			}
 			maxCount := counter.count
 			ctx := interrupt.CancelOnInterrupt(context.Background())
+			// Then interrupt and check it happened
 			interrupter := &interruptObserver{t: t, signalInterrupt: true}
 			if got, want := verify(ctx, dir, config, roots, interrupter), interrupt.ErrCanceled; !errors.Is(got, want) {
 				t.Errorf("%v: unexpected error: got: %v, want: %v", name, got, want)
@@ -718,7 +720,6 @@ func TestVerification_CanInterrupt(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 type interruptObserver struct {
