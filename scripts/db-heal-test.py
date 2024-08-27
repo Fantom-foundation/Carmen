@@ -9,11 +9,12 @@ import flag
 
 # --- Dynamic variables --- #
 aida_path_flag = flag.string("aida", "", "Path to Aida root.")
-aida_db_path_flag = flag.string("aidadb", "", "Path to AidaDB.")
+aida_db_path_flag = flag.string("aida_db", "", "Path to AidaDB.")
 tmp_path_flag = flag.string("tmp", "", "Path to tmp dir.")
 
 number_of_iterations_flag = flag.int("iter", 1000, "Number of iterations.")
-incremental_block_flag = flag.int("increments", 1000, "Block size of each iteration - cannot be <200.")
+window_flag = flag.int("window", 120, "How often will program get terminated (in seconds).")
+checkpoint_granularity_flag = flag.int("cp_granularity", 2000, "How often will Carmen create checkpoints.")
 flag.parse()
 
 aida_path = aida_path_flag.value
@@ -21,7 +22,12 @@ aida_db_path = aida_db_path_flag.value
 tmp_path = tmp_path_flag.value
 
 number_of_iterations = number_of_iterations_flag.value
-incremental_block = incremental_block_flag.value
+window = window_flag.value
+checkpoint_granularity = checkpoint_granularity_flag.value
+
+# Mark first checkpoint
+latest_checkpoint = checkpoint_granularity
+
 if aida_path == "":
     print("please set Aida using --aida")
     exit(1)
@@ -34,9 +40,7 @@ if tmp_path == "":
 
 # Block variables
 first_block = 0
-last_block = 1000
-kill_block = 900
-restore_block = 800
+last_block = 60000000
 
 # --- Static variables --- #
 
@@ -49,19 +53,31 @@ aida_log_file = Path.cwd() / 'aida.log'
 carmen_log_file = Path.cwd() / 'carmen.log'
 current_dir = Path.cwd()
 
+print("Your settings:")
+print(f"\tNumber of iterations: {number_of_iterations}.")
+print(f"\tWindow size: {window} seconds.")
+print(f"\tCheckpoint granularity: {checkpoint_granularity} blocks.")
 
-# Function to monitor the log file and send terminate signal when kill_block occurs
-def monitor_log():
+
+# Function which stops process after given sleep_time.
+def terminate_process_after(sleep_time: int, checkpoint: int):
+    start = 0.0
     with aida_log_file.open('r') as f:
         while True:
             line = f.readline()
             if not line:
                 time.sleep(0.1)
                 continue
-            if f"block {kill_block}" in line:
-                print("Interrupting.")
+            if start > 0 and time.time() - start >= sleep_time:
+                print("Interrupting...")
                 process.terminate()
-                return 0
+                return checkpoint
+            if f"block {checkpoint + checkpoint_granularity}" in line:
+                # First checkpoint was found, we should start timer as it means block processing is running.
+                if start == 0.0:
+                    start = time.time()
+                checkpoint = checkpoint + checkpoint_granularity
+                print(f"Found new checkpoint {checkpoint}.")
             # If process ends with error (return code 1) or either 'fail' or 'exit status' occurs in line exit script
             if process.poll() == 1 or any(s in line for s in ["exit status", "fail"]):
                 print("Error occurred - printing output.log:")
@@ -69,7 +85,8 @@ def monitor_log():
                     text = l.read()
                     print(text)
                 os.chdir(current_dir)
-                return 1
+                return -1
+
 
 
 # First iteration command
@@ -78,7 +95,8 @@ cmd = [
     '--db-tmp', tmp_path, '--carmen-schema', '5', '--db-impl', 'carmen',
     '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
     '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
-    '--carmen-cp-interval', '200', str(first_block), str(last_block)
+    '--carmen-cp-interval', str(checkpoint_granularity_flag), '--tracker-granularity', str(checkpoint_granularity_flag),
+    str(first_block), str(last_block)
 ]
 
 os.chdir(aida_path)
@@ -89,12 +107,12 @@ os.chdir(current_dir)
 print("Creating database with aida-vm-sdb...")
 
 # Start monitoring the log file
-status = monitor_log()
+latest_checkpoint = terminate_process_after(window, latest_checkpoint)
 
 # Wait for the first command to complete
 process.wait()
 
-if status == 1:
+if latest_checkpoint == -1:
     sys.exit(1)
 
 # Find working directory
@@ -117,7 +135,7 @@ for i in range(1, number_of_iterations + 1):
 
     # Restore Archive
     result = subprocess.run(
-        ['go', 'run', './database/mpt/tool', 'reset', '--force-unlock', str(archive), str(restore_block)],
+        ['go', 'run', './database/mpt/tool', 'reset', '--force-unlock', str(archive), str(latest_checkpoint)],
         stdout=c,
         stderr=c,
         cwd=carmen_root)
@@ -130,9 +148,9 @@ for i in range(1, number_of_iterations + 1):
     # Export genesis to restore LiveDB
     genesis = Path(tmp_path) / 'test_genesis.dat'
 
-    print(f"Restoration complete. Exporting LiveDB genesis block {restore_block}.")
+    print(f"Restoration complete. Exporting LiveDB genesis block {latest_checkpoint}.")
     result = subprocess.run(
-        ['go', 'run', './database/mpt/tool', 'export', '--block', str(restore_block), str(archive), str(genesis)],
+        ['go', 'run', './database/mpt/tool', 'export', '--block', str(latest_checkpoint), str(archive), str(genesis)],
         stdout=c,
         stderr=c,
         cwd=carmen_root)
@@ -171,19 +189,16 @@ for i in range(1, number_of_iterations + 1):
 
     print(f"Iteration {i}/{number_of_iterations}")
     # We restored to block X, although we need to start the app at +1 block because X is already done
-    first_block = restore_block + 1
-    last_block += incremental_block
-    restore_block += incremental_block
-    kill_block += incremental_block
+    first_block = latest_checkpoint + 1
 
-    print(f"Syncing to block {last_block}...")
+    print("Syncing restarted...")
     command = [
         './build/aida-vm-sdb', 'substate', '--validate',
         '--db-tmp', tmp_path, '--carmen-schema', '5', '--db-impl', 'carmen',
         '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
         '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
-        '--carmen-cp-interval', '200', '--db-src', str(working_dir),
-        '--skip-priming', str(first_block), str(last_block)
+        '--carmen-cp-interval', str(checkpoint_granularity_flag), '--db-src', str(working_dir),
+        '--skip-priming', '--tracker-granularity', str(checkpoint_granularity_flag),  str(first_block), str(last_block)
     ]
 
     os.chdir(aida_path)
@@ -192,12 +207,12 @@ for i in range(1, number_of_iterations + 1):
     os.chdir(current_dir)
 
     # Start monitoring the log file
-    status = monitor_log()
+    latest_checkpoint = terminate_process_after(window, latest_checkpoint)
 
     # Wait for the command to complete
     process.wait()
 
-    if status == 1:
+    if latest_checkpoint == -1:
         sys.exit(1)
 
     if last_working_dir:
