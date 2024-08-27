@@ -345,7 +345,7 @@ func (s *MptState) Apply(block uint64, update common.Update) (archiveUpdateHints
 	return hints, err
 }
 
-func (s *MptState) Visit(visitor NodeVisitor) error {
+func (s *MptState) Visit(visitor NodeVisitor, _ bool) error {
 	return s.trie.VisitTrie(visitor)
 }
 

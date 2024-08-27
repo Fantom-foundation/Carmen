@@ -487,7 +487,7 @@ func TestIO_ExportBlockFromOnlineArchive(t *testing.T) {
 
 		// Import live database.
 		targetDir := t.TempDir()
-		if err := ImportLiveDb(targetDir, buffer); err != nil {
+		if err := ImportLiveDb(NewLog(), targetDir, buffer); err != nil {
 			t.Fatalf("failed to import DB: %v", err)
 		}
 
@@ -513,9 +513,8 @@ func TestIO_ExportBlockFromOnlineArchive(t *testing.T) {
 		if err != nil {
 			t.Fatalf("cannot close database: %v", err)
 		}
-
 	}
-
+	
 }
 
 func TestIO_Live_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {

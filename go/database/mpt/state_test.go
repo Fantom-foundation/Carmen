@@ -349,7 +349,7 @@ func TestState_StateModifications_Failing(t *testing.T) {
 				t.Errorf("accessing data should fail")
 			}
 			nodeVisitor := NewMockNodeVisitor(ctrl)
-			if err := state.Visit(nodeVisitor); !errors.Is(err, injectedErr) {
+			if err := state.Visit(nodeVisitor, false); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
 			}
 		})

@@ -76,7 +76,8 @@ func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor, cutAtAccounts bool
 	if err != nil {
 		return err
 	}
-	return visitAll(e.directory, root, visitor, cutAtAccounts)
+
+	return visitAll(&nodeSourceFactory{directory: e.directory}, root, visitor, cutAtAccounts)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
@@ -140,27 +141,9 @@ func ExportBlockFromArchive(ctx context.Context, logger *Log, directory string, 
 
 // ExportBlockFromOnlineArchive exports LiveDB view for a single given block from an Archive.
 // This method exports from the online archive, i.e, an archive that is being updated with new blocks.
-// To ensure the exported data are up-to-date, this method flushes archive to disk before exporting.
-// For this reason, this method should not be called often, as it would hammer performance.
-// Expected usage is, for instance, the creation of database dump once in many blocks to backup the state.
-func ExportBlockFromOnlineArchive(ctx context.Context, archive *mpt.ArchiveTrie, out io.Writer, block uint64) error {
-	// before doing anything, flush the archive to ensure the data is up-to-date
-	if err := archive.Flush(); err != nil {
-		return err
-	}
-	_, err := ExportLive(ctx, exportableArchiveTrie{
-		directory: archive.Directory(),
-		trie:      archive,
-		block:     block,
-	}, out)
-	return err
-}
-
-// ExportBlockFromOnlineArchive exports LiveDB view for a single given block from an Archive.
-// This method exports from the online archive, i.e, an archive that is being updated with new blocks.
-// To ensure the exported data are up-to-date, this method flushes archive to disk before exporting.
-// For this reason, this method should not be called often, as it would hammer performance.
-// Expected usage is, for instance, the creation of database dump once in many blocks to backup the state.
+// To ensure the exported data are up-to-date, this method flushes the archive to disk before exporting.
+// For this reason, this method should not be called often, as it would hamper performance.
+// Expected usage is, for instance, the creation of a LiveDB state dumps to back up the state of selected blocks for fast recovery.
 func ExportBlockFromOnlineArchive(ctx context.Context, archive *mpt.ArchiveTrie, out io.Writer, block uint64) error {
 	logger := NewLog()
 	logger.Printf("exporting block %d from online archive", block)
@@ -233,7 +216,7 @@ func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Wri
 
 	// Write out codes.
 	logger.Print("exporting codes")
-	codes, err := getReferencedCodes(ctx, logger,db)
+	codes, err := getReferencedCodes(ctx, logger, db)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to retrieve codes: %w", err)
 	}
