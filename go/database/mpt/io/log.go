@@ -30,6 +30,9 @@ func NewLog() *Log {
 
 // Print logs a message that includes the time elapsed since the start of the program.
 func (l *Log) Print(msg string) {
+	if l == nil {
+		return
+	}
 	now := time.Now()
 	t := uint64(now.Sub(l.start).Seconds())
 	l.logger.Printf("[t=%4d:%02d] - %s\n", t/60, t%60, msg)

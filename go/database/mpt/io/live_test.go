@@ -291,17 +291,17 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 		t.Fatalf("failed to create archive: %v", err)
 	}
 	const (
-		M = 10
-		N = 3
+		Blocks   = 10
+		Accounts = 3
 	)
 
 	var expectedHashes []common.Hash
 
-	for i := 0; i < M; i++ {
+	for i := 0; i < Blocks; i++ {
 		code := []byte{1, 2, 3, byte(i)}
 		u := uint64(i)
 		update := common.Update{}
-		for j := 0; j < N; j++ {
+		for j := 0; j < Accounts; j++ {
 			newAddr := common.AddressFromNumber(j)
 
 			update.CreatedAccounts = append(update.CreatedAccounts, newAddr)
@@ -327,7 +327,7 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 		t.Fatalf("failed to close archive archive: %v", err)
 	}
 
-	for i := 0; i < M; i++ {
+	for i := 0; i < Blocks; i++ {
 		// Export live database from archive.
 		buffer := new(bytes.Buffer)
 		if err := ExportBlockFromArchive(context.Background(), NewLog(), sourceDir, buffer, uint64(i)); err != nil {
@@ -364,6 +364,81 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 		}
 	}
 
+}
+
+func TestIO_ExportBlockFromOnlineArchive(t *testing.T) {
+	archive, err := mpt.OpenArchiveTrie(t.TempDir(), mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+	defer func() {
+		if err := archive.Close(); err != nil {
+			t.Fatalf("failed to close archive archive: %v", err)
+		}
+	}()
+
+	const (
+		Blocks   = 10
+		Accounts = 3
+	)
+
+	for i := 0; i < Blocks; i++ {
+		code := []byte{1, 2, 3, byte(i)}
+		u := uint64(i)
+		update := common.Update{}
+		for j := 0; j < Accounts; j++ {
+			newAddr := common.AddressFromNumber(j)
+
+			update.CreatedAccounts = append(update.CreatedAccounts, newAddr)
+			update.Balances = append(update.Balances, common.BalanceUpdate{Account: newAddr, Balance: amount.New(u + 1)})
+			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: newAddr, Nonce: common.ToNonce(u + 1)})
+			update.Codes = append(update.Codes, common.CodeUpdate{Account: newAddr, Code: code})
+			update.Slots = append(update.Slots, common.SlotUpdate{Account: newAddr, Key: common.Key{byte(j)}, Value: common.Value{byte(i)}})
+		}
+		err = archive.Add(u, update, nil)
+		if err != nil {
+			t.Fatalf("failed to create block in archive: %v", err)
+		}
+		hashArchive, err := archive.GetHash(u)
+		if err != nil {
+			t.Fatalf("cannot get hash: %v", err)
+		}
+
+		// while the archive has not been explicitly flushed or closed, the data should be available when exporting
+		buffer := new(bytes.Buffer)
+		if err := ExportBlockFromOnlineArchive(context.Background(), NewLog(), archive, buffer, uint64(i)); err != nil {
+			t.Fatalf("failed to export Archive: %v", err)
+		}
+
+		// Import live database.
+		targetDir := t.TempDir()
+		if err := ImportLiveDb(nil, targetDir, buffer); err != nil {
+			t.Fatalf("failed to import DB: %v", err)
+		}
+
+		if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+			t.Fatalf("verification of imported DB failed: %v", err)
+		}
+
+		db, err := mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
+		if err != nil {
+			t.Fatalf("failed to open recovered DB: %v", err)
+		}
+
+		hashLive, err := db.GetHash()
+		if err != nil {
+			t.Fatalf("cannot get hash: %v", err)
+		}
+
+		if got, want := hashLive, hashArchive; got != want {
+			t.Errorf("restored DB failed to reproduce same hash\nwanted %x\n got %x", want, got)
+		}
+
+		err = db.Close()
+		if err != nil {
+			t.Fatalf("cannot close database: %v", err)
+		}
+	}
 }
 
 func TestIO_Live_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {

@@ -55,3 +55,15 @@ func TestProgressLogger_Step(t *testing.T) {
 		t.Errorf("unexpected log content: got %q, want %q", got, want)
 	}
 }
+
+func TestLog_CanBeNil(t *testing.T) {
+	var logger *Log
+
+	logger.Print("Test message")
+	logger.Printf("%d", 1)
+	progress := logger.NewProgressTracker("Progress: %d steps, %.2f steps/sec", 10)
+	for i := 0; i < 100; i++ {
+		progress.Step(1)
+	}
+
+}
