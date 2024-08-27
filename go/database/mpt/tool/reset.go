@@ -13,7 +13,6 @@ package main
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
@@ -21,12 +20,11 @@ import (
 )
 
 var Reset = cli.Command{
-	Action:    reset,
+	Action:    addPerformanceDiagnoses(reset),
 	Name:      "reset",
 	Usage:     "resets the given archive to a selected block",
 	ArgsUsage: "<director> <block>",
 	Flags: []cli.Flag{
-		&cpuProfileFlag,
 		&forceUnlockFlag,
 	},
 }
@@ -42,15 +40,6 @@ func reset(context *cli.Context) error {
 	// parse the directory argument
 	if context.Args().Len() != 2 {
 		return fmt.Errorf("missing directory and/or block height parameter")
-	}
-
-	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
-	if strings.TrimSpace(cpuProfileFileName) != "" {
-		if err := startCpuProfiler(cpuProfileFileName); err != nil {
-			return err
-		}
-		defer stopCpuProfiler()
 	}
 
 	dir := context.Args().Get(0)

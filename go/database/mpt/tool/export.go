@@ -15,21 +15,20 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
+	"os"
+
 	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
-	"os"
-	"strings"
 )
 
 var ExportCmd = cli.Command{
-	Action:    doExport,
+	Action:    addPerformanceDiagnoses(doExport),
 	Name:      "export",
 	Usage:     "exports a LiveDB or Archive instance into a file",
 	ArgsUsage: "<db director> <target-file>",
 	Flags: []cli.Flag{
-		&cpuProfileFlag,
 		&targetBlockFlag,
 	},
 }
@@ -40,15 +39,6 @@ func doExport(context *cli.Context) error {
 	}
 	dir := context.Args().Get(0)
 	trg := context.Args().Get(1)
-
-	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
-	if strings.TrimSpace(cpuProfileFileName) != "" {
-		if err := startCpuProfiler(cpuProfileFileName); err != nil {
-			return err
-		}
-		defer stopCpuProfiler()
-	}
 
 	// check the type of target database
 	mptInfo, err := io.CheckMptDirectoryAndGetInfo(dir)

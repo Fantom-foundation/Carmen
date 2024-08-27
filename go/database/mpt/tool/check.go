@@ -12,7 +12,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
@@ -20,28 +19,16 @@ import (
 )
 
 var Check = cli.Command{
-	Action:    check,
+	Action:    addPerformanceDiagnoses(check),
 	Name:      "check",
 	Usage:     "performs extensive invariants checks",
 	ArgsUsage: "<director>",
-	Flags: []cli.Flag{
-		&cpuProfileFlag,
-	},
 }
 
 func check(context *cli.Context) error {
 	// parse the directory argument
 	if context.Args().Len() != 1 {
 		return fmt.Errorf("missing directory storing state")
-	}
-
-	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
-	if strings.TrimSpace(cpuProfileFileName) != "" {
-		if err := startCpuProfiler(cpuProfileFileName); err != nil {
-			return err
-		}
-		defer stopCpuProfiler()
 	}
 
 	dir := context.Args().Get(0)
