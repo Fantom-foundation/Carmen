@@ -601,8 +601,13 @@ func loadRoots(archiveDirectory string) (*rootList, error) {
 		return nil, err
 	}
 	defer f.Close()
+	stat, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+
 	reader := bufio.NewReader(f)
-	roots, err := loadRootsFrom(reader)
+	roots, err := loadRootsFrom(reader, stat.Size())
 	if err != nil {
 		return nil, err
 	}
@@ -615,9 +620,9 @@ func loadRoots(archiveDirectory string) (*rootList, error) {
 	}, nil
 }
 
-func loadRootsFrom(reader io.Reader) ([]Root, error) {
-	res := []Root{}
+func loadRootsFrom(reader io.Reader, sizeInBytes int64) ([]Root, error) {
 	encoder := NodeIdEncoder{}
+	res := make([]Root, 0, sizeInBytes/int64(encoder.GetEncodedSize()))
 	buffer := make([]byte, encoder.GetEncodedSize())
 	var hash common.Hash
 	for {

@@ -1577,7 +1577,7 @@ func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
 
 	for _, size := range []int{1, 2, 4, 1024} {
 		reader := utils.NewChunkReader(b.Bytes(), size)
-		res, err := loadRootsFrom(reader)
+		res, err := loadRootsFrom(reader, int64(b.Len()))
 		if err != nil {
 			t.Fatalf("error loading roots: %v", err)
 		}
