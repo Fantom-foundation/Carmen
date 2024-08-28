@@ -54,7 +54,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 	// Import the archive into a new directory.
 	targetDir := t.TempDir()
 	buffer = bytes.NewBuffer(genesis)
-	if err := ImportArchive(targetDir, buffer); err != nil {
+	if err := ImportArchive(NewLog(), targetDir, buffer); err != nil {
 		t.Fatalf("failed to import Archive: %v", err)
 	}
 
@@ -120,7 +120,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 	// Import the archive into a new directory.
 	targetDir := t.TempDir()
 	buffer = bytes.NewBuffer(genesis)
-	if err := ImportLiveAndArchive(targetDir, buffer); err != nil {
+	if err := ImportLiveAndArchive(NewLog(), targetDir, buffer); err != nil {
 		t.Fatalf("failed to import Archive: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestIO_LiveAndArchive_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot write magic number: %v", err)
 	}
-	err = importArchive(t.TempDir(), t.TempDir(), b)
+	err = importArchive(nil, t.TempDir(), t.TempDir(), b)
 	if err == nil {
 		t.Fatal("import must fail")
 	}

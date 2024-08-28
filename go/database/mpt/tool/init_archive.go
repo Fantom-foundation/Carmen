@@ -52,6 +52,7 @@ func doArchiveInit(context *cli.Context) error {
 
 	height := context.Uint64(blockHeightFlag.Name)
 
+	logger := mptIo.NewLog()
 	file, err := os.Open(src)
 	if err != nil {
 		return err
@@ -61,7 +62,7 @@ func doArchiveInit(context *cli.Context) error {
 		return err
 	}
 	return errors.Join(
-		mptIo.InitializeArchive(dir, in, height),
+		mptIo.InitializeArchive(logger, dir, in, height),
 		file.Close(),
 	)
 }

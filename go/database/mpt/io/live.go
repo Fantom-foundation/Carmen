@@ -185,17 +185,17 @@ func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Wri
 
 // ImportLiveDb creates a fresh StateDB in the given directory and fills it
 // with the content read from the given reader.
-func ImportLiveDb(directory string, in io.Reader) error {
-	_, _, err := runImport(directory, in, mpt.S5LiveConfig)
+func ImportLiveDb(logger *Log, directory string, in io.Reader) error {
+	_, _, err := runImport(logger, directory, in, mpt.S5LiveConfig)
 	return err
 }
 
 // InitializeArchive creates a fresh Archive in the given directory containing
 // the state read from the input stream at the given block. All states before
 // the given block are empty.
-func InitializeArchive(directory string, in io.Reader, block uint64) (err error) {
+func InitializeArchive(logger *Log, directory string, in io.Reader, block uint64) (err error) {
 	// The import creates a live-DB state that initializes the Archive.
-	root, hash, err := runImport(directory, in, mpt.S5ArchiveConfig)
+	root, hash, err := runImport(logger, directory, in, mpt.S5ArchiveConfig)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func InitializeArchive(directory string, in io.Reader, block uint64) (err error)
 	return nil
 }
 
-func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.NodeId, hash common.Hash, err error) {
+func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig) (root mpt.NodeId, hash common.Hash, err error) {
 	// check that the destination directory is an empty directory
 	if err := checkEmptyDirectory(directory); err != nil {
 		return root, hash, err
@@ -279,6 +279,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 
 	counter := 0
 
+	progress := logger.NewProgressTracker("imported %d accounts, %.2f accounts/s", 1_000_000)
 	hashFound := false
 	var stateHash common.Hash
 	for {
@@ -310,6 +311,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 		}
 		switch buffer[0] {
 		case 'A':
+			progress.Step(1)
 			if _, err := io.ReadFull(in, addr[:]); err != nil {
 				return root, hash, err
 			}

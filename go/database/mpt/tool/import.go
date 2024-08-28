@@ -55,7 +55,7 @@ func doLiveAndArchiveImport(context *cli.Context) error {
 	return doImport(context, mptIo.ImportLiveAndArchive)
 }
 
-func doImport(context *cli.Context, runImport func(directory string, in io.Reader) error) error {
+func doImport(context *cli.Context, runImport func(logger *mptIo.Log, directory string, in io.Reader) error) error {
 	if context.Args().Len() != 2 {
 		return fmt.Errorf("missing source file and/or target directory parameter")
 	}
@@ -80,7 +80,7 @@ func doImport(context *cli.Context, runImport func(directory string, in io.Reade
 		logger.Printf("import done")
 	}()
 	return errors.Join(
-		runImport(dir, in),
+		runImport(logger, dir, in),
 		file.Close(),
 	)
 }

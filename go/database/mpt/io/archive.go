@@ -203,29 +203,29 @@ func ExportArchive(ctx context.Context, logger *Log, directory string, out io.Wr
 	return archive.Close()
 }
 
-func ImportArchive(directory string, in io.Reader) error {
+func ImportArchive(logger *Log, directory string, in io.Reader) error {
 	// check that the destination directory is an empty directory
 	if err := checkEmptyDirectory(directory); err != nil {
 		return err
 	}
 	liveDbDir := path.Join(directory, "tmp-live-db")
 	return errors.Join(
-		importArchive(liveDbDir, directory, in),
+		importArchive(logger, liveDbDir, directory, in),
 		os.RemoveAll(liveDbDir), // live db is deleted at the end
 	)
 }
 
-func ImportLiveAndArchive(directory string, in io.Reader) error {
+func ImportLiveAndArchive(logger *Log, directory string, in io.Reader) error {
 	// check that the destination directory is an empty directory
 	if err := checkEmptyDirectory(directory); err != nil {
 		return err
 	}
 	liveDbDir := path.Join(directory, "live")
 	archiveDbDir := path.Join(directory, "archive")
-	return importArchive(liveDbDir, archiveDbDir, in)
+	return importArchive(logger, liveDbDir, archiveDbDir, in)
 }
 
-func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
+func importArchive(logger *Log, liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	// Start by checking the magic number.
 	buffer := make([]byte, len(archiveMagicNumber))
 	if _, err := io.ReadFull(in, buffer); err != nil {
@@ -267,6 +267,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}()
 
 	// Restore the archive from the input file.
+	progress := logger.NewProgressTracker("processed %d blocks, rate: %f blocks/s", 1_000_000)
 	context := newImportContext()
 	for {
 		// Read prefix determining the next input marker.
@@ -296,8 +297,9 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 			if _, err := io.ReadFull(in, buffer[0:4]); err != nil {
 				return err
 			}
-			context.setBlock(uint64(binary.BigEndian.Uint32(buffer)))
-
+			block := binary.BigEndian.Uint32(buffer)
+			progress.Step(int(block) - progress.GetCounter())
+			context.setBlock(uint64(block))
 		case 'H':
 			if _, err := io.ReadFull(in, buffer[0:1]); err != nil {
 				return err
