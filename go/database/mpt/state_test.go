@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -44,7 +45,9 @@ var stateFactories = map[string]func(string) (io.Closer, error){
 	"archive": func(dir string) (io.Closer, error) {
 		return OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
 	},
-	"verify": func(dir string) (io.Closer, error) { return openVerificationNodeSource(nil, dir, S5LiveConfig) },
+	"verify": func(dir string) (io.Closer, error) {
+		return openVerificationNodeSource(context.Background(), dir, S5LiveConfig)
+	},
 }
 
 var mptStateFactories = map[string]func(string) (*MptState, error){

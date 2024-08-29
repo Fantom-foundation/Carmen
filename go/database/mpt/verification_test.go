@@ -694,7 +694,7 @@ func TestVerification_CanInterrupt(t *testing.T) {
 		runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 			// First count the occurrence
 			counter := &interruptObserver{t: t}
-			if err := verifyFileForest(context.Background(), dir, config, roots, counter); err != nil {
+			if err := verify(context.Background(), dir, config, roots, counter); err != nil {
 				t.Errorf("%v: found unexpected error in fresh forest: %v", name, err)
 			}
 			maxCount := counter.count

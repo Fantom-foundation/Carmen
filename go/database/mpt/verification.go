@@ -868,7 +868,7 @@ func (s *verificationNodeSource) clearOverride() {
 
 func (s *verificationNodeSource) forAllInnerNodes(check func(Node) error) error {
 	return s.forNodes(func(_ NodeId, node Node) error {
-		// Check only every 1000th node - IsCancelled was proved to slow down the verification
+		// Check only every 1000th node
 		if s.numberOfNodesIterated%1000 == 0 && interrupt.IsCancelled(s.ctx) {
 			return interrupt.ErrCanceled
 		}
