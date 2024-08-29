@@ -19,9 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
-	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
@@ -692,20 +690,16 @@ func TestVerification_CanInterrupt(t *testing.T) {
 
 	for name, verify := range tests {
 		runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-			// First count the occurrence
-			counter := &interruptObserver{t: t}
-			if err := verify(context.Background(), dir, config, roots, counter); err != nil {
-				t.Errorf("%v: found unexpected error in fresh forest: %v", name, err)
+			ctx := newCountingWhenDoneContext(context.Background(), 10_000_000)
+			if err := verify(ctx, dir, config, roots, nil); err != nil {
+				t.Errorf("%v: found unexpected error: %v", name, err)
 			}
-			maxCount := counter.count
-			ctx := interrupt.CancelOnInterrupt(context.Background())
-			// Then interrupt and check it happened
-			interrupter := &interruptObserver{t: t, signalInterrupt: true}
-			if got, want := verify(ctx, dir, config, roots, interrupter), interrupt.ErrCanceled; !errors.Is(got, want) {
-				t.Errorf("%v: unexpected error: got: %v, want: %v", name, got, want)
-			}
-			if interrupter.count >= maxCount {
-				t.Fatalf("%v: verification was not interrupted", name)
+
+			for i := 0; i < ctx.count; i++ {
+				ctx := newCountingWhenDoneContext(context.Background(), i)
+				if err := verify(ctx, dir, config, roots, nil); !errors.Is(err, interrupt.ErrCanceled) {
+					t.Errorf("%v: found unexpected error: %v", name, err)
+				}
 			}
 
 			// Make sure data is not corrupted
@@ -722,26 +716,30 @@ func TestVerification_CanInterrupt(t *testing.T) {
 	}
 }
 
-type interruptObserver struct {
-	t               *testing.T
-	signalInterrupt bool
-	count           int
+// countingWhenDoneContext is a context.Context that counts the number of times Done is called, and signals done only
+// when the threshold is reached.
+type countingWhenDoneContext struct {
+	context.Context
+	count     int // count the number of executions checking done
+	threshold int // when this threshold is reached, signal done from this point onwards
+	done      chan struct{}
 }
 
-func (c *interruptObserver) StartVerification() {
-	if c.signalInterrupt {
-		c.signalInterrupt = false
-		err := syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-		if err != nil {
-			c.t.Fatal("failed to create a SIGINT signal")
-		}
-		time.Sleep(100 * time.Millisecond)
+func newCountingWhenDoneContext(ctx context.Context, threshold int) *countingWhenDoneContext {
+	return &countingWhenDoneContext{
+		Context:   ctx,
+		threshold: threshold,
+		done:      make(chan struct{}),
 	}
 }
 
-func (c *interruptObserver) Progress(string) { c.count++ }
-
-func (c *interruptObserver) EndVerification(error) {}
+func (c *countingWhenDoneContext) Done() <-chan struct{} {
+	if c.count == c.threshold { // equality to close only once
+		close(c.done)
+	}
+	c.count++
+	return c.done
+}
 
 func runVerificationTest(t *testing.T, verify func(t *testing.T, dir string, config MptConfig, roots []Root)) {
 	t.Helper()
