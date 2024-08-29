@@ -1929,6 +1929,49 @@ func TestForest_CollectedErrorsAreReportedInFlushAndClose(t *testing.T) {
 	}
 }
 
+func TestForest_FailingFlush_Invalidates_Forest(t *testing.T) {
+	injectedError := fmt.Errorf("injected error A")
+
+	ctrl := gomock.NewController(t)
+
+	branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+	extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
+	accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+	values := stock.NewMockStock[uint64, ValueNode](ctrl)
+
+	forest, err := makeForest(
+		MptConfig{Hashing: DirectHashing},
+		branches,
+		extensions,
+		accounts,
+		values,
+		ForestConfig{
+			Mode: Immutable,
+		},
+	)
+	if err != nil {
+		t.Fatalf("failed to create test forest: %v", err)
+	}
+
+	// only call fails, but the forest must be invalidated
+	gomock.InOrder(
+		branches.EXPECT().Flush().Return(injectedError),
+		branches.EXPECT().Flush().Return(nil),
+	)
+	extensions.EXPECT().Flush().Return(nil).AnyTimes()
+	accounts.EXPECT().Flush().Return(nil).AnyTimes()
+	values.EXPECT().Flush().Return(nil).AnyTimes()
+
+	if want, got := injectedError, forest.Flush(); !errors.Is(got, want) {
+		t.Errorf("missing operation error in flush, wanted %v, got %v", want, got)
+	}
+
+	// next time it must fail as well
+	if want, got := injectedError, forest.Flush(); !errors.Is(got, want) {
+		t.Errorf("missing operation error in flush, wanted %v, got %v", want, got)
+	}
+}
+
 func TestForest_CloseMultipleTimes(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
