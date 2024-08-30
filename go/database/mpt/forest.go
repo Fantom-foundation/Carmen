@@ -554,7 +554,7 @@ func (s *Forest) Flush() error {
 
 	errs = append(errs, s.flushDirtyIds(ids))
 
-	return errors.Join(
+	err := errors.Join(
 		errors.Join(errs...),
 		s.writeBuffer.Flush(),
 		s.accounts.Flush(),
@@ -562,6 +562,12 @@ func (s *Forest) Flush() error {
 		s.extensions.Flush(),
 		s.values.Flush(),
 	)
+
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+
+	return err
 }
 
 func (s *Forest) flushDirtyIds(ids []NodeId) error {
