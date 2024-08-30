@@ -320,7 +320,8 @@ func (a *ArchiveTrie) GetStorage(block uint64, account common.Address, slot comm
 	if err != nil {
 		return common.Value{}, a.addError(err)
 	}
-	return view.GetValue(account, slot)
+	value, err = view.GetValue(account, slot)
+	return value, a.addError(err)
 }
 
 func (a *ArchiveTrie) GetAccountHash(block uint64, account common.Address) (common.Hash, error) {
@@ -344,9 +345,16 @@ func (a *ArchiveTrie) CreateWitnessProof(block uint64, address common.Address, k
 		return nil, archive.ErrWitnessProofNotSupported
 	}
 	a.rootsMutex.Lock()
-	ref := a.roots.roots[block].NodeRef
+	length := uint64(a.roots.length())
+	if block >= length {
+		a.rootsMutex.Unlock()
+		return nil, fmt.Errorf("invalid block: %d >= %d", block, length)
+	}
+	ref := a.roots.get(block).NodeRef
 	a.rootsMutex.Unlock()
-	return CreateWitnessProof(a.nodeSource, &ref, address, keys...)
+
+	proof, err := CreateWitnessProof(a.nodeSource, &ref, address, keys...)
+	return proof, a.addError(err)
 }
 
 // GetDiff computes the difference between the given source and target blocks.
@@ -415,11 +423,12 @@ func (a *ArchiveTrie) Dump() {
 func (a *ArchiveTrie) Flush() error {
 	a.rootsMutex.Lock()
 	defer a.rootsMutex.Unlock()
-	return errors.Join(
+	err := errors.Join(
 		a.CheckErrors(),
 		a.head.Flush(),
 		a.roots.storeRoots(),
 	)
+	return a.addError(err)
 }
 
 func (a *ArchiveTrie) VisitTrie(block uint64, visitor NodeVisitor) error {
@@ -427,7 +436,7 @@ func (a *ArchiveTrie) VisitTrie(block uint64, visitor NodeVisitor) error {
 	if err != nil {
 		return err
 	}
-	return view.VisitTrie(visitor)
+	return a.addError(view.VisitTrie(visitor))
 }
 
 func (a *ArchiveTrie) Close() error {
