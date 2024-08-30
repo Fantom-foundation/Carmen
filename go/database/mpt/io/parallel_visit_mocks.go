@@ -25,7 +25,7 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockNodeSourceFactory is a mock of NodeSourceFactory interface.
+// MockNodeSourceFactory is a mock of nodeSourceFactory interface.
 type MockNodeSourceFactory struct {
 	ctrl     *gomock.Controller
 	recorder *MockNodeSourceFactoryMockRecorder
@@ -49,10 +49,10 @@ func (m *MockNodeSourceFactory) EXPECT() *MockNodeSourceFactoryMockRecorder {
 }
 
 // Open mocks base method.
-func (m *MockNodeSourceFactory) Open() (NodeSource, error) {
+func (m *MockNodeSourceFactory) Open() (nodeSource, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Open")
-	ret0, _ := ret[0].(NodeSource)
+	ret0, _ := ret[0].(nodeSource)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -63,7 +63,7 @@ func (mr *MockNodeSourceFactoryMockRecorder) Open() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Open", reflect.TypeOf((*MockNodeSourceFactory)(nil).Open))
 }
 
-// MockNodeSource is a mock of NodeSource interface.
+// MockNodeSource is a mock of nodeSource interface.
 type MockNodeSource struct {
 	ctrl     *gomock.Controller
 	recorder *MockNodeSourceMockRecorder

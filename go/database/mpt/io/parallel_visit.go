@@ -18,7 +18,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common/heap"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"io"
-	"log"
 	"path"
 	"sync"
 	"sync/atomic"
@@ -26,16 +25,16 @@ import (
 
 //go:generate mockgen -source parallel_visit.go -destination parallel_visit_mocks.go -package io
 
-// NodeSourceFactory is a factory for NodeSource instances.
+// nodeSourceFactory is a factory for nodeSource instances.
 // It provides access to nodes side to another infrastructure
 // that already accesses the nodes.
-type NodeSourceFactory interface {
-	Open() (NodeSource, error)
+type nodeSourceFactory interface {
+	Open() (nodeSource, error)
 }
 
-// NodeSource is a source of nodes.
+// nodeSource is a source of nodes.
 // It provides access to nodes by their ids.
-type NodeSource interface {
+type nodeSource interface {
 	Get(mpt.NodeId) (mpt.Node, error)
 	Close() error
 }
@@ -43,10 +42,10 @@ type NodeSource interface {
 // visitAll visits all nodes in the trie rooted at the given node in depth-first pre-order order.
 // This function accesses nodes using its own read-only node source, independently of a potential node source and cache managed by an MPT Forest instance. Thus, the caller need to make sure that any concurrently open MPT Forest has been flushed before calling this function to avoid reading out-dated or inconsistent data.
 func visitAll(
-	sourceFactory NodeSourceFactory,
+	sourceFactory nodeSourceFactory,
 	root mpt.NodeId,
 	visitor mpt.NodeVisitor,
-	cutAtAccounts bool,
+	pruneStorage bool,
 ) error {
 
 	// The idea is to have workers processing a common queue of needed
@@ -78,37 +77,29 @@ func visitAll(
 
 	requests.Add(request{nil, root})
 
+	var workersDoneWg sync.WaitGroup
+	var workersReadyWg sync.WaitGroup
 	const NumWorker = 16
-
-	// open all sources for the number of workers and track possible errors
-	sources := make([]NodeSource, 0, NumWorker)
-	openingErrors := make([]error, 0, NumWorker)
+	workersDoneWg.Add(NumWorker)
+	workersReadyWg.Add(NumWorker)
+	workerErrorsChan := make(chan error, NumWorker)
 	for i := 0; i < NumWorker; i++ {
-		source, err := sourceFactory.Open()
-		sources = append(sources, source)
-		openingErrors = append(openingErrors, err)
-	}
-
-	defer func() {
-		// only log errors when closing the sources
-		// as data are opened parallel to the main program
-		// and thus the error should not invalidate the result
-		for _, source := range sources {
-			if source != nil {
-				if err := source.Close(); err != nil {
-					log.Printf("failed to close source: %v", err)
-				}
+		go func() {
+			defer func() {
+				workersDoneWg.Done()
+			}()
+			source, err := sourceFactory.Open()
+			if err != nil {
+				workerErrorsChan <- err
+				workersReadyWg.Done()
+				return
 			}
-		}
-	}()
-
-	// error in one of the sources interrupts processing
-	if err := errors.Join(openingErrors...); err != nil {
-		return err
-	}
-
-	for i := 0; i < NumWorker; i++ {
-		go func(source NodeSource) {
+			workersReadyWg.Done()
+			defer func() {
+				if err := source.Close(); err != nil {
+					workerErrorsChan <- err
+				}
+			}()
 			for !done.Load() {
 				// TODO: implement throttling
 				// get the next job
@@ -156,7 +147,7 @@ func visitAll(
 					requests.Add(request{pos, next.Id()})
 					requestsMutex.Unlock()
 				case *mpt.AccountNode:
-					if !cutAtAccounts {
+					if !pruneStorage {
 						storage := node.GetStorage()
 						id := storage.Id()
 						if !id.IsEmpty() {
@@ -168,7 +159,26 @@ func visitAll(
 					}
 				}
 			}
-		}(sources[i])
+		}()
+	}
+
+	var err error
+	// wait for all go routines to be start to check for init errors
+	workersReadyWg.Wait()
+	// read possible error
+	var chRead bool
+	for !chRead {
+		select {
+		case workerErr := <-workerErrorsChan:
+			err = errors.Join(err, workerErr)
+		default:
+			chRead = true
+		}
+	}
+
+	// if init was not successful, return the error
+	if err != nil {
+		return err
 	}
 
 	// Perform depth-first iteration through the trie.
@@ -191,15 +201,13 @@ func visitAll(
 		responsesMutex.Unlock()
 
 		if res.err != nil {
-			return res.err
+			err = res.err
+			break
 		}
 
-		switch visitor.Visit(res.node, mpt.NodeInfo{Id: cur}) {
-		case mpt.VisitResponseAbort:
-			return nil
-		case mpt.VisitResponsePrune:
-			continue
-		}
+		// we do not check for visitor response here,
+		// as pruning or abortion is not supported
+		visitor.Visit(res.node, mpt.NodeInfo{Id: cur})
 
 		switch node := res.node.(type) {
 		case *mpt.BranchNode:
@@ -214,7 +222,7 @@ func visitAll(
 			next := node.GetNext()
 			stack = append(stack, next.Id())
 		case *mpt.AccountNode:
-			if !cutAtAccounts {
+			if !pruneStorage {
 				storage := node.GetStorage()
 				id := storage.Id()
 				if !id.IsEmpty() {
@@ -224,9 +232,20 @@ func visitAll(
 		}
 	}
 
-	return nil
+	// wait until all workers are done to read errors
+	done.Store(true)
+	workersDoneWg.Wait()
+	close(workerErrorsChan)
+	for workerErr := range workerErrorsChan {
+		err = errors.Join(err, workerErr)
+	}
+
+	return err
 }
 
+// position addresses a node within a tree by listing the path from the root node to the respective node.
+// Each position holds the distance of the node from the root, and an index of a branch the node
+// is attached to. For a non-branch parent node, the index is always 0.
 type position struct {
 	parent *position
 	pos    byte
@@ -318,14 +337,15 @@ func (p *position) _compare(b *position) int {
 }
 
 // ----------------------------------------------------------------------------
-//                               NodeSource
+//                               nodeSource
 // ----------------------------------------------------------------------------
 
-type nodeSourceFactory struct {
+// stockNodeSourceFactory is a nodeSourceFactory implementation that creates stock backed sources to access nodes.
+type stockNodeSourceFactory struct {
 	directory string
 }
 
-func (f *nodeSourceFactory) Open() (NodeSource, error) {
+func (f *stockNodeSourceFactory) Open() (nodeSource, error) {
 	var toClose []io.Closer
 	closeWithErr := func(err error) error {
 		for _, s := range toClose {
@@ -336,31 +356,31 @@ func (f *nodeSourceFactory) Open() (NodeSource, error) {
 		return err
 	}
 
-	accounts, err := file.OpenReadOnlyStock[mpt.NodeId, mpt.AccountNode](path.Join(f.directory, "accounts"), mpt.AccountNodeWithPathLengthEncoderWithNodeHash{})
+	accounts, err := file.OpenReadOnlyStock[uint64, mpt.AccountNode](path.Join(f.directory, "accounts"), mpt.AccountNodeWithPathLengthEncoderWithNodeHash{})
 	if err != nil {
 		return nil, closeWithErr(err)
 	}
 	toClose = append(toClose, accounts)
 
-	branches, err := file.OpenReadOnlyStock[mpt.NodeId, mpt.BranchNode](path.Join(f.directory, "branches"), mpt.BranchNodeEncoderWithNodeHash{})
+	branches, err := file.OpenReadOnlyStock[uint64, mpt.BranchNode](path.Join(f.directory, "branches"), mpt.BranchNodeEncoderWithNodeHash{})
 	if err != nil {
 		return nil, closeWithErr(err)
 	}
 	toClose = append(toClose, branches)
 
-	extensions, err := file.OpenReadOnlyStock[mpt.NodeId, mpt.ExtensionNode](path.Join(f.directory, "extensions"), mpt.ExtensionNodeEncoderWithNodeHash{})
+	extensions, err := file.OpenReadOnlyStock[uint64, mpt.ExtensionNode](path.Join(f.directory, "extensions"), mpt.ExtensionNodeEncoderWithNodeHash{})
 	if err != nil {
 		return nil, closeWithErr(err)
 	}
 	toClose = append(toClose, extensions)
 
-	values, err := file.OpenReadOnlyStock[mpt.NodeId, mpt.ValueNode](path.Join(f.directory, "values"), mpt.ValueNodeWithPathLengthEncoderWithNodeHash{})
+	values, err := file.OpenReadOnlyStock[uint64, mpt.ValueNode](path.Join(f.directory, "values"), mpt.ValueNodeWithPathLengthEncoderWithNodeHash{})
 	if err != nil {
 		return nil, closeWithErr(err)
 	}
 	toClose = append(toClose, values)
 
-	return &nodeSource{
+	return &stockNodeSource{
 		accounts:   accounts,
 		branches:   branches,
 		extensions: extensions,
@@ -368,37 +388,39 @@ func (f *nodeSourceFactory) Open() (NodeSource, error) {
 	}, nil
 }
 
-type nodeSource struct {
-	accounts   stock.ReadOnly[mpt.NodeId, mpt.AccountNode]
-	branches   stock.ReadOnly[mpt.NodeId, mpt.BranchNode]
-	extensions stock.ReadOnly[mpt.NodeId, mpt.ExtensionNode]
-	values     stock.ReadOnly[mpt.NodeId, mpt.ValueNode]
+// stockNodeSource is a nodeSource implementation that uses stock to access nodes.
+type stockNodeSource struct {
+	accounts   stock.ReadOnly[uint64, mpt.AccountNode]
+	branches   stock.ReadOnly[uint64, mpt.BranchNode]
+	extensions stock.ReadOnly[uint64, mpt.ExtensionNode]
+	values     stock.ReadOnly[uint64, mpt.ValueNode]
 }
 
-func (s *nodeSource) Get(id mpt.NodeId) (mpt.Node, error) {
+func (s *stockNodeSource) Get(id mpt.NodeId) (mpt.Node, error) {
+	pos := id.Index()
 	if id.IsEmpty() {
 		return mpt.EmptyNode{}, nil
 	}
 	if id.IsAccount() {
-		res, err := s.accounts.Get(id)
+		res, err := s.accounts.Get(pos)
 		return &res, err
 	}
 	if id.IsBranch() {
-		res, err := s.branches.Get(id)
+		res, err := s.branches.Get(pos)
 		return &res, err
 	}
 	if id.IsExtension() {
-		res, err := s.extensions.Get(id)
+		res, err := s.extensions.Get(pos)
 		return &res, err
 	}
 	if id.IsValue() {
-		res, err := s.values.Get(id)
+		res, err := s.values.Get(pos)
 		return &res, err
 	}
 	return nil, fmt.Errorf("unknown node type: %v", id)
 }
 
-func (s *nodeSource) Close() error {
+func (s *stockNodeSource) Close() error {
 	return errors.Join(
 		s.accounts.Close(),
 		s.branches.Close(),

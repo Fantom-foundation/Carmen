@@ -118,7 +118,7 @@ func TestNodeSource_CanRead_Nodes(t *testing.T) {
 			t.Fatalf("failed to get block height: %v", err)
 		}
 
-		factory := nodeSourceFactory{directory: trie.Directory()}
+		factory := stockNodeSourceFactory{directory: trie.Directory()}
 		source, err := factory.Open()
 		if err != nil {
 			t.Fatalf("failed to open node source: %v", err)
@@ -156,7 +156,7 @@ func TestNodeSource_CanRead_Nodes(t *testing.T) {
 
 func TestVisit_Nodes_Failing_CannotOpenDir(t *testing.T) {
 	dir := path.Join(t.TempDir(), "missing")
-	if err := visitAll(&nodeSourceFactory{dir}, mpt.EmptyId(), mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+	if err := visitAll(&stockNodeSourceFactory{dir}, mpt.EmptyId(), mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		return mpt.VisitResponseContinue
 	}), false); err == nil {
 		t.Errorf("expected error, got nil")
@@ -181,7 +181,7 @@ func TestVisit_Nodes_Failing_MissingDir(t *testing.T) {
 	}
 
 	// visit here when the trie is close as the directory is missing
-	if err := visitAll(&nodeSourceFactory{dir}, root, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+	if err := visitAll(&stockNodeSourceFactory{dir}, root, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		return mpt.VisitResponseContinue
 	}), false); err == nil {
 		t.Errorf("expected error, got nil")
@@ -204,7 +204,7 @@ func TestVisit_Nodes_Failing_MissingData(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get block root: %v", err)
 		}
-		if err := visitAll(&nodeSourceFactory{trie.Directory()}, nodeId, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 			return mpt.VisitResponseContinue
 		}), false); err == nil {
 			t.Errorf("expected error, got nil")
@@ -239,26 +239,25 @@ func TestVisit_Nodes_CannotCloseSources(t *testing.T) {
 		t.Fatalf("failed to close archive: %v", err)
 	}
 
-	parentFc := &nodeSourceFactory{trie.Directory()}
-	parentSource, err := parentFc.Open()
-	if err != nil {
-		t.Fatalf("failed to open source: %v", err)
-	}
-
+	parentFc := &stockNodeSourceFactory{trie.Directory()}
 	ctrl := gomock.NewController(t)
 
-	mockSource := NewMockNodeSource(ctrl)
-	mockSource.EXPECT().Get(gomock.Any()).DoAndReturn(parentSource.Get).AnyTimes()
-	mockSource.EXPECT().Close().Return(injectedError).Times(16)
-
 	mockFc := NewMockNodeSourceFactory(ctrl)
-	mockFc.EXPECT().Open().Return(mockSource, nil).Times(16)
+	mockFc.EXPECT().Open().DoAndReturn(func() (nodeSource, error) {
+		parentSource, err := parentFc.Open()
+		if err != nil {
+			t.Fatalf("failed to open source: %v", err)
+		}
+		mockSource := NewMockNodeSource(ctrl)
+		mockSource.EXPECT().Get(gomock.Any()).DoAndReturn(parentSource.Get).AnyTimes()
+		mockSource.EXPECT().Close().Return(injectedError)
+		return mockSource, nil
+	}).Times(16)
 
 	if err := visitAll(mockFc, nodeId, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 		return mpt.VisitResponseContinue
-	}), false); err != nil {
-		// close failed, but this error is not propagated upwards.
-		t.Errorf("unexpected error %v", err)
+	}), false); !errors.Is(err, injectedError) {
+		t.Errorf("expected error %v, got %v", injectedError, err)
 	}
 }
 
@@ -298,7 +297,7 @@ func TestVisit_Nodes_Iterated_Deterministic(t *testing.T) {
 				t.Run(fmt.Sprintf("block=%d,iteration=%d", block, i), func(t *testing.T) {
 					t.Parallel()
 					var position int
-					if err := visitAll(&nodeSourceFactory{trie.Directory()}, nodeId, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+					if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 						if got, want := info.Id, nodes[position]; got != want {
 							t.Errorf("expected node %v, got %v", want, got)
 						}
@@ -314,7 +313,7 @@ func TestVisit_Nodes_Iterated_Deterministic(t *testing.T) {
 }
 
 func TestSource_EmptyNodeId(t *testing.T) {
-	source := nodeSource{}
+	source := stockNodeSource{}
 	node, _ := source.Get(mpt.EmptyId())
 	if got, want := node, (mpt.EmptyNode{}); got != want {
 		t.Errorf("expected empty node, got %v", got)
@@ -347,7 +346,7 @@ func TestOpenSource_Failing_MissingFiles(t *testing.T) {
 			}
 		}
 
-		factory := nodeSourceFactory{directory: dir}
+		factory := stockNodeSourceFactory{directory: dir}
 		if _, err := factory.Open(); err == nil {
 			t.Errorf("expected error, got nil")
 		}
