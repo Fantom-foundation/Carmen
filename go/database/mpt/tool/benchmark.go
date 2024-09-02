@@ -13,15 +13,12 @@ package main
 import (
 	"fmt"
 	"io/fs"
-	"log"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
-	"runtime/trace"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -37,15 +34,12 @@ var Benchmark = cli.Command{
 	Usage:  "benchmarks MPT performance by filling data into a fresh instance",
 	Flags: []cli.Flag{
 		&archiveFlag,
-		&diagnosticsFlag,
 		&numBlocksFlag,
 		&numReadsPerBlockFlag,
 		&numInsertsPerBlockFlag,
 		&reportIntervalFlag,
 		&tmpDirFlag,
 		&keepStateFlag,
-		&cpuProfileFlag,
-		&traceFlag,
 	},
 }
 
@@ -53,11 +47,6 @@ var (
 	archiveFlag = cli.BoolFlag{
 		Name:  "archive",
 		Usage: "enables archive mode",
-	}
-	diagnosticsFlag = cli.IntFlag{
-		Name:  "diagnostic-port",
-		Usage: "enable hosting of a realtime diagnostic server by providing a port",
-		Value: 0,
 	}
 	numBlocksFlag = cli.IntFlag{
 		Name:  "num-blocks",
@@ -87,16 +76,6 @@ var (
 		Name:  "keep-state",
 		Usage: "disables the deletion of temporary data at the end of the benchmark",
 	}
-	cpuProfileFlag = cli.StringFlag{
-		Name:  "cpuprofile",
-		Usage: "sets the target file for storing CPU profiles to, disabled if empty",
-		Value: "",
-	}
-	traceFlag = cli.StringFlag{
-		Name:  "tracefile",
-		Usage: "sets the target file for traces to, disabled if empty",
-		Value: "",
-	}
 )
 
 func benchmark(context *cli.Context) error {
@@ -106,17 +85,7 @@ func benchmark(context *cli.Context) error {
 		tmpDir = os.TempDir()
 	}
 
-	diagnosticPort := context.Int(diagnosticsFlag.Name)
-	if diagnosticPort > 0 && diagnosticPort < (1<<16) {
-		fmt.Printf("Starting diagnostic server at port http://localhost:%d (see https://pkg.go.dev/net/http/pprof#hdr-Usage_examples for usage examples)\n", diagnosticPort)
-		fmt.Printf("Block and mutex sampling rate is set to 100%% for diagnostics, which may impact overall performance\n")
-		go func() {
-			addr := fmt.Sprintf("localhost:%d", diagnosticPort)
-			log.Println(http.ListenAndServe(addr, nil))
-		}()
-		runtime.SetBlockProfileRate(1)
-		runtime.SetMutexProfileFraction(1)
-	}
+	startDiagnosticServer(context.Int(diagnosticsFlag.Name))
 
 	start := time.Now()
 	results, err := runBenchmark(
@@ -350,36 +319,6 @@ func runBenchmark(
 	res.reportTime = reportingTime
 
 	return res, nil
-}
-
-func startCpuProfiler(filename string) error {
-	f, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("could not create CPU profile: %s", err)
-	}
-	if err := pprof.StartCPUProfile(f); err != nil {
-		return fmt.Errorf("could not start CPU profile: %s", err)
-	}
-	return nil
-}
-
-func stopCpuProfiler() {
-	pprof.StopCPUProfile()
-}
-
-func startTracer(filename string) error {
-	traceFile, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("failed to create trace file: %v", err)
-	}
-	if err := trace.Start(traceFile); err != nil {
-		return fmt.Errorf("failed to start trace: %v", err)
-	}
-	return nil
-}
-
-func stopTracer() {
-	trace.Stop()
 }
 
 // GetDirectorySize computes the size of all files in the given directory in bytes.

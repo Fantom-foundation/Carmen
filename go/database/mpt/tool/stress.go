@@ -31,7 +31,7 @@ import (
 // an MPT data base with the aim of stress-testing core components like the
 // node cache, the write buffer, and the background flush mechanism.
 var StressTestCmd = cli.Command{
-	Action: stressTest,
+	Action: addPerformanceDiagnoses(stressTest),
 	Name:   "stress-test",
 	Usage:  "stress test an MPT database",
 	Flags: []cli.Flag{

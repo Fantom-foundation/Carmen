@@ -155,8 +155,17 @@ func (s *ArchiveState) Export(ctx context.Context, out io.Writer) (common.Hash, 
 		return common.Hash{}, state.ExportNotSupported
 	}
 
-	exportableTrie := mptio.NewExportableArchiveTrie(trie, s.block)
-	rootHash, err := mptio.ExportLive(ctx, exportableTrie, out)
+	err := mptio.ExportBlockFromOnlineArchive(ctx, nil, trie, out, s.block)
+	// trie could get corrupted during export, practically just by flushing it
+	s.archiveError = errors.Join(s.archiveError, trie.CheckErrors())
+	if err != nil || s.archiveError != nil {
+		// export opens the trie parallel to the current program,
+		// possible error is sent to the caller but should not corrupt
+		// the database on error.
+		return common.Hash{}, errors.Join(err, s.archiveError)
+	}
+
+	rootHash, err := trie.GetHash(s.block)
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
 		return common.Hash{}, s.archiveError
