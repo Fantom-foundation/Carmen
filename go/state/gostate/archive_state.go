@@ -167,14 +167,6 @@ func (s *ArchiveState) Export(ctx context.Context, out io.Writer) (common.Hash, 
 
 	rootHash, err := trie.GetHash(s.block)
 	if err != nil {
-		// export opens the trie parallel to the current program,
-		// possible error is sent to the caller but should not corrupt
-		// the database on error.
-		return common.Hash{}, err
-	}
-
-	rootHash, err := trie.GetHash(s.block)
-	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
 		return common.Hash{}, s.archiveError
 	}

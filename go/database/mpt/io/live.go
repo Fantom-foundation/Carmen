@@ -155,32 +155,6 @@ func ExportBlockFromArchive(ctx context.Context, logger *Log, directory string, 
 	return err
 }
 
-// ExportBlockFromOnlineArchive exports LiveDB view for a single given block from an Archive.
-// This method exports from the online archive, i.e, an archive that is being updated with new blocks.
-// To ensure the exported data are up-to-date, this method flushes the archive to disk before exporting.
-// For this reason, this method should not be called often, as it would hamper performance.
-// Expected usage is, for instance, the creation of a LiveDB state dumps to back up the state of selected blocks for fast recovery.
-func ExportBlockFromOnlineArchive(ctx context.Context, archive *mpt.ArchiveTrie, out io.Writer, block uint64) error {
-	logger := NewLog()
-	logger.Printf("exporting block %d from online archive", block)
-	defer func() {
-		logger.Printf("exported block %d from online archive", block)
-	}()
-
-	logger.Printf("flushing archive")
-	// before doing anything, flush the archive to ensure the data is up-to-date
-	if err := archive.Flush(); err != nil {
-		return err
-	}
-
-	logger.Printf("exporting")
-	_, err := ExportLive(ctx, logger, exportableArchiveTrie{
-		trie:  archive,
-		block: block,
-	}, out)
-	return err
-}
-
 // ExportBlockFromOnlineArchive exports a LiveDB dump for a single given block from an Archive.
 // This method exports from an online archive, i.e, an archive that is being updated with new blocks.
 // To ensure the exported data is up-to-date, this method flushes the archive to disk before exporting.
