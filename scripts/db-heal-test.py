@@ -201,9 +201,9 @@ for i in range(1, number_of_iterations + 1):
         '--db-tmp', tmp_path, '--carmen-schema', '5', '--db-impl', 'carmen',
         '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
         '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
-        '--carmen-checkpoint-interval', str(checkpoint_granularity_flag), '--db-src',
+        '--carmen-checkpoint-interval', str(checkpoint_granularity), '--db-src',
         str(working_dir), '--skip-priming', '--tracker-granularity',
-        str(checkpoint_granularity_flag), str(first_block), str(last_block)
+        str(checkpoint_granularity), str(first_block), str(last_block)
     ]
 
     os.chdir(aida_path)
