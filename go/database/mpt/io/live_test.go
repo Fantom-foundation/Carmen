@@ -416,7 +416,7 @@ func TestIO_ExportBlockFromOnlineArchive(t *testing.T) {
 			t.Fatalf("failed to import DB: %v", err)
 		}
 
-		if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+		if err := mpt.VerifyFileLiveTrie(context.Background(), targetDir, mpt.S5LiveConfig, nil); err != nil {
 			t.Fatalf("verification of imported DB failed: %v", err)
 		}
 
