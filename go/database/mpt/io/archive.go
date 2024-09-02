@@ -16,14 +16,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"io"
 	"os"
 	"path"
 	"sort"
-
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
-	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
-	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -57,7 +56,7 @@ var archiveMagicNumber []byte = []byte("Fantom-Archive-State")
 
 const archiveFormatVersion = byte(1)
 
-func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
+func ExportArchive(ctx context.Context, logger *Log, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -67,6 +66,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
+	logger.Printf("opening archive: %s", directory)
 	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
 	if err != nil {
 		return err
@@ -83,6 +83,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	}
 
 	// Write out codes.
+	logger.Printf("exporting codes")
 	codes := archive.GetCodes()
 	if err = writeCodes(codes, out); err != nil {
 		return err
@@ -98,7 +99,10 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	}
 
 	// Encode diff of each individual block.
+	logger.Printf("exporting blocks")
+	tracker := logger.NewProgressTracker("processed %d blocks, rate: %f blocks/s", 1_000_000)
 	for block := uint64(0); block <= maxBlock; block++ {
+		tracker.Step(1)
 		if interrupt.IsCancelled(ctx) {
 			return errors.Join(interrupt.ErrCanceled, archive.Close())
 		}
@@ -199,29 +203,29 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	return archive.Close()
 }
 
-func ImportArchive(directory string, in io.Reader) error {
+func ImportArchive(logger *Log, directory string, in io.Reader) error {
 	// check that the destination directory is an empty directory
 	if err := checkEmptyDirectory(directory); err != nil {
 		return err
 	}
 	liveDbDir := path.Join(directory, "tmp-live-db")
 	return errors.Join(
-		importArchive(liveDbDir, directory, in),
+		importArchive(logger, liveDbDir, directory, in),
 		os.RemoveAll(liveDbDir), // live db is deleted at the end
 	)
 }
 
-func ImportLiveAndArchive(directory string, in io.Reader) error {
+func ImportLiveAndArchive(logger *Log, directory string, in io.Reader) error {
 	// check that the destination directory is an empty directory
 	if err := checkEmptyDirectory(directory); err != nil {
 		return err
 	}
 	liveDbDir := path.Join(directory, "live")
 	archiveDbDir := path.Join(directory, "archive")
-	return importArchive(liveDbDir, archiveDbDir, in)
+	return importArchive(logger, liveDbDir, archiveDbDir, in)
 }
 
-func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
+func importArchive(logger *Log, liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	// Start by checking the magic number.
 	buffer := make([]byte, len(archiveMagicNumber))
 	if _, err := io.ReadFull(in, buffer); err != nil {
@@ -263,6 +267,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}()
 
 	// Restore the archive from the input file.
+	progress := logger.NewProgressTracker("processed %d blocks, rate: %f blocks/s", 1_000_000)
 	context := newImportContext()
 	for {
 		// Read prefix determining the next input marker.
@@ -292,8 +297,9 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 			if _, err := io.ReadFull(in, buffer[0:4]); err != nil {
 				return err
 			}
-			context.setBlock(uint64(binary.BigEndian.Uint32(buffer)))
-
+			block := binary.BigEndian.Uint32(buffer)
+			progress.Step(int(block) - progress.GetCounter())
+			context.setBlock(uint64(block))
 		case 'H':
 			if _, err := io.ReadFull(in, buffer[0:1]); err != nil {
 				return err

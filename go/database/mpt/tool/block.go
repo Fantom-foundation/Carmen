@@ -12,7 +12,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
@@ -21,12 +20,11 @@ import (
 )
 
 var Block = cli.Command{
-	Action:    block,
+	Action:    addPerformanceDiagnoses(block),
 	Name:      "block",
 	Usage:     "retrieves information about a given block",
 	ArgsUsage: "<archive-director>",
 	Flags: []cli.Flag{
-		&cpuProfileFlag,
 		&targetBlockFlag,
 	},
 }
@@ -40,15 +38,6 @@ func block(context *cli.Context) error {
 	// parse the directory argument
 	if context.Args().Len() != 1 {
 		return fmt.Errorf("missing directory storing archive")
-	}
-
-	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
-	if strings.TrimSpace(cpuProfileFileName) != "" {
-		if err := startCpuProfiler(cpuProfileFileName); err != nil {
-			return err
-		}
-		defer stopCpuProfiler()
 	}
 
 	dir := context.Args().Get(0)
