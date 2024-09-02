@@ -151,7 +151,10 @@ for i in range(1, number_of_iterations + 1):
         stderr=c,
         cwd=carmen_root)
 
-    check_program_failure(result.returncode, c.read())
+    log = c.read()
+    print(log)
+
+    check_program_failure(result.returncode, log)
 
     # Export genesis to restore LiveDB
     genesis = Path(tmp_path) / 'test_genesis.dat'
