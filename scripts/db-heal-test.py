@@ -60,7 +60,7 @@ current_dir = Path.cwd()
 
 print("Your settings:")
 print(f"\tNumber of iterations: {number_of_iterations}.")
-print(f"\tWindow size: {window} seconds.")
+print(f"\tSync time before kill: {window} seconds.")
 print(f"\tCheckpoint granularity: {checkpoint_granularity} blocks.")
 
 
@@ -82,7 +82,7 @@ def terminate_process_after(sleep_time: int, checkpoint: int):
                 if start == 0.0:
                     start = time.time()
                 checkpoint = checkpoint + checkpoint_granularity
-                print(f"Found new checkpoint {checkpoint}.")
+                print(f"Found new checkpoint {checkpoint}.") # TODO: Remove
             # If process ends with error (return code 1) or either 'fail' or 'exit status' occurs in line exit script
             if process.poll() == 1 or any(s in line for s in ["exit status", "fail"]):
                 print("Error occurred - printing output.log:")
@@ -99,8 +99,8 @@ cmd = [
     '--db-tmp', tmp_path, '--carmen-schema', '5', '--db-impl', 'carmen',
     '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
     '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
-    '--carmen-checkpoint-interval', str(checkpoint_granularity_flag), '--tracker-granularity',
-    str(checkpoint_granularity_flag), str(first_block), str(last_block)
+    '--carmen-checkpoint-interval', str(checkpoint_granularity), '--tracker-granularity',
+    str(checkpoint_granularity), str(first_block), str(last_block)
 ]
 
 os.chdir(aida_path)
