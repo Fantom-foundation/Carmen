@@ -64,6 +64,13 @@ print(f"\tSync time before kill: {window} seconds.")
 print(f"\tCheckpoint granularity: {checkpoint_granularity} blocks.")
 
 
+# Function which checks programs return code, if program failed, log is printed and program is terminated.
+def check_program_failure(code: int, log: str):
+    if code != 0:
+        print(log)
+        sys.exit(1)
+
+
 # Function which stops process after given sleep_time.
 def terminate_process_after(sleep_time: int, checkpoint: int):
     start = 0.0
@@ -82,14 +89,13 @@ def terminate_process_after(sleep_time: int, checkpoint: int):
                 if start == 0.0:
                     start = time.time()
                 checkpoint = checkpoint + checkpoint_granularity
-                print(f"Found new checkpoint {checkpoint}.") # TODO: Remove
+                print(f"Found new checkpoint {checkpoint}.")  # TODO: Remove
             # If process ends with error (return code 1) or either 'fail' or 'exit status' occurs in line exit script
             if process.poll() == 1 or any(s in line for s in ["exit status", "fail"]):
                 print("Error occurred - printing output.log:")
                 with open(aida_log_file, 'r') as l:
                     text = l.read()
                     print(text)
-                os.chdir(current_dir)
                 return -1
 
 
@@ -117,6 +123,7 @@ latest_checkpoint = terminate_process_after(window, latest_checkpoint)
 process.wait()
 
 if latest_checkpoint == -1:
+    os.chdir(current_dir)
     sys.exit(1)
 
 # Find working directory
@@ -143,11 +150,8 @@ for i in range(1, number_of_iterations + 1):
         stdout=c,
         stderr=c,
         cwd=carmen_root)
-    if result.returncode != 0:
-        # Print carmen logs if interation fails
-        text = c.read()
-        print(text)
-        sys.exit(1)
+
+    check_program_failure(result.returncode, c.read())
 
     # Export genesis to restore LiveDB
     genesis = Path(tmp_path) / 'test_genesis.dat'
@@ -158,11 +162,7 @@ for i in range(1, number_of_iterations + 1):
         stdout=c,
         stderr=c,
         cwd=carmen_root)
-    if result.returncode != 0:
-        # Print carmen logs if interation fails
-        text = c.read()
-        print(text)
-        sys.exit(1)
+    check_program_failure(result.returncode, c.read())
 
     # Restore LiveDB
     print("Export complete. Applying LiveDB genesis.")
@@ -185,11 +185,7 @@ for i in range(1, number_of_iterations + 1):
         stdout=c,
         stderr=c,
         cwd=carmen_root)
-    if result.returncode != 0:
-        # Print carmen logs if interation fails
-        text = c.read()
-        print(text)
-        sys.exit(1)
+    check_program_failure(result.returncode, c.read())
 
     print(f"Iteration {i}/{number_of_iterations}")
     # We restored to block X, although we need to start the app at +1 block because X is already done
@@ -218,6 +214,7 @@ for i in range(1, number_of_iterations + 1):
     process.wait()
 
     if latest_checkpoint == -1:
+        os.chdir(current_dir)
         sys.exit(1)
 
     if last_working_dir:
