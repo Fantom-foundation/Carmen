@@ -165,7 +165,7 @@ for i in range(1, number_of_iterations + 1):
         stdout=c,
         stderr=c,
         cwd=carmen_root)
-    check_program_failure(result.returncode, c.read())
+    check_program_failure(result.returncode, c)
 
     # Restore LiveDB
     print("Export complete. Applying LiveDB genesis.")
@@ -188,7 +188,7 @@ for i in range(1, number_of_iterations + 1):
         stdout=c,
         stderr=c,
         cwd=carmen_root)
-    check_program_failure(result.returncode, c.read())
+    check_program_failure(result.returncode, c)
 
     print(f"Iteration {i}/{number_of_iterations}")
     # We restored to block X, although we need to start the app at +1 block because X is already done
