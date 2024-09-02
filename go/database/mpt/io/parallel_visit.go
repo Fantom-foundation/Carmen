@@ -39,12 +39,28 @@ type nodeSource interface {
 	get(mpt.NodeId) (mpt.Node, error)
 }
 
+// noResponseNodeVisitor is a visitor for nodes.
+type noResponseNodeVisitor interface {
+	// Visit is called for each node encountered while visiting a trie.
+	Visit(mpt.Node, mpt.NodeInfo)
+}
+
+// noResponseMptNodeVisitor is a noResponseNodeVisitor implementation that routes to the mpt.NodeVisitor,
+// but ignores the results of each call to Visit.
+type noResponseMptNodeVisitor struct {
+	parent mpt.NodeVisitor
+}
+
+func (v *noResponseMptNodeVisitor) Visit(node mpt.Node, info mpt.NodeInfo) {
+	v.parent.Visit(node, info)
+}
+
 // visitAll visits all nodes in the trie rooted at the given node in depth-first pre-order order.
 // This function accesses nodes using its own read-only node source, independently of a potential node source and cache managed by an MPT Forest instance. Thus, the caller need to make sure that any concurrently open MPT Forest has been flushed before calling this function to avoid reading out-dated or inconsistent data.
 func visitAll(
 	sourceFactory nodeSourceFactory,
 	root mpt.NodeId,
-	visitor mpt.NodeVisitor,
+	visitor noResponseNodeVisitor,
 	pruneStorage bool,
 ) error {
 
@@ -163,7 +179,7 @@ func visitAll(
 	}
 
 	var err error
-	// wait for all go routines to be start to check for init errors
+	// wait for all go routines start to check for init errors
 	workersReadyWg.Wait()
 	// read possible error
 	var chRead bool

@@ -156,9 +156,7 @@ func TestNodeSource_CanRead_Nodes(t *testing.T) {
 
 func TestVisit_Nodes_Failing_CannotOpenDir(t *testing.T) {
 	dir := path.Join(t.TempDir(), "missing")
-	if err := visitAll(&stockNodeSourceFactory{dir}, mpt.EmptyId(), mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-		return mpt.VisitResponseContinue
-	}), false); err == nil {
+	if err := visitAll(&stockNodeSourceFactory{dir}, mpt.EmptyId(), &noResponseMptNodeVisitor{}, false); err == nil {
 		t.Errorf("expected error, got nil")
 	}
 }
@@ -180,10 +178,7 @@ func TestVisit_Nodes_Failing_MissingDir(t *testing.T) {
 		t.Fatalf("failed to remove directory: %v", err)
 	}
 
-	// visit here when the trie is close as the directory is missing
-	if err := visitAll(&stockNodeSourceFactory{dir}, root, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-		return mpt.VisitResponseContinue
-	}), false); err == nil {
+	if err := visitAll(&stockNodeSourceFactory{dir}, root, &noResponseMptNodeVisitor{}, false); err == nil {
 		t.Errorf("expected error, got nil")
 	}
 
@@ -204,9 +199,7 @@ func TestVisit_Nodes_Failing_MissingData(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get block root: %v", err)
 		}
-		if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-			return mpt.VisitResponseContinue
-		}), false); err == nil {
+		if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, &noResponseMptNodeVisitor{}, false); err == nil {
 			t.Errorf("expected error, got nil")
 		}
 	})
@@ -216,12 +209,10 @@ func TestVisit_Nodes_CannotOpenFiles(t *testing.T) {
 	injectedError := fmt.Errorf("injected error")
 
 	ctrl := gomock.NewController(t)
-	fc := NewMockNodeSourceFactory(ctrl)
-	fc.EXPECT().Open().Return(nil, injectedError).Times(16)
+	fc := NewMocknodeSourceFactory(ctrl)
+	fc.EXPECT().open().Return(nil, injectedError).Times(16)
 
-	if err := visitAll(fc, mpt.EmptyId(), mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-		return mpt.VisitResponseContinue
-	}), false); !errors.Is(err, injectedError) {
+	if err := visitAll(fc, mpt.EmptyId(), &noResponseMptNodeVisitor{}, false); !errors.Is(err, injectedError) {
 		t.Errorf("expected error %v, got %v", injectedError, err)
 	}
 }
@@ -242,21 +233,22 @@ func TestVisit_Nodes_CannotCloseSources(t *testing.T) {
 	parentFc := &stockNodeSourceFactory{trie.Directory()}
 	ctrl := gomock.NewController(t)
 
-	mockFc := NewMockNodeSourceFactory(ctrl)
-	mockFc.EXPECT().Open().DoAndReturn(func() (nodeSource, error) {
+	mockFc := NewMocknodeSourceFactory(ctrl)
+	mockFc.EXPECT().open().DoAndReturn(func() (nodeSource, error) {
 		parentSource, err := parentFc.open()
 		if err != nil {
 			t.Fatalf("failed to open source: %v", err)
 		}
-		mockSource := NewMockNodeSource(ctrl)
-		mockSource.EXPECT().Get(gomock.Any()).DoAndReturn(parentSource.get).AnyTimes()
+		mockSource := NewMocknodeSource(ctrl)
+		mockSource.EXPECT().get(gomock.Any()).DoAndReturn(parentSource.get).AnyTimes()
 		mockSource.EXPECT().Close().Return(injectedError)
 		return mockSource, nil
 	}).Times(16)
 
-	if err := visitAll(mockFc, nodeId, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-		return mpt.VisitResponseContinue
-	}), false); !errors.Is(err, injectedError) {
+	visitor := NewMocknoResponseNodeVisitor(ctrl)
+	visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
+
+	if err := visitAll(mockFc, nodeId, visitor, false); !errors.Is(err, injectedError) {
 		t.Errorf("expected error %v, got %v", injectedError, err)
 	}
 }
@@ -297,13 +289,16 @@ func TestVisit_Nodes_Iterated_Deterministic(t *testing.T) {
 				t.Run(fmt.Sprintf("block=%d,iteration=%d", block, i), func(t *testing.T) {
 					t.Parallel()
 					var position int
-					if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, mpt.MakeVisitor(func(_ mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+					ctrl := gomock.NewController(t)
+					visitor := NewMocknoResponseNodeVisitor(ctrl)
+					visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).DoAndReturn(func(_ mpt.Node, info mpt.NodeInfo) {
 						if got, want := info.Id, nodes[position]; got != want {
 							t.Errorf("expected node %v, got %v", want, got)
 						}
 						position++
-						return mpt.VisitResponseContinue
-					}), false); err != nil {
+					}).AnyTimes()
+
+					if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, visitor, false); err != nil {
 						t.Fatalf("failed to visit nodes: %v", err)
 					}
 				})
@@ -373,15 +368,15 @@ func createArchive(t *testing.T) *mpt.ArchiveTrie {
 	}
 
 	const (
-		M = 10
-		N = 30
+		Blocks   = 10
+		Accounts = 30
 	)
 
-	for i := 0; i < M; i++ {
+	for i := 0; i < Blocks; i++ {
 		code := []byte{1, 2, 3, byte(i)}
 		u := uint64(i)
 		update := common.Update{}
-		for j := 0; j < N; j++ {
+		for j := 0; j < Accounts; j++ {
 			newAddr := common.AddressFromNumber(j)
 
 			update.CreatedAccounts = append(update.CreatedAccounts, newAddr)

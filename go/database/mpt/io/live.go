@@ -58,26 +58,28 @@ const (
 // and furthermore getting its properties such as a root hash and contract codes.
 type mptStateVisitor interface {
 	// Visit allows for traverse the whole trie.
-	Visit(visitor mpt.NodeVisitor) error
+	// If pruneStorage is true, the storage nodes are not visited.
+	Visit(visitor mpt.NodeVisitor, pruneStorage bool) error
 	// GetHash returns the hash of the represented Trie.
 	GetHash() (common.Hash, error)
 	// GetCodeForHash returns byte code for given hash.
 	GetCodeForHash(common.Hash) []byte
 }
 
+// ExportableArchiveTrie is a wrapper for an ArchiveTrie instance that allows for
+// exporting its content by the ability to visit archive trie nodes.
 type exportableArchiveTrie struct {
 	trie  *mpt.ArchiveTrie
 	block uint64
 }
 
-func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor) error {
+func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor, pruneStorage bool) error {
 	root, err := e.trie.GetBlockRoot(e.block)
 	if err != nil {
 		return err
 	}
 
-	cutAtAccounts := false // TODO
-	return visitAll(&stockNodeSourceFactory{directory: e.trie.Directory()}, root, visitor, cutAtAccounts)
+	return visitAll(&stockNodeSourceFactory{directory: e.trie.Directory()}, root, &noResponseMptNodeVisitor{visitor}, pruneStorage)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
@@ -86,6 +88,24 @@ func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
 
 func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
 	return e.trie.GetCodeForHash(hash)
+}
+
+// exportableLiveTrie is a wrapper for a LiveDB instance that allows for
+// exporting its content by the ability to visit archive trie nodes.
+type exportableLiveTrie struct {
+	db *mpt.MptState
+}
+
+func (e *exportableLiveTrie) Visit(visitor mpt.NodeVisitor, _ bool) error {
+	return e.db.Visit(visitor)
+}
+
+func (e *exportableLiveTrie) GetHash() (common.Hash, error) {
+	return e.db.GetHash()
+}
+
+func (e *exportableLiveTrie) GetCodeForHash(hash common.Hash) []byte {
+	return e.db.GetCodeForHash(hash)
 }
 
 // Export opens a LiveDB instance retained in the given directory and writes
@@ -109,7 +129,7 @@ func Export(ctx context.Context, logger *Log, directory string, out io.Writer) e
 	}
 	defer db.Close()
 
-	_, err = ExportLive(ctx, logger, db, out)
+	_, err = ExportLive(ctx, logger, &exportableLiveTrie{db: db}, out)
 	return err
 }
 
@@ -131,10 +151,7 @@ func ExportBlockFromArchive(ctx context.Context, logger *Log, directory string, 
 	}
 
 	defer archive.Close()
-	_, err = ExportLive(ctx, logger, exportableArchiveTrie{
-		trie:  archive,
-		block: block,
-	}, out)
+	_, err = ExportLive(ctx, logger, exportableArchiveTrie{trie: archive, block: block}, out)
 	return err
 }
 
@@ -226,7 +243,7 @@ func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Wri
 	logger.Print("exporting accounts and values")
 	progress := logger.NewProgressTracker("exported %d accounts, %.2f accounts/s", 1_000_000)
 	visitor := exportVisitor{out: out, ctx: ctx, progress: progress}
-	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
+	if err := db.Visit(&visitor, false); err != nil || visitor.err != nil {
 		return common.Hash{}, fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
 	}
 
@@ -443,7 +460,7 @@ func getReferencedCodes(ctxt context.Context, logger *Log, db mptStateVisitor) (
 			return mpt.VisitResponsePrune // < no need to visit the storage trie
 		}
 		return mpt.VisitResponseContinue
-	}))
+	}), true)
 
 	if interrupt.IsCancelled(ctxt) {
 		err = interrupt.ErrCanceled

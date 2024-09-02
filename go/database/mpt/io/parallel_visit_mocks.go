@@ -114,3 +114,38 @@ func (mr *MocknodeSourceMockRecorder) get(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "get", reflect.TypeOf((*MocknodeSource)(nil).get), arg0)
 }
+
+// MocknoResponseNodeVisitor is a mock of noResponseNodeVisitor interface.
+type MocknoResponseNodeVisitor struct {
+	ctrl     *gomock.Controller
+	recorder *MocknoResponseNodeVisitorMockRecorder
+}
+
+// MocknoResponseNodeVisitorMockRecorder is the mock recorder for MocknoResponseNodeVisitor.
+type MocknoResponseNodeVisitorMockRecorder struct {
+	mock *MocknoResponseNodeVisitor
+}
+
+// NewMocknoResponseNodeVisitor creates a new mock instance.
+func NewMocknoResponseNodeVisitor(ctrl *gomock.Controller) *MocknoResponseNodeVisitor {
+	mock := &MocknoResponseNodeVisitor{ctrl: ctrl}
+	mock.recorder = &MocknoResponseNodeVisitorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocknoResponseNodeVisitor) EXPECT() *MocknoResponseNodeVisitorMockRecorder {
+	return m.recorder
+}
+
+// Visit mocks base method.
+func (m *MocknoResponseNodeVisitor) Visit(arg0 mpt.Node, arg1 mpt.NodeInfo) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Visit", arg0, arg1)
+}
+
+// Visit indicates an expected call of Visit.
+func (mr *MocknoResponseNodeVisitorMockRecorder) Visit(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Visit", reflect.TypeOf((*MocknoResponseNodeVisitor)(nil).Visit), arg0, arg1)
+}
