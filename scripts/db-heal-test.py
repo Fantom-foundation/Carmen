@@ -1,3 +1,4 @@
+import argparse
 import os
 import subprocess
 import tempfile
@@ -5,25 +6,29 @@ import time
 import shutil
 from pathlib import Path
 import sys
-import flag
 
-# --- Dynamic variables --- #
-aida_path_flag = flag.string("aida", "", "Path to Aida root.")
-aida_db_path_flag = flag.string("aida_db", "", "Path to AidaDB.")
-tmp_path_flag = flag.string("tmp", "", "Path to tmp dir.")
+parser = argparse.ArgumentParser(prog="DB HEAL TEST SCRIPT",
+                                 description="This script as serves as a test tool for 'db-heal' feature."
+                                             "It tests recover and LiveDB export/import.")
 
-number_of_iterations_flag = flag.int("iter", 1000, "Number of iterations.")
-window_flag = flag.int("window", 120, "How often will program get terminated (in seconds).")
-checkpoint_granularity_flag = flag.int("cp_granularity", 2000, "How often will Carmen create checkpoints.")
-flag.parse()
+# --- Parameters --- #
+parser.add_argument('--aida', type=str, help="Path to Aida root.")
+parser.add_argument('--aida-db', type=str, help="Path to AidaDB.")
+parser.add_argument("--tmp", type=str, help="Path to tmp dir.")
+parser.add_argument("--iter", type=int, help="Number of iterations.", default=1000)
+parser.add_argument("--window", type=int,
+                    help="Delay between start of sync process and forced termination (in seconds).", default=5)
+parser.add_argument("--cp-granularity", type=int,
+                    help="How often will Carmen create checkpoints (in blocks).", default=10)
 
-aida_path = aida_path_flag.value
-aida_db_path = aida_db_path_flag.value
-tmp_path = tmp_path_flag.value
+args = parser.parse_args()
 
-number_of_iterations = number_of_iterations_flag.value
-window = window_flag.value
-checkpoint_granularity = checkpoint_granularity_flag.value
+aida_path = args.aida
+aida_db_path = args.aida_db
+tmp_path = args.tmp
+number_of_iterations = args.iter
+window = args.window
+checkpoint_granularity = args.cp_granularity
 
 # Mark first checkpoint
 latest_checkpoint = checkpoint_granularity
@@ -86,7 +91,6 @@ def terminate_process_after(sleep_time: int, checkpoint: int):
                     print(text)
                 os.chdir(current_dir)
                 return -1
-
 
 
 # First iteration command
