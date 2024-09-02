@@ -142,7 +142,7 @@ for i in range(1, number_of_iterations + 1):
     live = working_dir / 'live'
 
     # Dumb carmen's logs into a file to avoid spamming
-    c = open(carmen_log_file, 'w+')
+    c = open(carmen_log_file, 'a+')
 
     # Restore Archive
     result = subprocess.run(
@@ -151,7 +151,7 @@ for i in range(1, number_of_iterations + 1):
         stderr=c,
         cwd=carmen_root)
 
-    log = c.readlines()
+    log = c.read()
     print(log)
 
     check_program_failure(result.returncode, log)
