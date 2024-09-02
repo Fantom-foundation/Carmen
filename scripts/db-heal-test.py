@@ -151,7 +151,7 @@ for i in range(1, number_of_iterations + 1):
         stderr=c,
         cwd=carmen_root)
 
-    log = c.read()
+    log = c.readlines()
     print(log)
 
     check_program_failure(result.returncode, log)
