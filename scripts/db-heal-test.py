@@ -65,9 +65,12 @@ print(f"\tCheckpoint granularity: {checkpoint_granularity} blocks.")
 
 
 # Function which checks programs return code, if program failed, log is printed and program is terminated.
-def check_program_failure(code: int, log: str):
+def check_program_failure(code, log):
     if code != 0:
-        print(log)
+        log.close()
+        with open(carmen_log_file, 'r') as l:
+            text = l.read()
+            print(text)
         sys.exit(1)
 
 
@@ -142,7 +145,7 @@ for i in range(1, number_of_iterations + 1):
     live = working_dir / 'live'
 
     # Dumb carmen's logs into a file to avoid spamming
-    c = open(carmen_log_file, 'a+')
+    c = open(carmen_log_file, 'w')
 
     # Restore Archive
     result = subprocess.run(
@@ -151,10 +154,7 @@ for i in range(1, number_of_iterations + 1):
         stderr=c,
         cwd=carmen_root)
 
-    log = c.read()
-    print(log)
-
-    check_program_failure(result.returncode, log)
+    check_program_failure(result.returncode, c)
 
     # Export genesis to restore LiveDB
     genesis = Path(tmp_path) / 'test_genesis.dat'
