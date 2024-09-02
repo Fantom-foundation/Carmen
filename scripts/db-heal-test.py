@@ -229,4 +229,8 @@ aida_log_file.unlink(missing_ok=True)
 carmen_log_file.unlink(missing_ok=True)
 shutil.rmtree(working_dir, ignore_errors=True)
 
+print("Success!")
+
 sys.exit(0)
+
+
