@@ -29,14 +29,14 @@ import (
 // It provides access to nodes side to another infrastructure
 // that already accesses the nodes.
 type nodeSourceFactory interface {
-	Open() (nodeSource, error)
+	open() (nodeSource, error)
 }
 
 // nodeSource is a source of nodes.
 // It provides access to nodes by their ids.
 type nodeSource interface {
-	Get(mpt.NodeId) (mpt.Node, error)
-	Close() error
+	io.Closer
+	get(mpt.NodeId) (mpt.Node, error)
 }
 
 // visitAll visits all nodes in the trie rooted at the given node in depth-first pre-order order.
@@ -88,7 +88,7 @@ func visitAll(
 			defer func() {
 				workersDoneWg.Done()
 			}()
-			source, err := sourceFactory.Open()
+			source, err := sourceFactory.open()
 			if err != nil {
 				workerErrorsChan <- err
 				workersReadyWg.Done()
@@ -113,7 +113,7 @@ func visitAll(
 				}
 
 				// fetch the node and put it into the responses
-				node, err := source.Get(req.id)
+				node, err := source.get(req.id)
 
 				responsesMutex.Lock()
 				responses[req.id] = response{node, err}
@@ -345,7 +345,7 @@ type stockNodeSourceFactory struct {
 	directory string
 }
 
-func (f *stockNodeSourceFactory) Open() (nodeSource, error) {
+func (f *stockNodeSourceFactory) open() (nodeSource, error) {
 	var toClose []io.Closer
 	closeWithErr := func(err error) error {
 		for _, s := range toClose {
@@ -396,7 +396,7 @@ type stockNodeSource struct {
 	values     stock.ReadOnly[uint64, mpt.ValueNode]
 }
 
-func (s *stockNodeSource) Get(id mpt.NodeId) (mpt.Node, error) {
+func (s *stockNodeSource) get(id mpt.NodeId) (mpt.Node, error) {
 	pos := id.Index()
 	if id.IsEmpty() {
 		return mpt.EmptyNode{}, nil

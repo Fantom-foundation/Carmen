@@ -25,69 +25,69 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockNodeSourceFactory is a mock of nodeSourceFactory interface.
-type MockNodeSourceFactory struct {
+// MocknodeSourceFactory is a mock of nodeSourceFactory interface.
+type MocknodeSourceFactory struct {
 	ctrl     *gomock.Controller
-	recorder *MockNodeSourceFactoryMockRecorder
+	recorder *MocknodeSourceFactoryMockRecorder
 }
 
-// MockNodeSourceFactoryMockRecorder is the mock recorder for MockNodeSourceFactory.
-type MockNodeSourceFactoryMockRecorder struct {
-	mock *MockNodeSourceFactory
+// MocknodeSourceFactoryMockRecorder is the mock recorder for MocknodeSourceFactory.
+type MocknodeSourceFactoryMockRecorder struct {
+	mock *MocknodeSourceFactory
 }
 
-// NewMockNodeSourceFactory creates a new mock instance.
-func NewMockNodeSourceFactory(ctrl *gomock.Controller) *MockNodeSourceFactory {
-	mock := &MockNodeSourceFactory{ctrl: ctrl}
-	mock.recorder = &MockNodeSourceFactoryMockRecorder{mock}
+// NewMocknodeSourceFactory creates a new mock instance.
+func NewMocknodeSourceFactory(ctrl *gomock.Controller) *MocknodeSourceFactory {
+	mock := &MocknodeSourceFactory{ctrl: ctrl}
+	mock.recorder = &MocknodeSourceFactoryMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockNodeSourceFactory) EXPECT() *MockNodeSourceFactoryMockRecorder {
+func (m *MocknodeSourceFactory) EXPECT() *MocknodeSourceFactoryMockRecorder {
 	return m.recorder
 }
 
-// Open mocks base method.
-func (m *MockNodeSourceFactory) Open() (nodeSource, error) {
+// open mocks base method.
+func (m *MocknodeSourceFactory) open() (nodeSource, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Open")
+	ret := m.ctrl.Call(m, "open")
 	ret0, _ := ret[0].(nodeSource)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Open indicates an expected call of Open.
-func (mr *MockNodeSourceFactoryMockRecorder) Open() *gomock.Call {
+// open indicates an expected call of open.
+func (mr *MocknodeSourceFactoryMockRecorder) open() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Open", reflect.TypeOf((*MockNodeSourceFactory)(nil).Open))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "open", reflect.TypeOf((*MocknodeSourceFactory)(nil).open))
 }
 
-// MockNodeSource is a mock of nodeSource interface.
-type MockNodeSource struct {
+// MocknodeSource is a mock of nodeSource interface.
+type MocknodeSource struct {
 	ctrl     *gomock.Controller
-	recorder *MockNodeSourceMockRecorder
+	recorder *MocknodeSourceMockRecorder
 }
 
-// MockNodeSourceMockRecorder is the mock recorder for MockNodeSource.
-type MockNodeSourceMockRecorder struct {
-	mock *MockNodeSource
+// MocknodeSourceMockRecorder is the mock recorder for MocknodeSource.
+type MocknodeSourceMockRecorder struct {
+	mock *MocknodeSource
 }
 
-// NewMockNodeSource creates a new mock instance.
-func NewMockNodeSource(ctrl *gomock.Controller) *MockNodeSource {
-	mock := &MockNodeSource{ctrl: ctrl}
-	mock.recorder = &MockNodeSourceMockRecorder{mock}
+// NewMocknodeSource creates a new mock instance.
+func NewMocknodeSource(ctrl *gomock.Controller) *MocknodeSource {
+	mock := &MocknodeSource{ctrl: ctrl}
+	mock.recorder = &MocknodeSourceMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockNodeSource) EXPECT() *MockNodeSourceMockRecorder {
+func (m *MocknodeSource) EXPECT() *MocknodeSourceMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockNodeSource) Close() error {
+func (m *MocknodeSource) Close() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
@@ -95,22 +95,22 @@ func (m *MockNodeSource) Close() error {
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockNodeSourceMockRecorder) Close() *gomock.Call {
+func (mr *MocknodeSourceMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockNodeSource)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MocknodeSource)(nil).Close))
 }
 
-// Get mocks base method.
-func (m *MockNodeSource) Get(arg0 mpt.NodeId) (mpt.Node, error) {
+// get mocks base method.
+func (m *MocknodeSource) get(arg0 mpt.NodeId) (mpt.Node, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0)
+	ret := m.ctrl.Call(m, "get", arg0)
 	ret0, _ := ret[0].(mpt.Node)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Get indicates an expected call of Get.
-func (mr *MockNodeSourceMockRecorder) Get(arg0 any) *gomock.Call {
+// get indicates an expected call of get.
+func (mr *MocknodeSourceMockRecorder) get(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockNodeSource)(nil).Get), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "get", reflect.TypeOf((*MocknodeSource)(nil).get), arg0)
 }

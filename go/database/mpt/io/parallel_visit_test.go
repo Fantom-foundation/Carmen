@@ -119,7 +119,7 @@ func TestNodeSource_CanRead_Nodes(t *testing.T) {
 		}
 
 		factory := stockNodeSourceFactory{directory: trie.Directory()}
-		source, err := factory.Open()
+		source, err := factory.open()
 		if err != nil {
 			t.Fatalf("failed to open node source: %v", err)
 		}
@@ -133,7 +133,7 @@ func TestNodeSource_CanRead_Nodes(t *testing.T) {
 					t.Fatalf("node %v is dirty", info.Id)
 				}
 
-				sourceNode, err := source.Get(info.Id)
+				sourceNode, err := source.get(info.Id)
 				if err != nil {
 					t.Fatalf("failed to get node from source: %v", err)
 				}
@@ -244,12 +244,12 @@ func TestVisit_Nodes_CannotCloseSources(t *testing.T) {
 
 	mockFc := NewMockNodeSourceFactory(ctrl)
 	mockFc.EXPECT().Open().DoAndReturn(func() (nodeSource, error) {
-		parentSource, err := parentFc.Open()
+		parentSource, err := parentFc.open()
 		if err != nil {
 			t.Fatalf("failed to open source: %v", err)
 		}
 		mockSource := NewMockNodeSource(ctrl)
-		mockSource.EXPECT().Get(gomock.Any()).DoAndReturn(parentSource.Get).AnyTimes()
+		mockSource.EXPECT().Get(gomock.Any()).DoAndReturn(parentSource.get).AnyTimes()
 		mockSource.EXPECT().Close().Return(injectedError)
 		return mockSource, nil
 	}).Times(16)
@@ -314,7 +314,7 @@ func TestVisit_Nodes_Iterated_Deterministic(t *testing.T) {
 
 func TestSource_EmptyNodeId(t *testing.T) {
 	source := stockNodeSource{}
-	node, _ := source.Get(mpt.EmptyId())
+	node, _ := source.get(mpt.EmptyId())
 	if got, want := node, (mpt.EmptyNode{}); got != want {
 		t.Errorf("expected empty node, got %v", got)
 	}
@@ -347,7 +347,7 @@ func TestOpenSource_Failing_MissingFiles(t *testing.T) {
 		}
 
 		factory := stockNodeSourceFactory{directory: dir}
-		if _, err := factory.Open(); err == nil {
+		if _, err := factory.open(); err == nil {
 			t.Errorf("expected error, got nil")
 		}
 	}
