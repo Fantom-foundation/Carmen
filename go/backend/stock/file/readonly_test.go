@@ -24,7 +24,7 @@ import (
 func TestReadOnlyFile_Get(t *testing.T) {
 	const Items = 3300
 	directory := t.TempDir()
-	s, err := openInitFileStock(directory, Items)
+	s, err := initFileStock(directory, Items)
 	if err != nil {
 		t.Fatalf("cannot init stock: %s", err)
 	}
@@ -61,7 +61,7 @@ func TestReadOnlyFile_Get(t *testing.T) {
 
 func TestReadOnlyFile_Open_MissingFile(t *testing.T) {
 	directory := t.TempDir()
-	s, err := openInitFileStock(directory, 10)
+	s, err := initFileStock(directory, 10)
 	if err != nil {
 		t.Fatalf("cannot init stock: %s", err)
 	}

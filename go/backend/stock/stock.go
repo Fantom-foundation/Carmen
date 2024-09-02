@@ -26,11 +26,8 @@ import (
 // It allows for retrieving values associated with index values,
 // while it can neither create nor delete values.
 type ReadOnly[I Index, V any] interface {
-	// Get retrieves a value associated to an index value. If there is no such
-	// element, an undefined value is returned. Stock implementations are not
-	// required to retain information on valid and deleted indexes to
-	// efficiently distinguish valid from invalid accesses. The life-cycle of
-	// IDs is expected to be managed by the client code.
+	// Get retrieves a value associated to an input index.
+	// If there is no such element, an undefined value is returned.
 	Get(I) (V, error)
 
 	io.Closer
@@ -48,12 +45,18 @@ type ReadOnly[I Index, V any] interface {
 // I ... the type used to address values in the stock (=index space)
 // V ... the type of values stored in the stock
 type Stock[I Index, V any] interface {
-	ReadOnly[I, V]
 
 	// New allocates an ID for a new value to be maintained in the Stock. IDs
 	// can be used to retrieve, update, and remove values from the Stock. Freed
 	// up IDs may be reassigned.
 	New() (I, error)
+
+	// Get retrieves a value associated to an index value. If there is no such
+	// element, an undefined value is returned. Stock implementations are not
+	// required to retain information on valid and deleted indexes to
+	// efficiently distinguish valid from invalid accesses. The life-cycle of
+	// IDs is expected to be managed by the client code.
+	Get(I) (V, error)
 
 	// Set updates the value associated to the given index. The given index must be
 	// alive, created through a New call of a Stock based on the same resources
