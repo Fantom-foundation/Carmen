@@ -12,6 +12,7 @@ package stock
 
 import (
 	"encoding/binary"
+	"io"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
@@ -20,6 +21,17 @@ import (
 )
 
 //go:generate mockgen -source stock.go -destination stock_mocks.go -package stock -exclude_interfaces Index
+
+// ReadOnly is a read-only interface to a Stock.
+// It allows for retrieving values associated with index values,
+// while it can neither create nor delete values.
+type ReadOnly[I Index, V any] interface {
+	// Get retrieves a value associated to an input index.
+	// If there is no such element, an undefined value is returned.
+	Get(I) (V, error)
+
+	io.Closer
+}
 
 // Stock is a collection of fixed-sized, serializable values each associated
 // to a unique, Stock-controlled index serving as an identifier.
@@ -33,6 +45,7 @@ import (
 // I ... the type used to address values in the stock (=index space)
 // V ... the type of values stored in the stock
 type Stock[I Index, V any] interface {
+
 	// New allocates an ID for a new value to be maintained in the Stock. IDs
 	// can be used to retrieve, update, and remove values from the Stock. Freed
 	// up IDs may be reassigned.
@@ -45,7 +58,7 @@ type Stock[I Index, V any] interface {
 	// IDs is expected to be managed by the client code.
 	Get(I) (V, error)
 
-	// Updates the value associated ot the given index. The given index must be
+	// Set updates the value associated to the given index. The given index must be
 	// alive, created through a New call of a Stock based on the same resources
 	// and not released.
 	Set(I, V) error
@@ -57,7 +70,7 @@ type Stock[I Index, V any] interface {
 	// to undefined behavior.
 	Delete(I) error
 
-	// GetIndexSet fetches a snapshot of the valid indexes at a given time. This
+	// GetIds fetches a snapshot of the valid indexes at a given time. This
 	// may be a costly operation in terms of IO activities. It is thus not intended
 	// for regular use in performance critical code. Its main motivation is to
 	// provide a building block for consistency checks of Stock content.
