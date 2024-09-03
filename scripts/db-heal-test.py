@@ -92,7 +92,6 @@ def terminate_process_after(sleep_time: int, checkpoint: int):
                 if start == 0.0:
                     start = time.time()
                 checkpoint = checkpoint + checkpoint_granularity
-                print(f"Found new checkpoint {checkpoint}.")  # TODO: Remove
             # If process ends with error (return code 1) or either 'fail' or 'exit status' occurs in line exit script
             if process.poll() == 1 or any(s in line for s in ["exit status", "fail"]):
                 print("Error occurred - printing output.log:")
