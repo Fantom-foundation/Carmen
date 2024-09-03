@@ -40,6 +40,7 @@ type nodeSource interface {
 }
 
 // noResponseNodeVisitor is a visitor for nodes.
+// It serves mainly as an adapter for mpt.NodeVisitor, but ignores the results of each call to Visit.
 type noResponseNodeVisitor interface {
 	// Visit is called for each node encountered while visiting a trie.
 	Visit(mpt.Node, mpt.NodeInfo)
@@ -56,7 +57,10 @@ func (v *noResponseMptNodeVisitor) Visit(node mpt.Node, info mpt.NodeInfo) {
 }
 
 // visitAll visits all nodes in the trie rooted at the given node in depth-first pre-order order.
-// This function accesses nodes using its own read-only node source, independently of a potential node source and cache managed by an MPT Forest instance. Thus, the caller need to make sure that any concurrently open MPT Forest has been flushed before calling this function to avoid reading out-dated or inconsistent data.
+// This function accesses nodes using its own read-only node source, independently of a potential
+// node source and cache managed by an MPT Forest instance.
+// Thus, the caller needs to make sure that any concurrently open MPTs have been flushed
+// before calling this function to avoid reading out-dated or inconsistent data.
 func visitAll(
 	sourceFactory nodeSourceFactory,
 	root mpt.NodeId,
@@ -93,12 +97,20 @@ func visitAll(
 
 	requests.Add(request{nil, root})
 
-	var workersDoneWg sync.WaitGroup
-	var workersReadyWg sync.WaitGroup
 	const NumWorker = 16
+
+	var workersDoneWg sync.WaitGroup
+	var workersInitWg sync.WaitGroup
 	workersDoneWg.Add(NumWorker)
-	workersReadyWg.Add(NumWorker)
-	workerErrorsChan := make(chan error, NumWorker)
+	workersInitWg.Add(NumWorker)
+	workersErrorChan := make(chan error, NumWorker)
+
+	// Workers discover nodes and put child references into a queue.
+	// Then the workers check which node references are in the queue
+	// and fetch nodes for them, again putting child references to the queue.
+	// This way, the trie is completely read multi-threaded.
+	// To favor the depth-first order, the node ids in the queue are
+	// sorted in a priority queue so that the deepest nodes are read first.
 	for i := 0; i < NumWorker; i++ {
 		go func() {
 			defer func() {
@@ -106,14 +118,14 @@ func visitAll(
 			}()
 			source, err := sourceFactory.open()
 			if err != nil {
-				workerErrorsChan <- err
-				workersReadyWg.Done()
+				workersErrorChan <- err
+				workersInitWg.Done()
 				return
 			}
-			workersReadyWg.Done()
+			workersInitWg.Done()
 			defer func() {
 				if err := source.Close(); err != nil {
-					workerErrorsChan <- err
+					workersErrorChan <- err
 				}
 			}()
 			for !done.Load() {
@@ -180,12 +192,12 @@ func visitAll(
 
 	var err error
 	// wait for all go routines start to check for init errors
-	workersReadyWg.Wait()
+	workersInitWg.Wait()
 	// read possible error
 	var chRead bool
 	for !chRead {
 		select {
-		case workerErr := <-workerErrorsChan:
+		case workerErr := <-workersErrorChan:
 			err = errors.Join(err, workerErr)
 		default:
 			chRead = true
@@ -198,6 +210,11 @@ func visitAll(
 	}
 
 	// Perform depth-first iteration through the trie.
+	// This main thread iterates the trie on its own and
+	// provides the nodes to the visitor in dept-first order.
+	// This loop does not perform any I/O, and instead it queries
+	// the workers for the nodes.
+	// This provides a performance boost.
 	stack := []mpt.NodeId{root}
 	for len(stack) > 0 {
 		cur := stack[len(stack)-1]
@@ -251,8 +268,8 @@ func visitAll(
 	// wait until all workers are done to read errors
 	done.Store(true)
 	workersDoneWg.Wait()
-	close(workerErrorsChan)
-	for workerErr := range workerErrorsChan {
+	close(workersErrorChan)
+	for workerErr := range workersErrorChan {
 		err = errors.Join(err, workerErr)
 	}
 
@@ -268,6 +285,7 @@ type position struct {
 	len    byte
 }
 
+// newPosition creates a new position from a byte slice.
 func newPosition(pos []byte) *position {
 	var res *position
 	for i, step := range pos {
@@ -290,6 +308,8 @@ func (p *position) String() string {
 	return fmt.Sprintf("%s.%d", p.parent.String(), p.pos)
 }
 
+// Child creates a new position that is a child of the current position.
+// The new position is one step deeper than the current one.
 func (p *position) Child(step byte) *position {
 	len := byte(0)
 	if p != nil {
@@ -302,6 +322,11 @@ func (p *position) Child(step byte) *position {
 	}
 }
 
+// compare compares two positions.
+// It finds parents of two positions that are at the same depths and compares
+// the positions of these parents.
+// If the positions differ, the result is the comparison of these parent positions.
+// If they are the same, the result is the depth of the positions.
 func (p *position) compare(b *position) int {
 	if p == b {
 		return 0

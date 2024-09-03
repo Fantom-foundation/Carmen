@@ -284,7 +284,7 @@ func TestVisit_Nodes_Iterated_Deterministic(t *testing.T) {
 
 			// visit all nodes in the trie and compare that the nodes are visited in the same order
 			// as the nodes in the trie
-			// 	repeat the experiment N times to ensure that the order is deterministic
+			// run the experiment N times to ensure that the order is deterministic
 			for i := 0; i < N; i++ {
 				t.Run(fmt.Sprintf("block=%d,iteration=%d", block, i), func(t *testing.T) {
 					t.Parallel()
