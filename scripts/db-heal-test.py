@@ -9,7 +9,9 @@ import sys
 
 parser = argparse.ArgumentParser(prog="DB HEAL TEST SCRIPT",
                                  description="This script as serves as a test tool for 'db-heal' feature."
-                                             "It tests recover and LiveDB export/import.")
+                                             "It tests recover and LiveDB export/import.",
+                                 usage="To use this script, please provide Aida root using --aida and path to"
+                                       "AidaDb using --aida-db.")
 
 # --- Parameters --- #
 parser.add_argument('--aida', type=str, help="Path to Aida root.")
@@ -33,13 +35,13 @@ checkpoint_granularity = args.cp_granularity
 # Mark first checkpoint
 latest_checkpoint = checkpoint_granularity
 
-if aida_path == "":
+if not aida_path or aida_path == "":
     print("please set Aida using --aida")
-    exit(1)
-if aida_db_path == "":
-    print("please set AidaDB using --aidadb")
-    exit(1)
-if tmp_path == "":
+    sys.exit(1)
+if not aida_db_path or aida_db_path == "":
+    print("please set AidaDB using --aida-db")
+    sys.exit(1)
+if not tmp_path or tmp_path == "":
     tmp_path = tempfile.gettempdir()
     print(f"tmp not set - using default {tmp_path}")
 
@@ -53,9 +55,16 @@ carmen_root = os.path.abspath('../go')
 
 # --- Script --- #
 
+# Create working dir which gets deleted after the run
+working_dir = os.path.join(tmp_path, 'db-heal-test')
+if os.path.exists(working_dir):
+    shutil.rmtree(working_dir)
+os.makedirs(working_dir)
+
 # Log file path from which we read output to find kill_block
 aida_log_file = Path.cwd() / 'aida.log'
-carmen_log_file = Path.cwd() / 'carmen.log'
+carmen_log_file = Path.cwd() / 'aida.log'
+genesis = os.path.join(working_dir, 'test_genesis.dat')
 current_dir = Path.cwd()
 
 print("Your settings:")
@@ -64,20 +73,21 @@ print(f"\tSync time before kill: {window} seconds.")
 print(f"\tCheckpoint granularity: {checkpoint_granularity} blocks.")
 
 
-# Function which checks programs return code, if program failed, log is printed and program is terminated.
-def check_program_failure(code, log):
+# Function which checks programs return code, if program failed, log is printed and True is returned.
+def has_program_failed(code, log):
     if code != 0:
         log.close()
         with open(carmen_log_file, 'r') as l:
             text = l.read()
             print(text)
-        sys.exit(1)
+        return True
+    return False
 
 
 # Function which stops process after given sleep_time.
 def terminate_process_after(sleep_time: int, checkpoint: int):
     start = 0.0
-    with aida_log_file.open('r') as f:
+    with open(aida_log_file, 'r') as f:
         while True:
             line = f.readline()
             if not line:
@@ -104,7 +114,7 @@ def terminate_process_after(sleep_time: int, checkpoint: int):
 # First iteration command
 cmd = [
     './build/aida-vm-sdb', 'substate', '--validate',
-    '--db-tmp', tmp_path, '--carmen-schema', '5', '--db-impl', 'carmen',
+    '--db-tmp', working_dir, '--carmen-schema', '5', '--db-impl', 'carmen',
     '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
     '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
     '--carmen-checkpoint-interval', str(checkpoint_granularity), '--tracker-granularity',
@@ -128,22 +138,24 @@ if latest_checkpoint == -1:
     os.chdir(current_dir)
     sys.exit(1)
 
-# Find working directory
-working_dir = max(Path(tmp_path).iterdir(), key=os.path.getmtime)
-archive = working_dir / 'archive'
-live = working_dir / 'live'
+# Find db directory
+working_db = max(Path(working_dir).iterdir(), key=os.path.getmtime)
+archive = os.path.join(working_db, 'archive')
+live = os.path.join(working_db, 'live')
 
 print("Testing db created, starting loop.")
 
+has_failed = False
+
 for i in range(1, number_of_iterations + 1):
-    last_working_dir = working_dir
+    last_working_db = working_db
 
     # Find working dir - Aida copies db-src
-    working_dir = max(Path(tmp_path).iterdir(), key=os.path.getmtime)
-    archive = working_dir / 'archive'
-    live = working_dir / 'live'
+    working_db = max(Path(working_dir).iterdir(), key=os.path.getmtime)
+    archive = os.path.join(working_db, 'archive')
+    live = os.path.join(working_db, 'live')
 
-    # Dumb carmen's logs into a file to avoid spamming
+    # Dump carmen's logs into a file to avoid spamming
     c = open(carmen_log_file, 'w')
 
     # Restore Archive
@@ -153,41 +165,33 @@ for i in range(1, number_of_iterations + 1):
         stderr=c,
         cwd=carmen_root)
 
-    check_program_failure(result.returncode, c)
+    if has_program_failed(result.returncode, c):
+        has_failed = True
+        break
 
     # Export genesis to restore LiveDB
-    genesis = Path(tmp_path) / 'test_genesis.dat'
-
     print(f"Restoration complete. Exporting LiveDB genesis block {latest_checkpoint}.")
     result = subprocess.run(
         ['go', 'run', './database/mpt/tool', 'export', '--block', str(latest_checkpoint), str(archive), str(genesis)],
         stdout=c,
         stderr=c,
         cwd=carmen_root)
-    check_program_failure(result.returncode, c)
+    if has_program_failed(result.returncode, c):
+        has_failed = True
+        break
 
     # Restore LiveDB
     print("Export complete. Applying LiveDB genesis.")
-    try:
-        shutil.rmtree(live)
-        print("Live directory removed successfully.")
-    except FileNotFoundError:
-        print(f"Directory {live} does not exist.")
-        exit(1)
-    except PermissionError:
-        print(f"Permission denied to remove {live}.")
-        exit(1)
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        exit(1)
+    shutil.rmtree(live)
 
-    print("Importing LiveDB genesis.")
     result = subprocess.run(
         ['go', 'run', './database/mpt/tool', 'import-live-db', str(genesis), str(live)],
         stdout=c,
         stderr=c,
         cwd=carmen_root)
-    check_program_failure(result.returncode, c)
+    if has_program_failed(result.returncode, c):
+        has_failed = True
+        break
 
     print(f"Iteration {i}/{number_of_iterations}")
     # We restored to block X, although we need to start the app at +1 block because X is already done
@@ -196,11 +200,11 @@ for i in range(1, number_of_iterations + 1):
     print("Syncing restarted...")
     command = [
         './build/aida-vm-sdb', 'substate', '--validate',
-        '--db-tmp', tmp_path, '--carmen-schema', '5', '--db-impl', 'carmen',
+        '--db-tmp', working_dir, '--carmen-schema', '5', '--db-impl', 'carmen',
         '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
         '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
         '--carmen-checkpoint-interval', str(checkpoint_granularity), '--db-src',
-        str(working_dir), '--skip-priming', '--tracker-granularity',
+        str(working_db), '--skip-priming', '--tracker-granularity',
         str(checkpoint_granularity), str(first_block), str(last_block)
     ]
 
@@ -217,22 +221,16 @@ for i in range(1, number_of_iterations + 1):
 
     if latest_checkpoint == -1:
         os.chdir(current_dir)
-        sys.exit(1)
+        has_failed = True
+        break
 
-    if last_working_dir:
-        print(f"Removing previous database {last_working_dir}")
-        shutil.rmtree(last_working_dir, ignore_errors=True)
-
-    genesis.unlink(missing_ok=True)
 # Clear anything leftover
-
-print(f"Clearing last database {working_dir} and log files.")
-aida_log_file.unlink(missing_ok=True)
-carmen_log_file.unlink(missing_ok=True)
+print(f"Clearing work directory {working_dir}.")
 shutil.rmtree(working_dir, ignore_errors=True)
 
+if has_failed:
+    print("Fail")
+    sys.exit(1)
+
 print("Success!")
-
 sys.exit(0)
-
-
