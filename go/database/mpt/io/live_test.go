@@ -32,7 +32,7 @@ func TestIO_ExportAndImportAsLiveDb(t *testing.T) {
 		t.Fatalf("failed to import DB: %v", err)
 	}
 
-	if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+	if err := mpt.VerifyFileLiveTrie(context.Background(), targetDir, mpt.S5LiveConfig, nil); err != nil {
 		t.Fatalf("verification of imported DB failed: %v", err)
 	}
 
@@ -64,7 +64,7 @@ func TestIO_ExportAndImportAsArchive(t *testing.T) {
 		t.Fatalf("failed to import DB: %v", err)
 	}
 
-	if err := mpt.VerifyArchiveTrie(targetDir, mpt.S5ArchiveConfig, nil); err != nil {
+	if err := mpt.VerifyArchiveTrie(context.Background(), targetDir, mpt.S5ArchiveConfig, nil); err != nil {
 		t.Fatalf("verification of imported DB failed: %v", err)
 	}
 
@@ -340,7 +340,7 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 			t.Fatalf("failed to import DB: %v", err)
 		}
 
-		if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+		if err := mpt.VerifyFileLiveTrie(context.Background(), targetDir, mpt.S5LiveConfig, nil); err != nil {
 			t.Fatalf("verification of imported DB failed: %v", err)
 		}
 
@@ -416,7 +416,7 @@ func TestIO_ExportBlockFromOnlineArchive(t *testing.T) {
 			t.Fatalf("failed to import DB: %v", err)
 		}
 
-		if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+		if err := mpt.VerifyFileLiveTrie(context.Background(), targetDir, mpt.S5LiveConfig, nil); err != nil {
 			t.Fatalf("verification of imported DB failed: %v", err)
 		}
 
