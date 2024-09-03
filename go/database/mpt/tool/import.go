@@ -17,41 +17,30 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
-	"time"
 
 	mptIo "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
 )
 
 var ImportLiveDbCmd = cli.Command{
-	Action:    doLiveDbImport,
+	Action:    addPerformanceDiagnoses(doLiveDbImport),
 	Name:      "import-live-db",
 	Usage:     "imports a LiveDB instance from a file",
 	ArgsUsage: "<source-file> <target director>",
-	Flags: []cli.Flag{
-		&cpuProfileFlag,
-	},
 }
 
 var ImportArchiveCmd = cli.Command{
-	Action:    doArchiveImport,
+	Action:    addPerformanceDiagnoses(doArchiveImport),
 	Name:      "import-archive",
 	Usage:     "imports an Archive instance from a file",
 	ArgsUsage: "<source-file> <target director>",
-	Flags: []cli.Flag{
-		&cpuProfileFlag,
-	},
 }
 
 var ImportLiveAndArchiveCmd = cli.Command{
-	Action:    doLiveAndArchiveImport,
+	Action:    addPerformanceDiagnoses(doLiveAndArchiveImport),
 	Name:      "import",
 	Usage:     "imports both LiveDB and Archive instance from a file",
 	ArgsUsage: "<source-file> <target director>",
-	Flags: []cli.Flag{
-		&cpuProfileFlag,
-	},
 }
 
 func doLiveDbImport(context *cli.Context) error {
@@ -66,28 +55,19 @@ func doLiveAndArchiveImport(context *cli.Context) error {
 	return doImport(context, mptIo.ImportLiveAndArchive)
 }
 
-func doImport(context *cli.Context, runImport func(directory string, in io.Reader) error) error {
+func doImport(context *cli.Context, runImport func(logger *mptIo.Log, directory string, in io.Reader) error) error {
 	if context.Args().Len() != 2 {
 		return fmt.Errorf("missing source file and/or target directory parameter")
 	}
 	src := context.Args().Get(0)
 	dir := context.Args().Get(1)
 
-	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
-	if strings.TrimSpace(cpuProfileFileName) != "" {
-		if err := startCpuProfiler(cpuProfileFileName); err != nil {
-			return err
-		}
-		defer stopCpuProfiler()
-	}
-
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("error creating output directory: %v", err)
 	}
 
-	start := time.Now()
-	logFromStart(start, "import started")
+	logger := mptIo.NewLog()
+	logger.Print("import started")
 	file, err := os.Open(src)
 	if err != nil {
 		return err
@@ -97,10 +77,10 @@ func doImport(context *cli.Context, runImport func(directory string, in io.Reade
 		return err
 	}
 	defer func() {
-		logFromStart(start, "import done")
+		logger.Printf("import done")
 	}()
 	return errors.Join(
-		runImport(dir, in),
+		runImport(logger, dir, in),
 		file.Close(),
 	)
 }

@@ -13,6 +13,7 @@ package mpt
 //go:generate mockgen -source verification.go -destination verification_mocks.go -package mpt
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"github.com/pbnjay/memory"
 )
@@ -55,7 +57,7 @@ func (NilVerificationObserver) EndVerification(res error) {}
 //     - all byte-codes within the code file matches their hashed representation in accounts
 //  2. Non-fatal checks
 //     - there are no extra Code Hashes not referenced by any account
-func VerifyMptState(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func VerifyMptState(ctx context.Context, directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}
@@ -67,7 +69,7 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
-	source, err := openVerificationNodeSource(directory, config)
+	source, err := openVerificationNodeSource(ctx, directory, config)
 	if err != nil {
 		return err
 	}
@@ -91,7 +93,7 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 //   - all required files are present and can be read
 //   - all referenced nodes are present
 //   - all hashes are consistent
-func verifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func verifyFileForest(ctx context.Context, directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}
@@ -103,7 +105,7 @@ func verifyFileForest(directory string, config MptConfig, roots []Root, observer
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
-	source, err := openVerificationNodeSource(directory, config)
+	source, err := openVerificationNodeSource(ctx, directory, config)
 	if err != nil {
 		return err
 	}
@@ -659,30 +661,33 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 }
 
 type verificationNodeSource struct {
+	ctx context.Context
+
 	config MptConfig
-
 	// The lock guaranteeing exclusive access to the data directory.
-	lock      common.LockFile
-	directory string
+	lock common.LockFile
 
+	directory string
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint64, BranchNode]
 	extensions stock.Stock[uint64, ExtensionNode]
 	accounts   stock.Stock[uint64, AccountNode]
-	values     stock.Stock[uint64, ValueNode]
 
+	values stock.Stock[uint64, ValueNode]
 	// The sets of valid IDs of each type.
 	accountIds   stock.IndexSet[uint64]
 	branchIds    stock.IndexSet[uint64]
 	extensionIds stock.IndexSet[uint64]
-	valueIds     stock.IndexSet[uint64]
 
+	valueIds stock.IndexSet[uint64]
 	// A custom pair of node ID and Node to be overwritten for node resolution.
 	overwriteId   NodeId
 	overwriteNode Node
+
+	numberOfNodesIterated uint64
 }
 
-func openVerificationNodeSource(directory string, config MptConfig) (*verificationNodeSource, error) {
+func openVerificationNodeSource(ctx context.Context, directory string, config MptConfig) (*verificationNodeSource, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
@@ -744,6 +749,7 @@ func openVerificationNodeSource(directory string, config MptConfig) (*verificati
 	}
 	success = true
 	return &verificationNodeSource{
+		ctx:          ctx,
 		config:       config,
 		lock:         lock,
 		directory:    directory,
@@ -861,7 +867,14 @@ func (s *verificationNodeSource) clearOverride() {
 }
 
 func (s *verificationNodeSource) forAllInnerNodes(check func(Node) error) error {
-	return s.forNodes(func(_ NodeId, node Node) error { return check(node) }, true, true, true, false)
+	return s.forNodes(func(_ NodeId, node Node) error {
+		// Check only every 1000th node
+		if s.numberOfNodesIterated%1000 == 0 && interrupt.IsCancelled(s.ctx) {
+			return interrupt.ErrCanceled
+		}
+		s.numberOfNodesIterated++
+		return check(node)
+	}, true, true, true, false)
 }
 
 func (s *verificationNodeSource) forAllNodes(check func(NodeId, Node) error) error {

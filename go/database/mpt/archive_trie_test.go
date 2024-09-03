@@ -13,8 +13,10 @@ package mpt
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -500,7 +502,7 @@ func TestArchiveTrie_VerifyArchive_Failure_Meta(t *testing.T) {
 		t.Fatalf("cannot update roots: %v", err)
 	}
 
-	if err := VerifyArchiveTrie(dir, S5ArchiveConfig, NilVerificationObserver{}); err == nil {
+	if err := VerifyArchiveTrie(context.Background(), dir, S5ArchiveConfig, NilVerificationObserver{}); err == nil {
 		t.Errorf("verification should fail")
 	}
 }
@@ -585,7 +587,7 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 				t.Fatalf("failed to close resources: %v", err)
 			}
 
-			if err := VerifyArchiveTrie(archiveDir, config, NilVerificationObserver{}); err != nil {
+			if err := VerifyArchiveTrie(context.Background(), archiveDir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("failed to verify archive: %v", err)
 			}
 		})
@@ -596,7 +598,7 @@ func TestArchiveTrie_VerificationOfEmptyDirectoryPasses(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			if err := VerifyArchiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("an empty directory should be fine, got: %v", err)
 			}
 		})
@@ -646,7 +648,7 @@ func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 				t.Fatalf("failed to close archive: %v", err)
 			}
 
-			if err := VerifyArchiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("a freshly closed archive should be fine, got: %v", err)
 			}
 		})
@@ -1509,7 +1511,7 @@ func TestArchiveTrie_VerificationOfArchiveWithMissingFileFails(t *testing.T) {
 				t.Fatalf("failed to delete file")
 			}
 
-			if err := VerifyArchiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err == nil {
 				t.Errorf("missing file should be detected")
 			}
 		})
@@ -1556,7 +1558,7 @@ func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
 				t.Fatalf("failed to modify file")
 			}
 
-			if err := VerifyArchiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err == nil {
 				t.Errorf("corrupted file should have been detected")
 			}
 		})
@@ -1577,7 +1579,7 @@ func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
 
 	for _, size := range []int{1, 2, 4, 1024} {
 		reader := utils.NewChunkReader(b.Bytes(), size)
-		res, err := loadRootsFrom(reader)
+		res, err := loadRootsFrom(reader, int64(b.Len()))
 		if err != nil {
 			t.Fatalf("error loading roots: %v", err)
 		}
@@ -1933,7 +1935,7 @@ func TestStoreRoots_Cannot_Create(t *testing.T) {
 
 }
 
-func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
+func TestArchiveTrie_FailingGOperation_InvalidatesOtherArchiveOperations(t *testing.T) {
 	injectedErr := fmt.Errorf("injectedError")
 
 	rotate := func(arr []string, k int) []string {
@@ -1943,34 +1945,47 @@ func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
 		return append(cp[k:], cp[:k]...)
 	}
 
-	names := maps.Keys(archiveGetters)
+	names := maps.Keys(archiveOps)
 
 	// rotate getters to start the experiment from all existing getters.
-	for i := 0; i < len(archiveGetters); i++ {
+	for i := 0; i < len(archiveOps); i++ {
 		i := i
 		t.Run(fmt.Sprintf("rotation_%d", i), func(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
 			db := NewMockDatabase(ctrl)
-			db.EXPECT().Freeze(gomock.Any())
 			db.EXPECT().CheckAll(gomock.Any())
 			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr).MaxTimes(1)
 			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr).MaxTimes(1)
 
-			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
+			live := NewMockLiveState(ctrl)
+			live.EXPECT().GetHash().Return(common.Hash{}, injectedErr).MaxTimes(1)
+			live.EXPECT().Root().Return(NewNodeReference(ValueId(1))).MaxTimes(1)
+			live.EXPECT().UpdateHashes().Return(common.Hash{}, nil, injectedErr).MaxTimes(1)
+			live.EXPECT().Flush().Return(injectedErr).AnyTimes() // flush can be repeated
+			live.EXPECT().closeWithError(gomock.Any()).AnyTimes()
+
+			nodeSource := NewMockNodeSource(ctrl)
+			nodeSource.EXPECT().getConfig().Return(S5ArchiveConfig).AnyTimes()
+			nodeSource.EXPECT().hashKey(gomock.Any()).Return(common.Hash{}).AnyTimes()
+			nodeSource.EXPECT().hashAddress(gomock.Any()).Return(common.Hash{}).AnyTimes()
+			nodeSource.EXPECT().getViewAccess(gomock.Any()).Return(shared.ViewHandle[Node]{}, injectedErr).MaxTimes(1)
+
+			archive, err := OpenArchiveTrie(t.TempDir(), S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("cannot open archive: %v", err)
 			}
-			archive.forest = db // inject mock
 
-			if err := archive.Add(2, common.Update{CreatedAccounts: []common.Address{{0xA}}}, nil); err != nil {
-				t.Fatalf("failed to update archive: %v", err)
-			}
+			// inject mocks
+			archive.forest = db
+			archive.head = live
+			archive.nodeSource = nodeSource
+			archive.roots.roots = append(archive.roots.roots, Root{NodeRef: NewNodeReference(ValueId(1))})
 
 			// all operations must fail
 			for _, name := range rotate(names, i) {
-				if got, want := archiveGetters[name](archive), injectedErr; !errors.Is(got, want) {
+				if got, want := archiveOps[name](archive), injectedErr; !errors.Is(got, want) {
 					t.Errorf("expected error does not match: %v != %v for op: %s", got, want, name)
 				}
 			}
@@ -1980,6 +1995,10 @@ func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
 				CreatedAccounts: []common.Address{{0xB}},
 			}
 
+			nodeVisitor := NewMockNodeVisitor(ctrl)
+			if err := archive.VisitTrie(0, nodeVisitor); !errors.Is(err, injectedErr) {
+				t.Errorf("expected failure did not happen: got: %v != want: %v", err, injectedErr)
+			}
 			if err := archive.Add(0, update, nil); !errors.Is(err, injectedErr) {
 				t.Errorf("expected failure did not happen: got: %v != want: %v", err, injectedErr)
 			}
@@ -2043,12 +2062,13 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 			db.EXPECT().Freeze(gomock.Any()).AnyTimes()
 			db.EXPECT().CheckAll(gomock.Any()).AnyTimes()
 
-			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
+			archive, err := OpenArchiveTrie(t.TempDir(), S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
 			if err != nil {
 				t.Fatalf("cannot open archive: %v", err)
 			}
 			archive.head = liveState
 			archive.forest = db
+			archive.roots.roots = append(archive.roots.roots, Root{NodeRef: NewNodeReference(ValueId(1))})
 
 			// mock up to the current loop
 			for j, liveOp := range liveStateOps {
@@ -2069,12 +2089,12 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 				Codes:           []common.CodeUpdate{{common.Address{0xA}, []byte{0x1}}},
 				Slots:           []common.SlotUpdate{{common.Address{0xA}, common.Key{0xB}, common.Value{0x1}}},
 			}
-			if err := archive.Add(0, update, nil); !errors.Is(err, injectedErr) {
+			if err := archive.Add(1, update, nil); !errors.Is(err, injectedErr) {
 				t.Errorf("expected failure did not happen: got: %v != want: %v", err, injectedErr)
 			}
 
 			// all getters must fail ¨
-			for name, getter := range archiveGetters {
+			for name, getter := range archiveOps {
 				if err := getter(archive); !errors.Is(err, injectedErr) {
 					t.Errorf("expected error does not match: %v != %v for op: %s", err, injectedErr, name)
 				}
@@ -2096,7 +2116,7 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 	}
 }
 
-var archiveGetters = map[string]func(archive archive.Archive) error{
+var archiveOps = map[string]func(archive archive.Archive) error{
 	"exists": func(archive archive.Archive) error {
 		_, err := archive.Exists(uint64(0), common.Address{})
 		return err
@@ -2115,6 +2135,16 @@ var archiveGetters = map[string]func(archive archive.Archive) error{
 	},
 	"storage": func(archive archive.Archive) error {
 		_, err := archive.GetStorage(uint64(0), common.Address{}, common.Key{})
+		return err
+	},
+	"flush": func(archive archive.Archive) error {
+		return archive.Flush()
+	},
+	"add": func(archive archive.Archive) error {
+		return archive.Add(uint64(rand.Int()), common.Update{}, nil)
+	},
+	"create witness proof": func(archive archive.Archive) error {
+		_, err := archive.CreateWitnessProof(0, common.Address{}, common.Key{})
 		return err
 	},
 }
@@ -2410,7 +2440,7 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 				}
 
 				// Check that the archive can be verified.
-				if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+				if err := VerifyArchiveTrie(context.Background(), dir, S5ArchiveConfig, nil); err != nil {
 					t.Fatalf("failed to verify archive after reset to block %d: %v", block, err)
 				}
 
@@ -2468,7 +2498,7 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 			}
 
 			// Check that the restored and extended archive can be verified.
-			if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, S5ArchiveConfig, nil); err != nil {
 				t.Fatalf("failed to verify archive: %v", err)
 			}
 

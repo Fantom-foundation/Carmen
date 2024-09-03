@@ -54,7 +54,7 @@ const (
 // VisitForestNodes load the nodes of the forest stored in the given directory and
 // applies the visitor on each of those.
 func VisitForestNodes(directory string, config MptConfig, visitor NodeVisitor) error {
-	source, err := openVerificationNodeSource(directory, config)
+	source, err := openVerificationNodeSource(nil, directory, config)
 	if err != nil {
 		return err
 	}

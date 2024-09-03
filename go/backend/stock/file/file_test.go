@@ -38,7 +38,7 @@ func openFileStock(t *testing.T, directory string) (stock.Stock[int, int], error
 	return OpenStock[int, int](stock.IntEncoder{}, directory)
 }
 
-func openInitFileStock(directory string, items int) (*fileStock[int, int], error) {
+func initFileStock(directory string, items int) (*fileStock[int, int], error) {
 	s, err := openStock[int, int](stock.IntEncoder{}, directory)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func TestFile_Open_CannotMkdir(t *testing.T) {
 
 func TestFile_Open_MissingFile(t *testing.T) {
 	directory := t.TempDir()
-	s, err := openInitFileStock(directory, 10)
+	s, err := initFileStock(directory, 10)
 	if err != nil {
 		t.Fatalf("cannot init stock: %s", err)
 	}
@@ -130,7 +130,7 @@ func TestFile_Open_CorruptedCheckpointFile(t *testing.T) {
 func testOpenCorruptedFiles(t *testing.T, filename string) {
 	t.Helper()
 	directory := t.TempDir()
-	s, err := openInitFileStock(directory, 10)
+	s, err := initFileStock(directory, 10)
 	if err != nil {
 		t.Fatalf("cannot init stock: %s", err)
 	}
@@ -183,7 +183,7 @@ func TestFile_VerifyStock_FailReadFreelist(t *testing.T) {
 func testFileVerifyStockMissingFile(t *testing.T, filename string) {
 	t.Helper()
 	directory := t.TempDir()
-	s, err := openInitFileStock(directory, 10)
+	s, err := initFileStock(directory, 10)
 	if err != nil {
 		t.Fatalf("cannot init stock: %s", err)
 	}
@@ -257,7 +257,7 @@ func TestFile_VerifyStock_FailReadFreeList(t *testing.T) {
 
 func TestFile_NewId_FailReadFile(t *testing.T) {
 	directory := t.TempDir()
-	s, err := openInitFileStock(directory, 10)
+	s, err := initFileStock(directory, 10)
 	if err != nil {
 		t.Fatalf("cannot init stock: %s", err)
 	}
@@ -347,7 +347,7 @@ func TestFile_Delete_FailsIfIdCoveredByCheckpointIsDeleted(t *testing.T) {
 
 func TestFile_Get_FailReadFile(t *testing.T) {
 	directory := t.TempDir()
-	s, err := openInitFileStock(directory, 10)
+	s, err := initFileStock(directory, 10)
 	if err != nil {
 		t.Fatalf("cannot init stock: %s", err)
 	}
@@ -367,7 +367,7 @@ func TestFile_Set_FailReadFile(t *testing.T) {
 	directory := t.TempDir()
 	// init stock above the buffer size to force reading from file during the test
 	const bufferSize = 1 << 12
-	s, err := openInitFileStock(directory, bufferSize)
+	s, err := initFileStock(directory, bufferSize)
 	if err != nil {
 		t.Fatalf("cannot init stock: %s", err)
 	}

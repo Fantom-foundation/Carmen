@@ -2228,7 +2228,7 @@ func TestDatabase_Export(t *testing.T) {
 	if err := os.MkdirAll(liveDbLocation, 0755); err != nil {
 		t.Fatalf("cannot create live db location: %v", err)
 	}
-	if err = io.ImportLiveDb(liveDbLocation, b); err != nil {
+	if err = io.ImportLiveDb(io.NewLog(), liveDbLocation, b); err != nil {
 		t.Fatalf("cannot import live db: %v", err)
 	}
 

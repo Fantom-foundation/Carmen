@@ -13,13 +13,12 @@ package io
 import (
 	"bytes"
 	"context"
-	"path"
-	"strings"
-	"testing"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
+	"path"
+	"strings"
+	"testing"
 )
 
 func TestIO_Archive_ExportAndImport(t *testing.T) {
@@ -47,7 +46,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 
 	// Export the archive into a buffer.
 	buffer := new(bytes.Buffer)
-	if err := ExportArchive(context.Background(), sourceDir, buffer); err != nil {
+	if err := ExportArchive(context.Background(), NewLog(), sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 	genesis := buffer.Bytes()
@@ -55,11 +54,11 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 	// Import the archive into a new directory.
 	targetDir := t.TempDir()
 	buffer = bytes.NewBuffer(genesis)
-	if err := ImportArchive(targetDir, buffer); err != nil {
+	if err := ImportArchive(NewLog(), targetDir, buffer); err != nil {
 		t.Fatalf("failed to import Archive: %v", err)
 	}
 
-	if err := mpt.VerifyArchiveTrie(targetDir, mpt.S5ArchiveConfig, nil); err != nil {
+	if err := mpt.VerifyArchiveTrie(context.Background(), targetDir, mpt.S5ArchiveConfig, nil); err != nil {
 		t.Fatalf("verification of imported Archive failed: %v", err)
 	}
 
@@ -113,7 +112,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 
 	// Export the archive into a buffer.
 	buffer := new(bytes.Buffer)
-	if err := ExportArchive(context.Background(), sourceDir, buffer); err != nil {
+	if err := ExportArchive(context.Background(), NewLog(), sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 	genesis := buffer.Bytes()
@@ -121,11 +120,11 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 	// Import the archive into a new directory.
 	targetDir := t.TempDir()
 	buffer = bytes.NewBuffer(genesis)
-	if err := ImportLiveAndArchive(targetDir, buffer); err != nil {
+	if err := ImportLiveAndArchive(NewLog(), targetDir, buffer); err != nil {
 		t.Fatalf("failed to import Archive: %v", err)
 	}
 
-	if err := mpt.VerifyFileLiveTrie(path.Join(targetDir, "live"), mpt.S5LiveConfig, nil); err != nil {
+	if err := mpt.VerifyFileLiveTrie(context.Background(), path.Join(targetDir, "live"), mpt.S5LiveConfig, nil); err != nil {
 		t.Fatalf("verification of imported LiveDB failed: %v", err)
 	}
 
@@ -143,7 +142,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 		t.Errorf("head root hashes do not match: got: %v != want: %v", got, want)
 	}
 
-	if err := mpt.VerifyArchiveTrie(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, nil); err != nil {
+	if err := mpt.VerifyArchiveTrie(context.Background(), path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, nil); err != nil {
 		t.Fatalf("verification of imported Archive failed: %v", err)
 	}
 
@@ -179,7 +178,7 @@ func TestIO_LiveAndArchive_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot write magic number: %v", err)
 	}
-	err = importArchive(t.TempDir(), t.TempDir(), b)
+	err = importArchive(nil, t.TempDir(), t.TempDir(), b)
 	if err == nil {
 		t.Fatal("import must fail")
 	}
