@@ -49,8 +49,6 @@ if not tmp_path or tmp_path == "":
 first_block = 0
 last_block = 60000000
 
-# --- Static variables --- #
-
 carmen_root = os.path.abspath('../go')
 
 # --- Script --- #
@@ -63,7 +61,7 @@ os.makedirs(working_dir)
 
 # Log file path from which we read output to find kill_block
 aida_log_file = Path.cwd() / 'aida.log'
-carmen_log_file = Path.cwd() / 'aida.log'
+carmen_log_file = Path.cwd() / 'carmen.log'
 genesis = os.path.join(working_dir, 'test_genesis.dat')
 current_dir = Path.cwd()
 
@@ -84,8 +82,8 @@ def has_program_failed(code, log):
     return False
 
 
-# Function which stops process after given sleep_time.
-def terminate_process_after(sleep_time: int, checkpoint: int):
+# Function which checks every line added to aida_log_file and behaves accordingly to the line.
+def check_aida_log(sleep_time: int, checkpoint: int):
     start = 0.0
     with open(aida_log_file, 'r') as f:
         while True:
@@ -111,6 +109,38 @@ def terminate_process_after(sleep_time: int, checkpoint: int):
                 return -1
 
 
+# Function which runs Carmen's info command and finds the latest checkpoint from created log
+def get_latest_checkpoint_from_info():
+    log = os.path.join(tmp_path, 'carmen-info.log')
+    cp: str
+    with open(log, 'w') as cl:
+        r = subprocess.run(
+            ['go', 'run', './database/mpt/tool', 'info', str(archive)],
+            stdout=cl,
+            stderr=cl,
+            cwd=carmen_root)
+        if has_program_failed(r.returncode, cl):
+            shutil.rmtree(log)
+            return -1
+
+    with open(log, 'r') as cl:
+        info_checkpoint = cl.readlines()[-1]
+        # Return last word which is the block number
+        cp = info_checkpoint.split()[-1]
+
+    os.remove(log)
+    return cp
+
+
+# Function which tries to reset archive on archive_path to block reset_block. If command fails, false is returned.
+def reset_archive(cl, archive_path, reset_block):
+    return subprocess.run(
+        ['go', 'run', './database/mpt/tool', 'reset', '--force-unlock', str(archive_path), str(reset_block)],
+        stdout=cl,
+        stderr=cl,
+        cwd=carmen_root)
+
+
 # First iteration command
 cmd = [
     './build/aida-vm-sdb', 'substate', '--validate',
@@ -129,7 +159,7 @@ os.chdir(current_dir)
 print("Creating database with aida-vm-sdb...")
 
 # Start monitoring the log file
-latest_checkpoint = terminate_process_after(window, latest_checkpoint)
+latest_checkpoint = check_aida_log(window, latest_checkpoint)
 
 # Wait for the first command to complete
 process.wait()
@@ -158,21 +188,31 @@ for i in range(1, number_of_iterations + 1):
     # Dump carmen's logs into a file to avoid spamming
     c = open(carmen_log_file, 'w')
 
+    block = int(latest_checkpoint)
     # Restore Archive
-    result = subprocess.run(
-        ['go', 'run', './database/mpt/tool', 'reset', '--force-unlock', str(archive), str(latest_checkpoint)],
-        stdout=c,
-        stderr=c,
-        cwd=carmen_root)
-
+    result = reset_archive(c, archive, latest_checkpoint)
     if has_program_failed(result.returncode, c):
-        has_failed = True
-        break
+        print("Error occured during reset - looking for checkpoint using 'info' command...")
+        # When checkpoint is required on an empty block, checkpoint is moved backwards
+        # hence we must ask db what's the latest checkpoint.
+        recovery_block = get_latest_checkpoint_from_info()
+        if recovery_block == -1:
+            has_failed = True
+            break
+        # Restore Archive again
+        c = open(carmen_log_file, 'w')
+        result = reset_archive(c, archive, recovery_block)
+        if has_program_failed(result.returncode, c):
+            # Next error is fatal
+            has_failed = True
+            break
+        print(f"Success! Using block {recovery_block}")
+        block = int(recovery_block)
 
     # Export genesis to restore LiveDB
-    print(f"Restoration complete. Exporting LiveDB genesis block {latest_checkpoint}.")
+    print(f"Restoration complete. Exporting LiveDB genesis block {block}.")
     result = subprocess.run(
-        ['go', 'run', './database/mpt/tool', 'export', '--block', str(latest_checkpoint), str(archive), str(genesis)],
+        ['go', 'run', './database/mpt/tool', 'export', '--block', str(block), str(archive), str(genesis)],
         stdout=c,
         stderr=c,
         cwd=carmen_root)
@@ -195,7 +235,7 @@ for i in range(1, number_of_iterations + 1):
 
     print(f"Iteration {i}/{number_of_iterations}")
     # We restored to block X, although we need to start the app at +1 block because X is already done
-    first_block = latest_checkpoint + 1
+    first_block = block + 1
 
     print("Syncing restarted...")
     command = [
@@ -214,7 +254,7 @@ for i in range(1, number_of_iterations + 1):
     os.chdir(current_dir)
 
     # Start monitoring the log file
-    latest_checkpoint = terminate_process_after(window, latest_checkpoint)
+    latest_checkpoint = check_aida_log(window, latest_checkpoint)
 
     # Wait for the command to complete
     process.wait()
