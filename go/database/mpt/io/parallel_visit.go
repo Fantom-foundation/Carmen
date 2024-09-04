@@ -115,9 +115,7 @@ func visitAll(
 	// sorted in a priority queue so that the deepest nodes are read first.
 	for i := 0; i < NumWorker; i++ {
 		go func() {
-			defer func() {
-				workersDoneWg.Done()
-			}()
+			defer workersDoneWg.Done()
 			source, err := sourceFactory.open()
 			if err != nil {
 				workersErrorChan <- err
