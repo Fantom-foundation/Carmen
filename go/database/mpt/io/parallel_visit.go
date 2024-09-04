@@ -26,8 +26,10 @@ import (
 //go:generate mockgen -source parallel_visit.go -destination parallel_visit_mocks.go -package io
 
 // nodeSourceFactory is a factory for nodeSource instances.
-// It provides access to nodes side to another infrastructure
-// that already accesses the nodes.
+// It provides read-only access to nodes, potentially side-channeling another infrastructure
+// that already accesses to the name nodes. The user of the factory needs to ensure that
+// this is not leading to inconsistencies by only accessing nodes that are not updated 
+// concurrently.
 type nodeSourceFactory interface {
 	open() (nodeSource, error)
 }
