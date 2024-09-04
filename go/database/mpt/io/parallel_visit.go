@@ -323,10 +323,9 @@ func (p *position) Child(step byte) *position {
 }
 
 // compare compares two positions.
-// It finds parents of two positions that are at the same depths and compares
-// the positions of these parents.
-// If the positions differ, the result is the comparison of these parent positions.
-// If they are the same, the result is the depth of the positions.
+// The order of node positions is defined by the order in which positions would
+// be visited by running an depth-first pre-order tree traversal. This is equivalent
+// to a lexicographical order of the positions when interpreted as a list navigation steps.
 func (p *position) compare(b *position) int {
 	if p == b {
 		return 0
