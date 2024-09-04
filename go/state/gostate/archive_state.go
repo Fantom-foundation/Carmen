@@ -171,7 +171,7 @@ func (s *ArchiveState) Export(ctx context.Context, out io.Writer) (common.Hash, 
 		return common.Hash{}, s.archiveError
 	}
 
-	return rootHash, nil
+	return rootHash, s.archiveError
 }
 
 func (s *ArchiveState) Flush() error {
