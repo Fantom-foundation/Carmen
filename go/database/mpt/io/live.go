@@ -96,8 +96,8 @@ type exportableLiveTrie struct {
 	db *mpt.MptState
 }
 
-func (e *exportableLiveTrie) Visit(visitor noResponseNodeVisitor, _ bool) error {
-	return e.db.Visit(noResponseVisitorAdapter{visitor})
+func (e *exportableLiveTrie) Visit(visitor noResponseNodeVisitor, pruneStorage bool) error {
+	return e.db.Visit(noResponseVisitorAdapter{visitor, pruneStorage})
 }
 
 func (e *exportableLiveTrie) GetHash() (common.Hash, error) {
@@ -109,11 +109,17 @@ func (e *exportableLiveTrie) GetCodeForHash(hash common.Hash) []byte {
 }
 
 type noResponseVisitorAdapter struct {
-	visitor noResponseNodeVisitor
+	visitor      noResponseNodeVisitor
+	pruneStorage bool
 }
 
 func (n noResponseVisitorAdapter) Visit(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 	n.visitor.Visit(node, info)
+	if n.pruneStorage {
+		if _, ok := node.(*mpt.AccountNode); ok {
+			return mpt.VisitResponsePrune
+		}
+	}
 	return mpt.VisitResponseContinue
 }
 
