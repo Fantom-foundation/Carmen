@@ -42,7 +42,6 @@ type nodeSource interface {
 }
 
 // noResponseNodeVisitor is a visitor for nodes.
-// It serves mainly as an adapter for mpt.NodeVisitor, but ignores the results of each call to Visit.
 type noResponseNodeVisitor interface {
 	// Visit is called for each node encountered while visiting a trie.
 	Visit(mpt.Node, mpt.NodeInfo)
