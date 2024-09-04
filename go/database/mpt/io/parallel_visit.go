@@ -35,7 +35,7 @@ type nodeSourceFactory interface {
 }
 
 // nodeSource is a source of nodes.
-// It provides access to nodes by their ids.
+// It provides read-only access to nodes by their ids.
 type nodeSource interface {
 	io.Closer
 	get(mpt.NodeId) (mpt.Node, error)
