@@ -59,7 +59,7 @@ const (
 type mptStateVisitor interface {
 	// Visit allows for traverse the whole trie.
 	// If pruneStorage is true, the storage nodes are not visited.
-	Visit(visitor mpt.NodeVisitor, pruneStorage bool) error
+	Visit(visitor noResponseNodeVisitor, pruneStorage bool) error
 	// GetHash returns the hash of the represented Trie.
 	GetHash() (common.Hash, error)
 	// GetCodeForHash returns byte code for given hash.
