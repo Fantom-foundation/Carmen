@@ -25,28 +25,6 @@ import (
 
 //go:generate mockgen -source parallel_visit.go -destination parallel_visit_mocks.go -package io
 
-// nodeSourceFactory is a factory for nodeSource instances.
-// It provides read-only access to nodes, potentially side-channeling another infrastructure
-// that already accesses to the name nodes. The user of the factory needs to ensure that
-// this is not leading to inconsistencies by only accessing nodes that are not updated
-// concurrently.
-type nodeSourceFactory interface {
-	open() (nodeSource, error)
-}
-
-// nodeSource is a source of nodes.
-// It provides read-only access to nodes by their ids.
-type nodeSource interface {
-	io.Closer
-	get(mpt.NodeId) (mpt.Node, error)
-}
-
-// noResponseNodeVisitor is a visitor for nodes.
-type noResponseNodeVisitor interface {
-	// Visit is called for each node encountered while visiting a trie.
-	Visit(mpt.Node, mpt.NodeInfo)
-}
-
 // visitAll visits all nodes in the trie rooted at the given node in depth-first pre-order order.
 // This function accesses nodes using its own read-only node source, independently of a potential
 // node source and cache managed by an MPT Forest instance.
@@ -368,6 +346,28 @@ func (p *position) _compare(b *position) int {
 // ----------------------------------------------------------------------------
 //                               nodeSource
 // ----------------------------------------------------------------------------
+
+// nodeSourceFactory is a factory for nodeSource instances.
+// It provides read-only access to nodes, potentially side-channeling another infrastructure
+// that already accesses to the name nodes. The user of the factory needs to ensure that
+// this is not leading to inconsistencies by only accessing nodes that are not updated
+// concurrently.
+type nodeSourceFactory interface {
+	open() (nodeSource, error)
+}
+
+// nodeSource is a source of nodes.
+// It provides read-only access to nodes by their ids.
+type nodeSource interface {
+	io.Closer
+	get(mpt.NodeId) (mpt.Node, error)
+}
+
+// noResponseNodeVisitor is a visitor for nodes.
+type noResponseNodeVisitor interface {
+	// Visit is called for each node encountered while visiting a trie.
+	Visit(mpt.Node, mpt.NodeInfo)
+}
 
 // stockNodeSourceFactory is a nodeSourceFactory implementation that creates stock backed sources to access nodes.
 type stockNodeSourceFactory struct {
