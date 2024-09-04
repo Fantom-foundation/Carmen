@@ -97,7 +97,7 @@ type exportableLiveTrie struct {
 }
 
 func (e *exportableLiveTrie) Visit(visitor noResponseNodeVisitor, _ bool) error {
-	return e.db.Visit(visitor)
+	return e.db.Visit(noResponseVisitorAdapter{visitor})
 }
 
 func (e *exportableLiveTrie) GetHash() (common.Hash, error) {
@@ -106,6 +106,15 @@ func (e *exportableLiveTrie) GetHash() (common.Hash, error) {
 
 func (e *exportableLiveTrie) GetCodeForHash(hash common.Hash) []byte {
 	return e.db.GetCodeForHash(hash)
+}
+
+type noResponseVisitorAdapter struct {
+	visitor noResponseNodeVisitor
+}
+
+func (n noResponseVisitorAdapter) Visit(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+	n.visitor.Visit(node, info)
+	return mpt.VisitResponseContinue
 }
 
 // Export opens a LiveDB instance retained in the given directory and writes
@@ -420,10 +429,10 @@ func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig
 func getReferencedCodes(ctxt context.Context, logger *Log, db mptStateVisitor) (map[common.Hash][]byte, error) {
 	progress := logger.NewProgressTracker("retrieved %d accounts, %.2f accounts/s", 1000_000)
 	codes := make(map[common.Hash][]byte)
-	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+	err := db.Visit(makeNoResponseVisitor(func(node mpt.Node, info mpt.NodeInfo) {
 		if n, ok := node.(*mpt.AccountNode); ok {
 			if interrupt.IsCancelled(ctxt) {
-				return mpt.VisitResponseAbort
+				return
 			}
 			progress.Step(1)
 			codeHash := n.Info().CodeHash
@@ -431,9 +440,7 @@ func getReferencedCodes(ctxt context.Context, logger *Log, db mptStateVisitor) (
 			if len(code) > 0 {
 				codes[codeHash] = code
 			}
-			return mpt.VisitResponsePrune // < no need to visit the storage trie
 		}
-		return mpt.VisitResponseContinue
 	}), true)
 
 	if interrupt.IsCancelled(ctxt) {
@@ -451,11 +458,11 @@ type exportVisitor struct {
 	progress *ProgressLogger
 }
 
-func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
+func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) {
 	// outside call to interrupt
 	if interrupt.IsCancelled(e.ctx) {
 		e.err = interrupt.ErrCanceled
-		return mpt.VisitResponseAbort
+		return
 	}
 	switch n := node.(type) {
 	case *mpt.AccountNode:
@@ -464,42 +471,41 @@ func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 		info := n.Info()
 		if _, err := e.out.Write([]byte{byte('A')}); err != nil {
 			e.err = err
-			return mpt.VisitResponseAbort
+			return
 		}
 		if _, err := e.out.Write(addr[:]); err != nil {
 			e.err = err
-			return mpt.VisitResponseAbort
+			return
 		}
 		b := info.Balance.Bytes32()
 		if _, err := e.out.Write(b[:]); err != nil {
 			e.err = err
-			return mpt.VisitResponseAbort
+			return
 		}
 		if _, err := e.out.Write(info.Nonce[:]); err != nil {
 			e.err = err
-			return mpt.VisitResponseAbort
+			return
 		}
 		if _, err := e.out.Write(info.CodeHash[:]); err != nil {
 			e.err = err
-			return mpt.VisitResponseAbort
+			return
 		}
 	case *mpt.ValueNode:
 		key := n.Key()
 		value := n.Value()
 		if _, err := e.out.Write([]byte{byte('S')}); err != nil {
 			e.err = err
-			return mpt.VisitResponseAbort
+			return
 		}
 		if _, err := e.out.Write(key[:]); err != nil {
 			e.err = err
-			return mpt.VisitResponseAbort
+			return
 		}
 		if _, err := e.out.Write(value[:]); err != nil {
 			e.err = err
-			return mpt.VisitResponseAbort
+			return
 		}
 	}
-	return mpt.VisitResponseContinue
 }
 
 func checkEmptyDirectory(directory string) error {

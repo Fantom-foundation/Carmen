@@ -14,14 +14,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt"
-	"go.uber.org/mock/gomock"
 	"os"
 	"path"
 	"strings"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
+	"go.uber.org/mock/gomock"
 )
 
 func TestPosition_CanBeCreatedAndPrinted(t *testing.T) {
@@ -155,7 +156,7 @@ func TestNodeSource_CanRead_Nodes(t *testing.T) {
 
 func TestVisit_Nodes_Failing_CannotOpenDir(t *testing.T) {
 	dir := path.Join(t.TempDir(), "missing")
-	if err := visitAll(&stockNodeSourceFactory{dir}, mpt.EmptyId(), &noResponseMptNodeVisitor{}, false); err == nil {
+	if err := visitAll(&stockNodeSourceFactory{dir}, mpt.EmptyId(), nil, false); err == nil {
 		t.Errorf("expected error, got nil")
 	}
 }
@@ -177,7 +178,7 @@ func TestVisit_Nodes_Failing_MissingDir(t *testing.T) {
 		t.Fatalf("failed to remove directory: %v", err)
 	}
 
-	if err := visitAll(&stockNodeSourceFactory{dir}, root, &noResponseMptNodeVisitor{}, false); err == nil {
+	if err := visitAll(&stockNodeSourceFactory{dir}, root, nil, false); err == nil {
 		t.Errorf("expected error, got nil")
 	}
 
@@ -198,7 +199,7 @@ func TestVisit_Nodes_Failing_MissingData(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get block root: %v", err)
 		}
-		if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, &noResponseMptNodeVisitor{}, false); err == nil {
+		if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, nil, false); err == nil {
 			t.Errorf("expected error, got nil")
 		}
 	})
@@ -211,7 +212,7 @@ func TestVisit_Nodes_CannotOpenFiles(t *testing.T) {
 	fc := NewMocknodeSourceFactory(ctrl)
 	fc.EXPECT().open().Return(nil, injectedError).Times(16)
 
-	if err := visitAll(fc, mpt.EmptyId(), &noResponseMptNodeVisitor{}, false); !errors.Is(err, injectedError) {
+	if err := visitAll(fc, mpt.EmptyId(), nil, false); !errors.Is(err, injectedError) {
 		t.Errorf("expected error %v, got %v", injectedError, err)
 	}
 }

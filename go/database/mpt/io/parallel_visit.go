@@ -13,14 +13,15 @@ package io
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/stock"
-	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
-	"github.com/Fantom-foundation/Carmen/go/common/heap"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"io"
 	"path"
 	"sync"
 	"sync/atomic"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
+	"github.com/Fantom-foundation/Carmen/go/common/heap"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
 //go:generate mockgen -source parallel_visit.go -destination parallel_visit_mocks.go -package io
@@ -367,6 +368,18 @@ type nodeSource interface {
 type noResponseNodeVisitor interface {
 	// Visit is called for each node encountered while visiting a trie.
 	Visit(mpt.Node, mpt.NodeInfo)
+}
+
+func makeNoResponseVisitor(visit func(mpt.Node, mpt.NodeInfo)) noResponseNodeVisitor {
+	return &noResponseNodeVisitorFunc{visit}
+}
+
+type noResponseNodeVisitorFunc struct {
+	visit func(mpt.Node, mpt.NodeInfo)
+}
+
+func (v *noResponseNodeVisitorFunc) Visit(node mpt.Node, info mpt.NodeInfo) {
+	v.visit(node, info)
 }
 
 // stockNodeSourceFactory is a nodeSourceFactory implementation that creates stock backed sources to access nodes.
