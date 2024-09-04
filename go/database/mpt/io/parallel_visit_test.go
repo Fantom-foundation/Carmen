@@ -125,7 +125,6 @@ func TestNodeSource_CanRead_Nodes(t *testing.T) {
 		}
 
 		// iterate all nodes in the trie for all blocks
-		// and compare that the loaded nodes match the nodes in the trie
 		for i := uint64(0); i <= blocks; i++ {
 			if err := trie.VisitTrie(i, mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
 				nodeHash, dirty := node.GetHash()
@@ -267,7 +266,6 @@ func TestVisit_Nodes_Iterated_Deterministic(t *testing.T) {
 		}
 
 		// iterate all nodes in the trie for all blocks
-		// and compare that the loaded nodes match the nodes in the trie
 		for block := uint64(0); block <= blocks; block++ {
 			var nodes []mpt.NodeId
 			if err := trie.VisitTrie(block, mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
@@ -296,7 +294,7 @@ func TestVisit_Nodes_Iterated_Deterministic(t *testing.T) {
 							t.Errorf("expected node %v, got %v", want, got)
 						}
 						position++
-					}).AnyTimes()
+					}).Times(len(nodes))
 
 					if err := visitAll(&stockNodeSourceFactory{trie.Directory()}, nodeId, visitor, false); err != nil {
 						t.Fatalf("failed to visit nodes: %v", err)
