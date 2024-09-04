@@ -73,13 +73,13 @@ type exportableArchiveTrie struct {
 	block uint64
 }
 
-func (e exportableArchiveTrie) Visit(visitor mpt.NodeVisitor, pruneStorage bool) error {
+func (e exportableArchiveTrie) Visit(visitor noResponseNodeVisitor, pruneStorage bool) error {
 	root, err := e.trie.GetBlockRoot(e.block)
 	if err != nil {
 		return err
 	}
 
-	return visitAll(&stockNodeSourceFactory{directory: e.trie.Directory()}, root, &noResponseMptNodeVisitor{visitor}, pruneStorage)
+	return visitAll(&stockNodeSourceFactory{directory: e.trie.Directory()}, root, visitor, pruneStorage)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
@@ -96,7 +96,7 @@ type exportableLiveTrie struct {
 	db *mpt.MptState
 }
 
-func (e *exportableLiveTrie) Visit(visitor mpt.NodeVisitor, _ bool) error {
+func (e *exportableLiveTrie) Visit(visitor noResponseNodeVisitor, _ bool) error {
 	return e.db.Visit(visitor)
 }
 

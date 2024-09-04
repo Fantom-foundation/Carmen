@@ -28,7 +28,7 @@ import (
 // nodeSourceFactory is a factory for nodeSource instances.
 // It provides read-only access to nodes, potentially side-channeling another infrastructure
 // that already accesses to the name nodes. The user of the factory needs to ensure that
-// this is not leading to inconsistencies by only accessing nodes that are not updated 
+// this is not leading to inconsistencies by only accessing nodes that are not updated
 // concurrently.
 type nodeSourceFactory interface {
 	open() (nodeSource, error)
@@ -45,16 +45,6 @@ type nodeSource interface {
 type noResponseNodeVisitor interface {
 	// Visit is called for each node encountered while visiting a trie.
 	Visit(mpt.Node, mpt.NodeInfo)
-}
-
-// noResponseMptNodeVisitor is a noResponseNodeVisitor implementation that routes to the mpt.NodeVisitor,
-// but ignores the results of each call to Visit.
-type noResponseMptNodeVisitor struct {
-	parent mpt.NodeVisitor
-}
-
-func (v *noResponseMptNodeVisitor) Visit(node mpt.Node, info mpt.NodeInfo) {
-	v.parent.Visit(node, info)
 }
 
 // visitAll visits all nodes in the trie rooted at the given node in depth-first pre-order order.
