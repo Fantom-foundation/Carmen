@@ -134,7 +134,7 @@ def get_latest_checkpoint_from_info():
         cp = info_checkpoint.split()[-1]
 
     os.remove(log)
-    return cp
+    return int(cp)
 
 
 # Function which tries to reset archive on archive_path to block reset_block. If command fails, false is returned.
