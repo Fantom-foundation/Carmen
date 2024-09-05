@@ -63,7 +63,11 @@ os.makedirs(working_dir)
 aida_log_file = Path.cwd() / 'aida.log'
 carmen_log_file = Path.cwd() / 'carmen.log'
 genesis = os.path.join(working_dir, 'test_genesis.dat')
+
 current_dir = Path.cwd()
+carmen_root = os.path.join(current_dir, 'go')
+if "Carmen/scripts" in str(current_dir):
+    carmen_root = os.path.abspath('../go')
 
 print("Your settings:")
 print(f"\tNumber of iterations: {number_of_iterations}.")
