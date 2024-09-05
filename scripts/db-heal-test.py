@@ -104,6 +104,7 @@ def check_aida_log(sleep_time: int, checkpoint: int):
             if f"block {checkpoint + checkpoint_granularity}" in line:
                 # First checkpoint was found, we should start timer as it means block processing is running.
                 if start == 0.0:
+                    print("Syncing restarted!")
                     start = time.time()
                 checkpoint = checkpoint + checkpoint_granularity
             # If process ends with error (return code 1) or either 'fail' or 'exit status' occurs in line exit script
@@ -243,7 +244,7 @@ for i in range(1, number_of_iterations + 1):
     # We restored to block X, although we need to start the app at +1 block because X is already done
     first_block = block + 1
 
-    print("Syncing restarted...")
+    print("Restarting Aida...")
     command = [
         './build/aida-vm-sdb', 'substate', '--validate',
         '--db-tmp', working_dir, '--carmen-schema', '5', '--db-impl', 'carmen',
