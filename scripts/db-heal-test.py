@@ -100,7 +100,7 @@ def check_aida_log(sleep_time: int, checkpoint: int):
             if start > 0 and time.time() - start >= sleep_time:
                 print("Interrupting...")
                 process.terminate()
-                return True
+                return False
             if start == 0.0 and "Track: block" in line:
                 # This line in combination with 0 start time means Syncing has been restarted.
                 print("Syncing restarted!")
@@ -111,7 +111,7 @@ def check_aida_log(sleep_time: int, checkpoint: int):
                 with open(aida_log_file, 'r') as l:
                     text = l.read()
                     print(text)
-                return False
+                return True
 
 
 # Function which runs Carmen's info command and finds the latest checkpoint from created log
