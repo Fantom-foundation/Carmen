@@ -10,8 +10,10 @@ import sys
 parser = argparse.ArgumentParser(prog="DB HEAL TEST SCRIPT",
                                  description="This script as serves as a test tool for 'db-heal' feature."
                                              "It tests recover and LiveDB export/import.",
-                                 usage="To use this script, please provide Aida root using --aida and path to"
-                                       "AidaDb using --aida-db.")
+                                 usage="To run this script, please provide Aida root using --aida and path to "
+                                       "AidaDb using --aida-db.\n"
+                                       "Example: python3 scripts/db-heal-test.py --aida /Path/To/Aida --aida-db"
+                                       "/Path/To/Aida/Db")
 
 # --- Parameters --- #
 parser.add_argument('--aida', type=str, help="Path to Aida root.")
