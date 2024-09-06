@@ -137,15 +137,6 @@ def get_latest_checkpoint_from_info():
     return int(cp)
 
 
-# Function which tries to reset archive on archive_path to block reset_block. If command fails, false is returned.
-def reset_archive(cl, archive_path, reset_block):
-    return subprocess.run(
-        ['go', 'run', './database/mpt/tool', 'reset', '--force-unlock', str(archive_path), str(reset_block)],
-        stdout=cl,
-        stderr=cl,
-        cwd=carmen_root)
-
-
 # First iteration command
 cmd = [
     './build/aida-vm-sdb', 'substate', '--validate',
@@ -196,7 +187,11 @@ for i in range(1, number_of_iterations + 1):
     print(f"Using checkpoint on block {latest_checkpoint}.")
 
     # Restore Archive
-    result = reset_archive(c, archive, latest_checkpoint)
+    result = subprocess.run(
+        ['go', 'run', './database/mpt/tool', 'reset', '--force-unlock', str(archive), str(latest_checkpoint)],
+        stdout=c,
+        stderr=c,
+        cwd=carmen_root)
     if has_program_failed(result.returncode, c):
         # Next error is fatal
         has_failed = True
