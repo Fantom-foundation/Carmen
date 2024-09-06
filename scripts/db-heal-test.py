@@ -68,7 +68,7 @@ genesis = os.path.join(working_dir, 'test_genesis.dat')
 
 current_dir = Path.cwd()
 carmen_root = os.path.join(current_dir, 'go')
-if "Carmen/scripts" in str(current_dir):
+if "scripts" in str(current_dir):
     carmen_root = os.path.abspath('../go')
 
 print("Your settings:")
