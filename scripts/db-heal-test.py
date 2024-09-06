@@ -7,10 +7,21 @@ import shutil
 from pathlib import Path
 import sys
 
+# The script is used for testing the db-heal feature in loop.
+# 1) It kills data processing hence makes database corrupted.
+# 2) Resets the Archive to block returned by info command.
+# 3) Exports and imports LiveDB from Archive.
+# The script needs to be run either in Carmen root or Carmen/scripts
+# as it looks for Carmen commands and uses it.
+# It also requires path to Aida root with BUILT Aida and AidaDb.
+# Example: python3 scripts/db-heal-test.py --aida /Path/To/Aida --aida-db /Path/To/Aida/Db
+
 parser = argparse.ArgumentParser(prog="DB HEAL TEST SCRIPT",
-                                 description="This script as serves as a test tool for 'db-heal' feature."
+                                 description="The script serves as a test tool for 'db-heal' feature."
                                              "It tests recover and LiveDB export/import.",
-                                 usage="To run this script, please provide Aida root using --aida and path to "
+                                 usage="The script only works within Carmen root or Carmen/scripts as it requires "
+                                       "running some of the Carmen commands.\n"
+                                       "To run the script, please provide Aida root using --aida and path to "
                                        "AidaDb using --aida-db.\n"
                                        "Example: python3 scripts/db-heal-test.py --aida /Path/To/Aida --aida-db"
                                        "/Path/To/Aida/Db")
@@ -62,8 +73,8 @@ if os.path.exists(working_dir):
 os.makedirs(working_dir)
 
 # Log file path from which we read output to find kill_block
-aida_log_file = Path.cwd() / 'aida.log'
-carmen_log_file = Path.cwd() / 'carmen.log'
+aida_log_file = os.path.join(working_dir, 'aida.log')
+carmen_log_file = os.path.join(working_dir, 'carmen.log')
 genesis = os.path.join(working_dir, 'test_genesis.dat')
 
 current_dir = Path.cwd()
@@ -125,7 +136,6 @@ def get_latest_checkpoint_from_info():
             stderr=cl,
             cwd=carmen_root)
         if has_program_failed(r.returncode, cl):
-            shutil.rmtree(log)
             return -1
 
     with open(log, 'r') as cl:
@@ -135,6 +145,17 @@ def get_latest_checkpoint_from_info():
 
     os.remove(log)
     return int(cp)
+
+
+# Function which finds newest dir within path p hence finds the current working db.
+def find_working_db(p):
+    result = []
+    for d in os.listdir(p):
+        pd = os.path.join(p, d)
+        if os.path.isdir(pd):
+            result.append(pd)
+
+    return max(result, key=os.path.getmtime)
 
 
 # First iteration command
@@ -165,7 +186,7 @@ if has_failed:
     sys.exit(1)
 
 # Find db directory
-working_db = max(Path(working_dir).iterdir(), key=os.path.getmtime)
+working_db = find_working_db(working_dir)
 archive = os.path.join(working_db, 'archive')
 live = os.path.join(working_db, 'live')
 
@@ -175,7 +196,7 @@ for i in range(1, number_of_iterations + 1):
     last_working_db = working_db
 
     # Find working dir - Aida copies db-src
-    working_db = max(Path(working_dir).iterdir(), key=os.path.getmtime)
+    working_db = find_working_db(working_dir)
     archive = os.path.join(working_db, 'archive')
     live = os.path.join(working_db, 'live')
 
