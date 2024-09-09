@@ -7,13 +7,18 @@ import shutil
 from pathlib import Path
 import sys
 
-# The script is used for testing the db-heal feature in loop.
-# 1) It kills data processing hence makes database corrupted.
-# 2) Resets the Archive to block returned by info command.
-# 3) Exports and imports LiveDB from Archive.
-# The script needs to be run either in Carmen root or Carmen/scripts
-# as it looks for Carmen commands and uses it.
-# It also requires path to Aida root with BUILT Aida and AidaDb.
+# This script performs an experiment to recover database after a severe failure. It runs synchronisation of the 
+# blockchain having the archive enabled. At a configured time, the process running the synchronisation is killed,
+# simulating a failure. When this happens, the script reads what is the last checkpoint of the archive and recovers 
+# the database to this checkpoint. Synchronisation continues from this checkpoint to verify that the database was 
+# recovered successfully. 
+#
+# To stress test the process, the script runs in a loop with frequent checkpoint creation and a tight window to kill 
+# the process. 
+#
+# The script needs python with default packages installed.  It needs Aida being build in a separate directory and it
+# further needs the Aida database. These two directories must be configured. 
+#
 # Example: python3 scripts/db-heal-test.py --aida /Path/To/Aida --aida-db /Path/To/Aida/Db
 
 parser = argparse.ArgumentParser(prog="DB HEAL TEST SCRIPT",
