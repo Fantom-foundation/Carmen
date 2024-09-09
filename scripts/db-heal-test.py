@@ -1,3 +1,13 @@
+# Copyright (c) 2024 Fantom Foundation
+#
+# Use of this software is governed by the Business Source License included
+# in the LICENSE file and at fantom.foundation/bsl11.
+#
+# Change Date: 2028-4-16
+#
+# On the date above, in accordance with the Business Source License, use of
+# this software will be governed by the GNU Lesser General Public License v3.
+
 import argparse
 import os
 import subprocess
@@ -16,15 +26,15 @@ import sys
 # To stress test the process, the script runs in a loop with frequent checkpoint creation and a tight window to kill 
 # the process. 
 #
-# The script needs python with default packages installed.  It needs Aida being build in a separate directory and it
-# further needs the Aida database. These two directories must be configured. 
+# The script needs python with default packages installed.  It needs Aida being build in a separate directory and
+# further it needs the Aida database. These two directories must be configured.
 #
 # Example: python3 scripts/db-heal-test.py --aida /Path/To/Aida --aida-db /Path/To/Aida/Db
 
 parser = argparse.ArgumentParser(prog="DB HEAL TEST SCRIPT",
                                  description="The script serves as a test tool for 'db-heal' feature."
                                              "It tests recover and LiveDB export/import.",
-                                 usage="The script only works within Carmen root or Carmen/scripts as it requires "
+                                 usage="The script only works within Carmen root as it requires "
                                        "running some of the Carmen commands.\n"
                                        "To run the script, please provide Aida root using --aida and path to "
                                        "AidaDb using --aida-db.\n"
@@ -84,8 +94,6 @@ genesis = os.path.join(working_dir, 'test_genesis.dat')
 
 current_dir = Path.cwd()
 carmen_root = os.path.join(current_dir, 'go')
-if "scripts" in str(current_dir):
-    carmen_root = os.path.abspath('../go')
 
 print("Your settings:")
 print(f"\tNumber of iterations: {number_of_iterations}.")
@@ -148,7 +156,6 @@ def get_latest_checkpoint_from_info():
         # Return last word which is the block number
         cp = info_checkpoint.split()[-1]
 
-    os.remove(log)
     return int(cp)
 
 
@@ -165,7 +172,7 @@ def find_working_db(p):
 
 # First iteration command
 cmd = [
-    './build/aida-vm-sdb', 'substate', '--validate',
+    str(aida_path), '/build/aida-vm-sdb', 'substate', '--validate',
     '--db-tmp', working_dir, '--carmen-schema', '5', '--db-impl', 'carmen',
     '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
     '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
@@ -173,10 +180,8 @@ cmd = [
     str(checkpoint_granularity), str(first_block), str(last_block)
 ]
 
-os.chdir(aida_path)
 with open(aida_log_file, 'w') as f:
     process = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
-os.chdir(current_dir)
 
 print("Creating database with aida-vm-sdb...")
 
@@ -187,7 +192,6 @@ has_failed = check_aida_log(window, latest_checkpoint)
 process.wait()
 
 if has_failed:
-    os.chdir(current_dir)
     sys.exit(1)
 
 # Find db directory
@@ -253,7 +257,7 @@ for i in range(1, number_of_iterations + 1):
 
     print("Restarting Aida...")
     command = [
-        './build/aida-vm-sdb', 'substate', '--validate',
+        str(aida_path), '/build/aida-vm-sdb', 'substate', '--validate',
         '--db-tmp', working_dir, '--carmen-schema', '5', '--db-impl', 'carmen',
         '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
         '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
@@ -262,10 +266,8 @@ for i in range(1, number_of_iterations + 1):
         str(checkpoint_granularity), str(first_block), str(last_block)
     ]
 
-    os.chdir(aida_path)
     with open(aida_log_file, 'w') as f:
         process = subprocess.Popen(command, stdout=f, stderr=subprocess.STDOUT)
-    os.chdir(current_dir)
 
     # Start monitoring the log file
     has_failed = check_aida_log(window, latest_checkpoint)
@@ -274,7 +276,6 @@ for i in range(1, number_of_iterations + 1):
     process.wait()
 
     if has_failed:
-        os.chdir(current_dir)
         break
 
 # Clear anything leftover
