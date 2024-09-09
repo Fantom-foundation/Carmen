@@ -171,8 +171,9 @@ def find_working_db(p):
 
 
 # First iteration command
+binary_path = os.path.join(aida_path, 'build', 'aida-vm-sdb')
 cmd = [
-    str(aida_path), '/build/aida-vm-sdb', 'substate', '--validate',
+    str(binary_path), 'substate', '--validate',
     '--db-tmp', working_dir, '--carmen-schema', '5', '--db-impl', 'carmen',
     '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
     '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
@@ -194,15 +195,9 @@ process.wait()
 if has_failed:
     sys.exit(1)
 
-# Find db directory
-working_db = find_working_db(working_dir)
-archive = os.path.join(working_db, 'archive')
-live = os.path.join(working_db, 'live')
-
 print("Testing db created, starting loop.")
 
 for i in range(1, number_of_iterations + 1):
-    last_working_db = working_db
 
     # Find working dir - Aida copies db-src
     working_db = find_working_db(working_dir)
@@ -257,7 +252,7 @@ for i in range(1, number_of_iterations + 1):
 
     print("Restarting Aida...")
     command = [
-        str(aida_path), '/build/aida-vm-sdb', 'substate', '--validate',
+        str(binary_path), 'substate', '--validate',
         '--db-tmp', working_dir, '--carmen-schema', '5', '--db-impl', 'carmen',
         '--aida-db', aida_db_path, '--no-heartbeat-logging', '--track-progress',
         '--archive', '--archive-variant', 's5', '--archive-query-rate', '200',
