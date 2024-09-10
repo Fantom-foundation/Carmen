@@ -501,9 +501,11 @@ func (s *fileStockRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
 			checkpointData = data
 		}
 	}
+	recoveringPending := false
 	if checkpointData.Checkpoint != checkpoint && exists(pending) {
 		if data, err := utils.ReadJsonFile[checkpointMetaData](pending); err == nil {
 			checkpointData = data
+			recoveringPending = true
 		}
 	}
 
@@ -534,9 +536,14 @@ func (s *fileStockRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
 		return err
 	}
 
-	pendingFile := getPendingCheckpointFile(s.directory)
-	if exists(pendingFile) {
-		if err := os.Remove(pendingFile); err != nil {
+	// if needed, promote the pending checkpoint to the committed checkpoint
+	if recoveringPending {
+		return os.Rename(pending, committed)
+	}
+
+	// remove the pending checkpoint file
+	if exists(pending) {
+		if err := os.Remove(pending); err != nil {
 			return err
 		}
 	}

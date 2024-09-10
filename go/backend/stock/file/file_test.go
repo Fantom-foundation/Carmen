@@ -810,6 +810,53 @@ func TestRestore_CanRestoreCommittedAndPendingCheckpoint(t *testing.T) {
 	}
 }
 
+func TestRestore_RestoringCheckpointRemovesPendingCheckpoint(t *testing.T) {
+	committed := checkpoint.Checkpoint(1)
+	pending := checkpoint.Checkpoint(2)
+
+	for _, recovered := range []checkpoint.Checkpoint{committed, pending} {
+
+		dir := t.TempDir()
+
+		s, err := openStock[int, int](stock.IntEncoder{}, dir)
+		if err != nil {
+			t.Fatalf("failed to open stock: %v", err)
+		}
+
+		if err := s.Prepare(committed); err != nil {
+			t.Fatalf("failed to prepare checkpoint: %v", err)
+		}
+		if err := s.Commit(committed); err != nil {
+			t.Fatalf("failed to commit checkpoint: %v", err)
+		}
+		if err := s.Prepare(pending); err != nil {
+			t.Fatalf("failed to prepare checkpoint: %v", err)
+		}
+
+		// At this point there is a committed and a pending checkpoint.
+		// One of those is restored, and should become the new committed
+		// checkpoint, while the other should be removed.
+		if err := GetRestorer(dir).Restore(recovered); err != nil {
+			t.Fatalf("failed to restore checkpoint: %v", err)
+		}
+
+		if !exists(getCommittedCheckpointFile(dir)) {
+			t.Fatalf("committed checkpoint file should exist")
+		}
+		if exists(getPendingCheckpointFile(dir)) {
+			t.Errorf("pending checkpoint file should not exist")
+		}
+
+		meta, err := utils.ReadJsonFile[checkpointMetaData](getCommittedCheckpointFile(dir))
+		if err != nil {
+			t.Fatalf("failed to read committed checkpoint: %v", err)
+		}
+		if meta.Checkpoint != recovered {
+			t.Errorf("expected committed checkpoint %v, got %v", committed, meta.Checkpoint)
+		}
+	}
+}
+
 func TestRestore_CorruptedStockCanBeRestored(t *testing.T) {
 	tests := map[string]struct {
 		corrupt                    func(dir string) error
