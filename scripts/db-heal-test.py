@@ -60,6 +60,10 @@ number_of_iterations = args.iter
 window = args.window
 checkpoint_granularity = args.cp_granularity
 
+# Find Carmen path within Aida directory
+# (we always want to use same Carmen version for block processing and recovering)
+carmen_path = os.path.join(aida_path, 'carmen', 'go')
+
 # Mark first checkpoint
 latest_checkpoint = checkpoint_granularity
 
@@ -77,7 +81,6 @@ if not tmp_path or tmp_path == "":
 first_block = 0
 last_block = 60000000
 
-carmen_root = os.path.abspath('../go')
 
 # --- Script --- #
 
@@ -91,9 +94,6 @@ os.makedirs(working_dir)
 aida_log_file = os.path.join(working_dir, 'aida.log')
 carmen_log_file = os.path.join(working_dir, 'carmen.log')
 genesis = os.path.join(working_dir, 'test_genesis.dat')
-
-current_dir = Path.cwd()
-carmen_root = os.path.join(current_dir, 'go')
 
 print("Your settings:")
 print(f"\tNumber of iterations: {number_of_iterations}.")
@@ -147,7 +147,7 @@ def get_latest_checkpoint_from_info():
             ['go', 'run', './database/mpt/tool', 'info', str(archive)],
             stdout=cl,
             stderr=cl,
-            cwd=carmen_root)
+            cwd=carmen_path)
         if has_program_failed(r.returncode, cl):
             return -1
 
@@ -216,7 +216,7 @@ for i in range(1, number_of_iterations + 1):
         ['go', 'run', './database/mpt/tool', 'reset', '--force-unlock', str(archive), str(latest_checkpoint)],
         stdout=c,
         stderr=c,
-        cwd=carmen_root)
+        cwd=carmen_path)
     if has_program_failed(result.returncode, c):
         # Next error is fatal
         has_failed = True
@@ -228,7 +228,7 @@ for i in range(1, number_of_iterations + 1):
         ['go', 'run', './database/mpt/tool', 'export', '--block', str(latest_checkpoint), str(archive), str(genesis)],
         stdout=c,
         stderr=c,
-        cwd=carmen_root)
+        cwd=carmen_path)
     if has_program_failed(result.returncode, c):
         has_failed = True
         break
@@ -241,7 +241,7 @@ for i in range(1, number_of_iterations + 1):
         ['go', 'run', './database/mpt/tool', 'import-live-db', str(genesis), str(live)],
         stdout=c,
         stderr=c,
-        cwd=carmen_root)
+        cwd=carmen_path)
     if has_program_failed(result.returncode, c):
         has_failed = True
         break
