@@ -51,7 +51,7 @@ parser.add_argument("--window", type=int,
 parser.add_argument("--cp-granularity", type=int,
                     help="How often will Carmen create checkpoints (in blocks).", default=10)
 parser.add_argument("--make", action=argparse.BooleanOptionalAction,
-                    help="If enabled, Aida will be build before the script begins.")
+                    help="If enabled, necessary Aida tool will be build before the script begins.")
 
 args = parser.parse_args()
 
@@ -177,7 +177,7 @@ if make:
     with open(aida_log_file, 'w') as f:
         print("Making Aida before run...")
         subprocess.run(
-            ['make'],
+            ['make', 'aida-vm-sdb'],
             cwd=aida_path,
             stdout=f,
             stderr=subprocess.STDOUT
