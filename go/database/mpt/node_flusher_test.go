@@ -48,7 +48,7 @@ func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cache := NewMockNodeCache(ctrl)
 
-	const loops = 3
+	const loops = 10
 	flushSignal := make(chan struct{}, loops)
 
 	// The cache is checked at least 'loops+1' times as the flush status is checked 'loops' times
