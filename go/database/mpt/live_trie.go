@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"os"
 	"unsafe"
 
@@ -156,6 +157,32 @@ func (s *LiveTrie) setHashes(hashes *NodeHashes) error {
 
 func (s *LiveTrie) VisitTrie(visitor NodeVisitor) error {
 	return s.forest.VisitTrie(&s.root, visitor)
+}
+
+// VisitAccountStorage visits the storage nodes of an account with the given address.
+// The visited nodes do not contain the account node itself.
+func (s *LiveTrie) VisitAccountStorage(address common.Address, visitor NodeVisitor) error {
+	var innerError error
+	// this visitor finds the account node with the given address
+	accountVisitor := MakeVisitor(func(node Node, info NodeInfo) VisitResponse {
+		switch n := node.(type) {
+		case *AccountNode:
+			if n.Address() == address {
+				// and then it sends the storage node to the visitor
+				_, innerError = n.visitStorage(s.forest, 0, visitor)
+			}
+			return VisitResponseAbort
+		}
+
+		return VisitResponseContinue
+	})
+
+	_, err := VisitPathToAccount(s.forest, &s.root, address, accountVisitor)
+	return errors.Join(innerError, err)
+}
+
+func (s *LiveTrie) CreateWitnessProof(addr common.Address, keys ...common.Key) (witness.Proof, error) {
+	return CreateWitnessProof(s.forest, &s.root, addr, keys...)
 }
 
 func (s *LiveTrie) Flush() error {

@@ -304,6 +304,15 @@ func (a *ArchiveTrie) GetCodes() map[common.Hash][]byte {
 	return a.head.GetCodes()
 }
 
+func (a *ArchiveTrie) GetAccountInfo(block uint64, account common.Address) (info AccountInfo, exists bool, err error) {
+	view, err := a.getView(block)
+	if err != nil {
+		return AccountInfo{}, false, err
+	}
+	info, exists, err = view.GetAccountInfo(account)
+	return info, exists, a.addError(err)
+}
+
 func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce common.Nonce, err error) {
 	view, err := a.getView(block)
 	if err != nil {
@@ -342,7 +351,7 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 }
 
 func (a *ArchiveTrie) CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error) {
-	if a.nodeSource.getConfig().Name != "S5-Archive" {
+	if !a.nodeSource.getConfig().UseHashedPaths {
 		return nil, archive.ErrWitnessProofNotSupported
 	}
 	a.rootsMutex.Lock()
@@ -438,6 +447,15 @@ func (a *ArchiveTrie) VisitTrie(block uint64, visitor NodeVisitor) error {
 		return err
 	}
 	return a.addError(view.VisitTrie(visitor))
+}
+
+func (a *ArchiveTrie) VisitAccountStorage(block uint64, address common.Address, visitor NodeVisitor) error {
+	view, err := a.getView(block)
+	if err != nil {
+		return err
+	}
+
+	return a.addError(view.VisitAccountStorage(address, visitor))
 }
 
 func (a *ArchiveTrie) Close() error {
