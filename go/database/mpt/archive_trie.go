@@ -731,6 +731,9 @@ func (l *rootList) Prepare(checkpoint checkpoint.Checkpoint) error {
 	if l.checkpoint+1 != checkpoint {
 		return fmt.Errorf("checkpoint mismatch, expected %v, got %v", l.checkpoint+1, checkpoint)
 	}
+	if err := l.storeRoots(); err != nil {
+		return err
+	}
 	pendingFile := filepath.Join(l.directory, fileNameArchiveRootsPreparedCheckpoint)
 	return writeRootListCheckpointData(pendingFile, rootListCheckpointData{
 		Checkpoint: checkpoint,
@@ -776,16 +779,21 @@ func getRootListRestorer(archiveDir string) rootListRestorer {
 }
 
 func (r rootListRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
-	meta, err := readRootListCheckpointData(filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint))
+	committedFile := filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint)
+	meta, err := readRootListCheckpointData(committedFile)
 	if err != nil {
 		return err
 	}
 
 	// If the given checkpoint is one step in the future, check whether there is a pending checkpoint.
 	if meta.Checkpoint+1 == checkpoint {
-		pending, err := readRootListCheckpointData(filepath.Join(r.directory, fileNameArchiveRootsPreparedCheckpoint))
+		pendingFile := filepath.Join(r.directory, fileNameArchiveRootsPreparedCheckpoint)
+		pending, err := readRootListCheckpointData(pendingFile)
 		if err == nil && pending.Checkpoint == checkpoint {
 			meta = pending
+			if err := os.Rename(pendingFile, committedFile); err != nil {
+				return err
+			}
 		}
 	}
 
