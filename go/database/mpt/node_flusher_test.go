@@ -49,14 +49,13 @@ func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
 	cache := NewMockNodeCache(ctrl)
 
 	const loops = 3
-	last := time.Now()
-	flushSignal := make(chan time.Time, loops)
+	flushSignal := make(chan struct{}, loops)
 
 	// The cache is checked at least 'loops+1' times as the flush status is checked 'loops' times
 	// and one more read is performed to make sure the flusher has started.
 	// Furthermore, it may happen that it gets called more times before this test maintains to finish.
 	cache.EXPECT().ForEach(gomock.Any()).MinTimes(loops + 1).Do(func(f func(id NodeId, node *shared.Shared[Node])) {
-		flushSignal <- time.Now()
+		flushSignal <- struct{}{}
 	}).Return()
 
 	flusher := startNodeFlusher(cache, nil, nodeFlusherConfig{
@@ -66,16 +65,25 @@ func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
 	// wait for the first signal to make sure the flusher has started
 	<-flushSignal
 
+	start := time.Now()
 	for i := 0; i < loops; i++ {
+		// read from the channel the amount of time the flusher is expected to trigger
 		select {
-		case now := <-flushSignal:
-			if now.Sub(last) < period/2 {
-				t.Fatalf("flush signal received too early")
-			}
-			last = now
-		case <-time.After(period * 2):
+		case <-flushSignal:
+			// ok, signal received
+		case <-time.After(period * 2 * loops):
 			t.Fatalf("flush signal not received")
 		}
+	}
+	total := time.Since(start)
+
+	expected := period * time.Duration(loops)
+	tolerance := period * time.Duration(loops) / 5
+	// Since the ticker in the flusher may adjust ticks for slow consumers,
+	// measure the expected frequency for the whole execution of the test.
+	// Also check the total time fits into a range, not an exact value.
+	if total < expected-tolerance || total > expected+tolerance {
+		t.Errorf("unexpected frequency of flushes")
 	}
 
 	if err := flusher.Stop(); err != nil {
@@ -83,6 +91,8 @@ func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
 	}
 
 	// drain potential remaining signals
+	// not to block the flusher goroutine
+	// from finishing
 	for {
 		select {
 		case <-flushSignal:
