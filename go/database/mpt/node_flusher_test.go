@@ -81,6 +81,15 @@ func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
 	if err := flusher.Stop(); err != nil {
 		t.Fatalf("failed to stop node flusher: %v", err)
 	}
+
+	// drain potential remaining signals
+	for {
+		select {
+		case <-flushSignal:
+		default:
+			return
+		}
+	}
 }
 
 func TestNodeFlusher_ErrorsAreCollected(t *testing.T) {
