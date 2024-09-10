@@ -50,6 +50,8 @@ parser.add_argument("--window", type=int,
                     help="Delay between start of sync process and forced termination (in seconds).", default=5)
 parser.add_argument("--cp-granularity", type=int,
                     help="How often will Carmen create checkpoints (in blocks).", default=10)
+parser.add_argument("--make", action=argparse.BooleanOptionalAction,
+                    help="If enabled, Aida will be build before the script begins.")
 
 args = parser.parse_args()
 
@@ -59,6 +61,7 @@ tmp_path = args.tmp
 number_of_iterations = args.iter
 window = args.window
 checkpoint_granularity = args.cp_granularity
+make = args.make
 
 # Find Carmen path within Aida directory
 # (we always want to use same Carmen version for block processing and recovering)
@@ -170,6 +173,16 @@ def find_working_db(p):
     return max(result, key=os.path.getmtime)
 
 
+if make:
+    with open(aida_log_file, 'w') as f:
+        print("Making Aida before run...")
+        subprocess.run(
+            ['make'],
+            cwd=aida_path,
+            stdout=f,
+            stderr=subprocess.STDOUT
+        )
+
 # First iteration command
 binary_path = os.path.join(aida_path, 'build', 'aida-vm-sdb')
 cmd = [
@@ -273,13 +286,13 @@ for i in range(1, number_of_iterations + 1):
     if has_failed:
         break
 
-# Clear anything leftover
-print(f"Clearing work directory {working_dir}.")
-shutil.rmtree(working_dir, ignore_errors=True)
-
 if has_failed:
     print("Fail")
     sys.exit(1)
 
+
+# Clear anything leftover only if the script do not fail
+print(f"Clearing work directory {working_dir}.")
+shutil.rmtree(working_dir, ignore_errors=True)
 print("Success!")
 sys.exit(0)
