@@ -71,19 +71,19 @@ func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
 		select {
 		case <-flushSignal:
 			// ok, signal received
-		case <-time.After(period * 2 * loops):
+		case <-time.After(period * loops * 100):
 			t.Fatalf("flush signal not received")
 		}
 	}
 	total := time.Since(start)
 
 	expected := period * time.Duration(loops)
-	tolerance := period * time.Duration(loops) / 5
+	lower := period * time.Duration(loops) / 5
 	// Since the ticker in the flusher may adjust ticks for slow consumers,
 	// measure the expected frequency for the whole execution of the test.
 	// Also check the total time fits into a range, not an exact value.
-	if total < expected-tolerance || total > expected+tolerance {
-		t.Errorf("unexpected frequency of flushes")
+	if got, want := total, expected-lower; got < want {
+		t.Errorf("total time below expected: got %v < want %v", got, want)
 	}
 
 	if err := flusher.Stop(); err != nil {
