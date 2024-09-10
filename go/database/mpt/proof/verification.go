@@ -312,7 +312,7 @@ func (v *accountVerifyingVisitor) Visit(n mpt.Node, _ mpt.NodeInfo) mpt.VisitRes
 			currentAddress: n.Address(),
 			storage:        make(map[common.Key]common.Value)}
 
-		if err := v.trie.VisitAccount(n.Address(), &storageVisitor); err != nil || storageVisitor.err != nil {
+		if err := v.trie.VisitAccountStorage(n.Address(), &storageVisitor); err != nil || storageVisitor.err != nil {
 			v.err = errors.Join(err, storageVisitor.err)
 			return mpt.VisitResponseAbort
 		}
@@ -414,8 +414,8 @@ type verifiableTrie interface {
 	//VisitTrie visits the trie nodes with the given visitor.
 	VisitTrie(visitor mpt.NodeVisitor) error
 
-	// VisitAccount visits the account's storage nodes with the given visitor.
-	VisitAccount(address common.Address, visitor mpt.NodeVisitor) error
+	// VisitAccountStorage visits the account's storage nodes with the given visitor.
+	VisitAccountStorage(address common.Address, visitor mpt.NodeVisitor) error
 
 	// UpdateHashes updates the hashes of the trie, and returns the resulting root hash.
 	UpdateHashes() (common.Hash, *mpt.NodeHashes, error)
@@ -437,8 +437,8 @@ type verifiableArchiveTrie interface {
 	// VisitTrie visits the trie nodes with the given visitor at the given block.
 	VisitTrie(block uint64, visitor mpt.NodeVisitor) error
 
-	// VisitAccount visits the account's storage nodes with the given visitor at the given block.
-	VisitAccount(block uint64, address common.Address, visitor mpt.NodeVisitor) error
+	// VisitAccountStorage visits the account's storage nodes with the given visitor at the given block.
+	VisitAccountStorage(block uint64, address common.Address, visitor mpt.NodeVisitor) error
 
 	// GetHash returns the root hash of the trie at the given block.
 	GetHash(block uint64) (common.Hash, error)
@@ -469,8 +469,8 @@ func (v *archiveTrie) VisitTrie(visitor mpt.NodeVisitor) error {
 	return v.trie.VisitTrie(v.block, visitor)
 }
 
-func (v *archiveTrie) VisitAccount(address common.Address, visitor mpt.NodeVisitor) error {
-	return v.trie.VisitAccount(v.block, address, visitor)
+func (v *archiveTrie) VisitAccountStorage(address common.Address, visitor mpt.NodeVisitor) error {
+	return v.trie.VisitAccountStorage(v.block, address, visitor)
 }
 
 func (v *archiveTrie) UpdateHashes() (common.Hash, *mpt.NodeHashes, error) {
