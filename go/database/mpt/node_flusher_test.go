@@ -48,23 +48,31 @@ func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cache := NewMockNodeCache(ctrl)
 
-	flushSignal := make(chan struct{}, 1)
-	cache.EXPECT().ForEach(gomock.Any()).Times(3).Do(func(f func(id NodeId, node *shared.Shared[Node])) {
-		flushSignal <- struct{}{}
+	const loops = 3
+	last := time.Now()
+	flushSignal := make(chan time.Time, loops)
+
+	// The cache is checked at least 'loops+1' times as the flush status is checked 'loops' times
+	// and one more read is performed to make sure the flusher has started.
+	// Furthermore, it may happen that it gets called more times before this test maintains to finish.
+	cache.EXPECT().ForEach(gomock.Any()).MinTimes(loops + 1).Do(func(f func(id NodeId, node *shared.Shared[Node])) {
+		flushSignal <- time.Now()
 	}).Return()
 
 	flusher := startNodeFlusher(cache, nil, nodeFlusherConfig{
 		period: period,
 	})
 
-	last := time.Now()
-	for i := 0; i < 3; i++ {
+	// wait for the first signal to make sure the flusher has started
+	<-flushSignal
+
+	for i := 0; i < loops; i++ {
 		select {
-		case <-flushSignal:
-			if time.Since(last) < period/2 {
+		case now := <-flushSignal:
+			if now.Sub(last) < period/2 {
 				t.Fatalf("flush signal received too early")
 			}
-			last = time.Now()
+			last = now
 		case <-time.After(period * 2):
 			t.Fatalf("flush signal not received")
 		}
