@@ -16,11 +16,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"slices"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
-	"io"
-	"slices"
 )
 
 // This file defines the interface and implementation of all node types in a
@@ -683,6 +684,10 @@ type BranchNode struct {
 	frozenChildren   uint16            // a bit mask marking frozen children; not persisted
 }
 
+func (n *BranchNode) GetChildren() [16]NodeReference {
+	return n.children
+}
+
 func (n *BranchNode) getNextNodeInBranch(
 	source NodeSource,
 	path []Nibble,
@@ -1102,6 +1107,10 @@ type ExtensionNode struct {
 	nextIsEmbedded bool
 }
 
+func (n *ExtensionNode) GetNext() NodeReference {
+	return n.next
+}
+
 func (n *ExtensionNode) getNextNodeInExtension(
 	source NodeSource,
 	path []Nibble,
@@ -1507,6 +1516,10 @@ type AccountNode struct {
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
+}
+
+func (n *AccountNode) GetStorage() NodeReference {
+	return n.storage
 }
 
 func (n *AccountNode) Address() common.Address {
