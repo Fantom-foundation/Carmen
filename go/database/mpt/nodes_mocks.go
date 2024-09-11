@@ -237,6 +237,18 @@ func (mr *MockNodeMockRecorder) Release(manager, thisRef, this any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockNode)(nil).Release), manager, thisRef, this)
 }
 
+// Reset mocks base method.
+func (m *MockNode) Reset() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Reset")
+}
+
+// Reset indicates an expected call of Reset.
+func (mr *MockNodeMockRecorder) Reset() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockNode)(nil).Reset))
+}
+
 // SetAccount mocks base method.
 func (m *MockNode) SetAccount(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, info AccountInfo) (NodeReference, bool, error) {
 	m.ctrl.T.Helper()
@@ -860,6 +872,18 @@ func (m *MockleafNode) Release(manager NodeManager, thisRef *NodeReference, this
 func (mr *MockleafNodeMockRecorder) Release(manager, thisRef, this any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockleafNode)(nil).Release), manager, thisRef, this)
+}
+
+// Reset mocks base method.
+func (m *MockleafNode) Reset() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Reset")
+}
+
+// Reset indicates an expected call of Reset.
+func (mr *MockleafNodeMockRecorder) Reset() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockleafNode)(nil).Reset))
 }
 
 // SetAccount mocks base method.

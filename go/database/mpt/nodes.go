@@ -16,11 +16,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"slices"
+	"sync/atomic"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
-	"io"
-	"slices"
 )
 
 // This file defines the interface and implementation of all node types in a
@@ -170,6 +172,9 @@ type Node interface {
 	// Release releases this node and all non-frozen nodes in the sub-tree
 	// rooted by this node. Only non-frozen nodes can be released.
 	Release(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node]) error
+
+	// Reset resets the node to its zero state.
+	Reset()
 
 	// IsDirty returns whether this node's state is different in memory than it
 	// is on disk. All nodes are created dirty and may only be cleaned by marking
@@ -473,9 +478,14 @@ func (c *nodeCheckContext) isCompatible(other *nodeCheckContext) bool {
 type nodeBase struct {
 	hash       common.Hash // the hash of this node (may be dirty)
 	hashStatus hashStatus  // indicating whether this node's hash is valid
-	clean      bool        // by default nodes are dirty (clean == false)
+	clean      int32       // by default nodes are dirty
 	frozen     bool        // a flag marking the node as immutable (default: mutable)
 }
+
+const (
+	cleanStatusDirty int32 = 0 // by default, a node is considered dirty
+	cleanStatusClean int32 = 1 // a node is considered clean if it is in sync with the disk
+)
 
 type hashStatus byte
 
@@ -525,23 +535,32 @@ func (n *nodeBase) markMutable() {
 	n.frozen = false
 }
 
+// IsDirty checks whether the in-memory version is in sync with the on-disk version.
+// This function is thread safe and does not need any specific shared node access
+// permissions to be accessed safely.
 func (n *nodeBase) IsDirty() bool {
-	return !n.clean
+	return atomic.LoadInt32(&n.clean) != cleanStatusClean
 }
 
 func (n *nodeBase) MarkClean() {
-	n.clean = true
+	atomic.StoreInt32(&n.clean, cleanStatusClean)
 }
 
 func (n *nodeBase) markDirty() {
-	n.clean = false
+	atomic.StoreInt32(&n.clean, cleanStatusDirty)
 	n.hashStatus = hashStatusDirty
 }
 
 func (n *nodeBase) Release() {
 	// The node is disconnected from the disk version and thus clean.
-	n.clean = true
+	n.MarkClean()
 	n.hashStatus = hashStatusClean
+}
+
+func (n *nodeBase) reset() {
+	n.markDirty()
+	n.hashStatus = hashStatusDirty
+	n.frozen = false
 }
 
 func (n *nodeBase) check(thisRef *NodeReference) error {
@@ -624,6 +643,10 @@ func (e EmptyNode) ClearStorage(manager NodeManager, thisRef *NodeReference, thi
 
 func (e EmptyNode) Release(NodeManager, *NodeReference, shared.WriteHandle[Node]) error {
 	return nil
+}
+
+func (e EmptyNode) Reset() {
+	// nothing to do
 }
 
 func (e EmptyNode) IsDirty() bool {
@@ -758,9 +781,7 @@ func (n *BranchNode) setNextNode(
 		}
 		defer handle.Release()
 		newNode := handle.Get().(*BranchNode)
-		*newNode = *n
-		newNode.markDirty()
-		newNode.markMutable()
+		newNode.assign(n)
 		n = newNode
 		thisRef = &newRef
 		isClone = true
@@ -917,6 +938,24 @@ func (n *BranchNode) Release(manager NodeManager, thisRef *NodeReference, this s
 		}
 	}
 	return manager.release(thisRef)
+}
+
+func (n *BranchNode) Reset() {
+	n.nodeBase.reset()
+	n.children = [16]NodeReference{}
+	n.dirtyHashes = 0
+	n.embeddedChildren = 0
+	n.frozenChildren = 0
+}
+
+func (n *BranchNode) assign(other *BranchNode) {
+	n.nodeBase.markDirty()
+	n.nodeBase.markMutable()
+	n.children = other.children
+	n.hashes = other.hashes
+	n.dirtyHashes = other.dirtyHashes
+	n.embeddedChildren = other.embeddedChildren
+	n.frozenChildren = other.frozenChildren
 }
 
 func (n *BranchNode) MarkFrozen() {
@@ -1178,9 +1217,7 @@ func (n *ExtensionNode) setNextNode(
 				}
 				defer handle.Release()
 				newNode := handle.Get().(*ExtensionNode)
-				*newNode = *n
-				newNode.markDirty()
-				newNode.markMutable()
+				newNode.assign(n)
 				thisRef, n = &newRef, newNode
 				isClone = true
 			}
@@ -1261,9 +1298,7 @@ func (n *ExtensionNode) setNextNode(
 		}
 		defer handle.Release()
 		newNode := handle.Get().(*ExtensionNode)
-		*newNode = *n
-		newNode.markDirty()
-		newNode.markMutable()
+		newNode.assign(n)
 		thisRef, n = &newRef, newNode
 		isClone = true
 	}
@@ -1392,6 +1427,24 @@ func (n *ExtensionNode) Release(manager NodeManager, thisRef *NodeReference, thi
 		return err
 	}
 	return manager.release(thisRef)
+}
+
+func (n *ExtensionNode) Reset() {
+	n.nodeBase.reset()
+	n.path = Path{}
+	n.next = NodeReference{}
+	n.nextHashDirty = true
+	n.nextIsEmbedded = false
+}
+
+func (n *ExtensionNode) assign(other *ExtensionNode) {
+	n.nodeBase.markDirty()
+	n.nodeBase.markMutable()
+	n.path = other.path
+	n.next = other.next
+	n.nextHash = other.nextHash
+	n.nextHashDirty = other.nextHashDirty
+	n.nextIsEmbedded = other.nextIsEmbedded
 }
 
 func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) error {
@@ -1569,9 +1622,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			}
 			defer handle.Release()
 			newNode := handle.Get().(*AccountNode)
-			*newNode = *n
-			newNode.markDirty()
-			newNode.markMutable()
+			newNode.assign(n)
 			newNode.info = info
 			return newRef, false, nil
 		}
@@ -1723,9 +1774,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisRef *NodeReference, this 
 			}
 			defer newHandle.Release()
 			newNode := newHandle.Get().(*AccountNode)
-			*newNode = *n
-			newNode.markDirty()
-			newNode.markMutable()
+			newNode.assign(n)
 			newNode.storage = root
 			newNode.storageHashDirty = true
 			return newRef, false, nil
@@ -1755,9 +1804,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 		}
 		defer newHandle.Release()
 		newNode := newHandle.Get().(*AccountNode)
-		*newNode = *n
-		newNode.markDirty()
-		newNode.markMutable()
+		newNode.assign(n)
 		newNode.storage = NewNodeReference(EmptyId())
 		newNode.storageHashDirty = true
 		return newRef, false, nil
@@ -1792,6 +1839,26 @@ func (n *AccountNode) Release(manager NodeManager, thisRef *NodeReference, this 
 	return manager.release(thisRef)
 }
 
+func (n *AccountNode) Reset() {
+	n.nodeBase.reset()
+	n.address = common.Address{}
+	n.info = AccountInfo{}
+	n.storage = NodeReference{}
+	n.storageHashDirty = true
+	n.pathLength = 0
+}
+
+func (n *AccountNode) assign(other *AccountNode) {
+	n.nodeBase.markDirty()
+	n.nodeBase.markMutable()
+	n.address = other.address
+	n.info = other.info
+	n.storage = other.storage
+	n.storageHash = other.storageHash
+	n.storageHashDirty = other.storageHashDirty
+	n.pathLength = other.pathLength
+}
+
 func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
 	if n.pathLength == length {
 		return *thisRef, false, nil
@@ -1803,9 +1870,7 @@ func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference,
 		}
 		defer newHandle.Release()
 		newNode := newHandle.Get().(*AccountNode)
-		*newNode = *n
-		newNode.markDirty()
-		newNode.markMutable()
+		newNode.assign(n)
 		newNode.pathLength = length
 		return newRef, false, nil
 	}
@@ -2034,6 +2099,21 @@ func (n *ValueNode) Release(manager NodeManager, thisRef *NodeReference, this sh
 	}
 	n.nodeBase.Release()
 	return manager.release(thisRef)
+}
+
+func (n *ValueNode) Reset() {
+	n.nodeBase.reset()
+	n.key = common.Key{}
+	n.value = common.Value{}
+	n.pathLength = 0
+}
+
+func (n *ValueNode) assign(other *ValueNode) {
+	n.nodeBase.markDirty()
+	n.nodeBase.markMutable()
+	n.key = other.key
+	n.value = other.value
+	n.pathLength = other.pathLength
 }
 
 func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {

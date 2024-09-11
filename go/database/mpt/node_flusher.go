@@ -13,6 +13,7 @@ package mpt
 import (
 	"errors"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
@@ -72,20 +73,23 @@ func (f *nodeFlusher) Stop() error {
 	return errors.Join(f.errs...)
 }
 
+var dirtyIdListPool = sync.Pool{
+	New: func() interface{} {
+		list := make([]NodeId, 0, 1_000_000)
+		return &list
+	},
+}
+
 func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 	// Collect a list of dirty nodes to be flushed.
-	dirtyIds := make([]NodeId, 0, 1_000_000)
+	dirtyIdsPtr := dirtyIdListPool.Get().(*[]NodeId)
+	defer dirtyIdListPool.Put(dirtyIdsPtr)
+	dirtyIds := *(dirtyIdsPtr)
+	dirtyIds = dirtyIds[:0]
 	cache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
-		handle, success := node.TryGetViewHandle()
-		if !success {
-			return
+		if node.GetUnprotected().IsDirty() {
+			dirtyIds = append(dirtyIds, id)
 		}
-		dirty := handle.Get().IsDirty()
-		handle.Release()
-		if !dirty {
-			return
-		}
-		dirtyIds = append(dirtyIds, id)
 	})
 
 	// The IDs are sorted to increase the chance of sequential
