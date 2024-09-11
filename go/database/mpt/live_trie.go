@@ -15,11 +15,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"os"
+	"path"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 )
 
 // LiveTrie retains a single trie encoding state information with destructible
@@ -34,7 +35,7 @@ type LiveTrie struct {
 	// The root node of the trie.
 	root NodeReference
 	// The file name for storing trie metadata.
-	metadatafile string
+	metaDataFile string
 }
 
 // OpenInMemoryLiveTrie loads trie information from the given directory and
@@ -66,7 +67,7 @@ func OpenFileLiveTrie(directory string, config MptConfig, cacheConfig NodeCacheC
 // directory. If the test passes, the data stored in the respective directory
 // can be considered to be a valid Live Trie of the given configuration.
 func VerifyFileLiveTrie(ctx context.Context, directory string, config MptConfig, observer VerificationObserver) error {
-	metadata, exists, err := readMetadata(directory + "/meta.json")
+	metadata, exists, err := readMetadata(getLiveTrieMetadataPath(directory))
 	if err != nil {
 		return err
 	}
@@ -87,14 +88,14 @@ func makeTrie(
 		return nil, fmt.Errorf("unable to open corrupted forest: %w", err)
 	}
 	// Parse metadata file.
-	metadatafile := directory + "/meta.json"
-	metadata, _, err := readMetadata(metadatafile)
+	metaDataFile := getLiveTrieMetadataPath(directory)
+	metadata, _, err := readMetadata(metaDataFile)
 	if err != nil {
 		return nil, err
 	}
 	return &LiveTrie{
 		root:         NewNodeReference(metadata.RootNode),
-		metadatafile: metadatafile,
+		metaDataFile: metaDataFile,
 		forest:       forest,
 	}, nil
 }
@@ -199,7 +200,7 @@ func (s *LiveTrie) Flush() error {
 	})
 
 	if err == nil {
-		if err := os.WriteFile(s.metadatafile, metadata, 0600); err != nil {
+		if err := os.WriteFile(s.metaDataFile, metadata, 0600); err != nil {
 			return err
 		}
 	}
@@ -240,6 +241,12 @@ func (s *LiveTrie) Check() error {
 type metadata struct {
 	RootNode NodeId
 	RootHash common.Hash
+}
+
+// getLiveTrieMetadataPath returns the path to the LiveTrie's metadata file of
+// the given directory.
+func getLiveTrieMetadataPath(directory string) string {
+	return path.Join(directory, "meta.json")
 }
 
 // readMetadata parses the content of the given file if it exists or returns

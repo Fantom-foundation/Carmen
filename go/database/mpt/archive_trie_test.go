@@ -2719,6 +2719,45 @@ func TestArchiveTrie_RestoreBlockHeightFailsOnBlockBeyondTheLastCheckpoint(t *te
 	}
 }
 
+func TestArchiveTrie_RestoreBlockHeightRestoresArchiveMetaData(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{
+		CheckpointInterval: 1,
+	})
+	if err != nil {
+		t.Fatalf("cannot open archive: %v", err)
+	}
+
+	if err := archive.Add(1, common.Update{}, nil); err != nil {
+		t.Fatalf("failed to add update: %v", err)
+	}
+
+	if err := archive.Close(); err != nil {
+		t.Fatalf("failed to close archive: %v", err)
+	}
+
+	cpHeight, err := GetCheckpointBlock(dir)
+	if err != nil || cpHeight != 1 {
+		t.Fatalf("unexpected checkpoint block: %d, %v", cpHeight, err)
+	}
+
+	if err := os.WriteFile(getLiveTrieMetadataPath(dir), []byte("corrupted"), 0644); err != nil {
+		t.Fatalf("failed to corrupt meta-data file: %v", err)
+	}
+
+	if err := RestoreBlockHeight(dir, S5ArchiveConfig, 1); err != nil {
+		t.Fatalf("failed to restore block height: %v", err)
+	}
+
+	archive, err = OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{}, ArchiveConfig{})
+	if err != nil {
+		t.Fatalf("cannot open archive: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("failed to close archive: %v", err)
+	}
+}
+
 func TestArchiveTrie_RestoreBlockHeight_DetectsIssuesAndForwardsThose(t *testing.T) {
 	tests := map[string]struct {
 		sabotage                     func(t *testing.T, dir string) error
@@ -2740,6 +2779,14 @@ func TestArchiveTrie_RestoreBlockHeight_DetectsIssuesAndForwardsThose(t *testing
 				))
 			},
 			expectedErrorMessageFragment: "failed to get checkpoint height",
+		},
+		"missing permission to update roots file": {
+			sabotage: func(_ *testing.T, dir string) error {
+				rootsFile := filepath.Join(dir, fileNameArchiveRoots)
+				return os.Chmod(rootsFile, 0400)
+			},
+			directoryShouldBeDirtyAfter:  true,
+			expectedErrorMessageFragment: "roots.dat: permission denied",
 		},
 		"failed checkpoint restore": {
 			sabotage: func(_ *testing.T, dir string) error {
