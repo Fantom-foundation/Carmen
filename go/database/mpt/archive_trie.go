@@ -546,8 +546,15 @@ func RestoreBlockHeight(directory string, config MptConfig, block uint64) (err e
 		return fmt.Errorf("failed to restore checkpoint: %w", err)
 	}
 
-	// After the checkpoint, restore the block height.
-	return rootRestorer.truncate(int(block + 1))
+	// After the checkpoint, restore the block height and make sure the meta-data file
+	// is a correct JSON file. Although the meta data is not used by the archive, its
+	// absence or corruption would prevent the archive from being opened. The content
+	// is irrelevant, since after loading it is replaced by the latest root.
+	metaDataFile := getLiveTrieMetadataPath(directory)
+	return errors.Join(
+		rootRestorer.truncate(int(block+1)),
+		utils.WriteJsonFile(metaDataFile, metadata{}),
+	)
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
