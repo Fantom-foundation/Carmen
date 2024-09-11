@@ -1919,12 +1919,17 @@ func (n *AccountNode) Visit(source NodeSource, thisRef *NodeReference, depth int
 	case VisitResponsePrune:
 		return false, nil
 	}
+	return n.visitStorage(source, depth+1, visitor)
+}
+
+// visitStorage is a helper function to visit the storage trie of an account.
+func (n *AccountNode) visitStorage(source NodeSource, depth int, visitor NodeVisitor) (bool, error) {
 	if n.storage.Id().IsEmpty() {
 		return false, nil
 	}
 	if node, err := source.getViewAccess(&n.storage); err == nil {
 		defer node.Release()
-		return node.Get().Visit(source, &n.storage, depth+1, visitor)
+		return node.Get().Visit(source, &n.storage, depth, visitor)
 	} else {
 		return false, err
 	}
