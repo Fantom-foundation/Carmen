@@ -14,8 +14,8 @@ import subprocess
 import tempfile
 import time
 import shutil
-from pathlib import Path
 import sys
+import re
 
 # This script performs an experiment to recover database after a severe failure. It runs synchronisation of the 
 # blockchain having the archive enabled. At a configured time, the process running the synchronisation is killed,
@@ -143,9 +143,10 @@ def check_aida_log(process, sleep_time, log_path):
 
 # Function which runs Carmen's info command and finds the latest checkpoint from created log
 def get_latest_checkpoint_from_info(log_path):
-    log = os.path.join(working_dir, log_path)
-    cp: str
-    with open(log, 'w') as cl:
+    pattern = r"Checkpoint block:\s*(\d+)"
+    cp = None
+    checkpoint_keyword = 'Checkpoint: '
+    with open(log_path, 'w') as cl:
         r = subprocess.run(
             ['go', 'run', './database/mpt/tool', 'info', str(archive)],
             stdout=cl,
@@ -154,11 +155,14 @@ def get_latest_checkpoint_from_info(log_path):
         if has_program_failed(r.returncode, cl, carmen_log_file):
             return -1
 
-    with open(log, 'r') as cl:
-        info_checkpoint = cl.readlines()[-1]
-        # Return last word which is the block number
-        cp = info_checkpoint.split()[-1]
-
+    with open(log_path, 'r') as cl:
+        # Read the entire content of the file
+        content = cl.read()
+        # Search for the pattern in the file content
+        match = re.search(pattern, content)
+        if match:
+            # Extract the number part from the match
+            cp = match.group(1)
     return int(cp)
 
 
