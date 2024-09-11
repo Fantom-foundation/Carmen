@@ -88,7 +88,7 @@ last_block = 60000000
 # --- Script --- #
 
 # Create working dir which gets deleted after the run
-working_dir = os.path.join(tmp_path, 'db-heal-test')
+working_dir = tempfile.TemporaryDirectory(dir=tmp_path, prefix="db-heal-test_").name
 if os.path.exists(working_dir):
     shutil.rmtree(working_dir)
 os.makedirs(working_dir)
@@ -102,6 +102,7 @@ print("Your settings:")
 print(f"\tNumber of iterations: {number_of_iterations}.")
 print(f"\tSync time before kill: {window} seconds.")
 print(f"\tCheckpoint granularity: {checkpoint_granularity} blocks.")
+print(f"\tWorking directory:      {working_dir}")
 
 
 # Function which checks programs return code, if program failed, log is printed and True is returned.
