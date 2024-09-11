@@ -105,10 +105,10 @@ print(f"\tCheckpoint granularity: {checkpoint_granularity} blocks.")
 
 
 # Function which checks programs return code, if program failed, log is printed and True is returned.
-def has_program_failed(code, log):
-    if code != 0:
+def has_program_failed(return_code, log, log_path):
+    if return_code != 0:
         log.close()
-        with open(carmen_log_file, 'r') as l:
+        with open(log_path, 'r') as l:
             text = l.read()
             print(text)
         return True
@@ -116,9 +116,9 @@ def has_program_failed(code, log):
 
 
 # Function which checks every line added to aida_log_file and behaves accordingly to the line.
-def check_aida_log(sleep_time: int, checkpoint: int):
+def check_aida_log(sleep_time, log_path):
     start = 0.0
-    with open(aida_log_file, 'r') as f:
+    with open(log_path, 'r') as f:
         while True:
             line = f.readline()
             if not line:
@@ -142,8 +142,8 @@ def check_aida_log(sleep_time: int, checkpoint: int):
 
 
 # Function which runs Carmen's info command and finds the latest checkpoint from created log
-def get_latest_checkpoint_from_info():
-    log = os.path.join(working_dir, 'carmen-info.log')
+def get_latest_checkpoint_from_info(log_path):
+    log = os.path.join(working_dir, log_path)
     cp: str
     with open(log, 'w') as cl:
         r = subprocess.run(
@@ -151,7 +151,7 @@ def get_latest_checkpoint_from_info():
             stdout=cl,
             stderr=cl,
             cwd=carmen_path)
-        if has_program_failed(r.returncode, cl):
+        if has_program_failed(r.returncode, cl, carmen_log_file):
             return -1
 
     with open(log, 'r') as cl:
@@ -200,7 +200,7 @@ with open(aida_log_file, 'w') as f:
 print("Creating database with aida-vm-sdb...")
 
 # Start monitoring the log file
-has_failed = check_aida_log(window, latest_checkpoint)
+has_failed = check_aida_log(window, aida_log_file)
 
 # Wait for the first command to complete
 process.wait()
@@ -221,7 +221,7 @@ for i in range(1, number_of_iterations + 1):
     c = open(carmen_log_file, 'w')
 
     # Find last checkpoint block
-    latest_checkpoint = get_latest_checkpoint_from_info()
+    latest_checkpoint = get_latest_checkpoint_from_info(carmen_log_file)
     print(f"Using checkpoint on block {latest_checkpoint}.")
 
     # Restore Archive
@@ -230,7 +230,7 @@ for i in range(1, number_of_iterations + 1):
         stdout=c,
         stderr=c,
         cwd=carmen_path)
-    if has_program_failed(result.returncode, c):
+    if has_program_failed(result.returncode, c, carmen_log_file):
         # Next error is fatal
         has_failed = True
         break
@@ -242,7 +242,7 @@ for i in range(1, number_of_iterations + 1):
         stdout=c,
         stderr=c,
         cwd=carmen_path)
-    if has_program_failed(result.returncode, c):
+    if has_program_failed(result.returncode, c, carmen_log_file):
         has_failed = True
         break
 
@@ -255,7 +255,7 @@ for i in range(1, number_of_iterations + 1):
         stdout=c,
         stderr=c,
         cwd=carmen_path)
-    if has_program_failed(result.returncode, c):
+    if has_program_failed(result.returncode, c, carmen_log_file):
         has_failed = True
         break
 
@@ -278,7 +278,7 @@ for i in range(1, number_of_iterations + 1):
         process = subprocess.Popen(command, stdout=f, stderr=subprocess.STDOUT)
 
     # Start monitoring the log file
-    has_failed = check_aida_log(window, latest_checkpoint)
+    has_failed = check_aida_log(window, aida_log_file)
 
     # Wait for the command to complete
     process.wait()
