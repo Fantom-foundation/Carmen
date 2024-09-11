@@ -442,6 +442,148 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_GetAccountInfo(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
+			if err != nil {
+				t.Fatalf("failed to open empty archive: %v", err)
+			}
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
+
+			addr1 := common.Address{1}
+			if err := archive.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Balances: []common.BalanceUpdate{
+					{Account: addr1, Balance: amount.New(1)},
+				},
+				Nonces: []common.NonceUpdate{
+					{Account: addr1, Nonce: common.Nonce{2}},
+				},
+				Codes: []common.CodeUpdate{
+					{Account: addr1, Code: []byte{3}},
+				},
+			}, nil); err != nil {
+				t.Fatalf("failed to add block: %v", err)
+			}
+
+			info, exists, err := archive.GetAccountInfo(1, addr1)
+			if err != nil {
+				t.Fatalf("failed to get account info: %v", err)
+			}
+			if !exists {
+				t.Fatalf("account should exist")
+			}
+
+			want := AccountInfo{
+				Balance:  amount.New(1),
+				Nonce:    common.Nonce{2},
+				CodeHash: common.Keccak256([]byte{3}),
+			}
+
+			if got, want := info, want; got != want {
+				t.Errorf("wrong account info, got %v, wanted %v", got, want)
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_VisitAccount(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 16384}, ArchiveConfig{})
+			if err != nil {
+				t.Fatalf("failed to open empty archive: %v", err)
+			}
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
+
+			const (
+				Addresses = 125
+			)
+
+			// insert growing number of keys in several accounts
+			accounts := make([]common.Address, 0, Addresses)
+			nonces := make([]common.NonceUpdate, 0, Addresses)
+			slotUpdates := make([]common.SlotUpdate, 0, Addresses*Addresses)
+			for i := 0; i < Addresses; i++ {
+				addr := common.AddressFromNumber(i)
+				slots := make([]common.SlotUpdate, 0, i+1)
+				for j := 0; j < i+1; j++ {
+					slots = append(slots, common.SlotUpdate{Account: addr, Key: common.Key{byte(j)}, Value: common.Value{byte(j)}})
+				}
+				accounts = append(accounts, addr)
+				nonces = append(nonces, common.NonceUpdate{Account: addr, Nonce: common.Nonce{1}})
+				slotUpdates = append(slotUpdates, slots...)
+			}
+
+			// create a block with all accounts but empty slots
+			if err := archive.Add(1, common.Update{
+				CreatedAccounts: accounts,
+				Nonces:          nonces,
+			}, nil); err != nil {
+				t.Fatalf("failed to add block: %v", err)
+			}
+
+			// create a block with all accounts and slots
+			if err := archive.Add(2, common.Update{
+				CreatedAccounts: accounts,
+				Nonces:          nonces,
+				Slots:           slotUpdates,
+			}, nil); err != nil {
+				t.Fatalf("failed to add block: %v", err)
+			}
+
+			// check the keys in the accounts are correct when visiting accounts
+			for i := 0; i < Addresses; i++ {
+				addr := common.AddressFromNumber(i)
+				visited := make(map[common.Key]common.Value)
+				if err := archive.VisitAccountStorage(2, addr, MakeVisitor(func(node Node, _ NodeInfo) VisitResponse {
+					switch n := node.(type) {
+					case *ValueNode:
+						visited[n.Key()] = n.Value()
+					}
+					return VisitResponseContinue
+				})); err != nil {
+					t.Fatalf("failed to visit account: %v", err)
+				}
+
+				for j := 0; j < i+1; j++ {
+					key := common.Key{byte(j)}
+					if got, want := visited[key], (common.Value{byte(j)}); got != want {
+						t.Errorf("wrong value for key %v, got %v, wanted %v", key, got, want)
+					}
+					delete(visited, key)
+				}
+
+				if len(visited) > 0 {
+					t.Errorf("unexpected keys: %v", visited)
+				}
+			}
+
+			// check there are no slots in blocks 0 and 1
+			for block := uint64(0); block < 2; block++ {
+				for i := 0; i < Addresses; i++ {
+					addr := common.AddressFromNumber(i)
+					if err := archive.VisitAccountStorage(block, addr, MakeVisitor(func(node Node, _ NodeInfo) VisitResponse {
+						t.Errorf("unexpected node: %v", node)
+						return VisitResponseContinue
+					})); err != nil {
+						t.Fatalf("failed to visit account: %v", err)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
@@ -1037,6 +1179,9 @@ func TestArchiveTrie_GettingView_Block_OutOfRange(t *testing.T) {
 			if _, err := archive.GetNonce(100, common.Address{1}); err == nil {
 				t.Errorf("block out of range should fail")
 			}
+			if _, _, err := archive.GetAccountInfo(100, common.Address{1}); err == nil {
+				t.Errorf("block out of range should fail")
+			}
 			if _, err := archive.GetStorage(100, common.Address{1}, common.Key{2}); err == nil {
 				t.Errorf("block out of range should fail")
 			}
@@ -1150,9 +1295,12 @@ func TestArchiveTrie_CannotGet_AccountHash(t *testing.T) {
 }
 
 func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
-	for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
+	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			arch, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
+			if err != nil {
+				t.Fatalf("failed to create empty archive; %s", err)
+			}
 			defer func() {
 				if err := arch.Close(); err != nil {
 					t.Fatalf("failed to close archive; %s", err)
@@ -1205,6 +1353,26 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 			}
 			if got, want := value, (common.Value{3}); got != want {
 				t.Errorf("unexpected value; got: %x, want: %x", got, want)
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_CreateWitnessProof_NonExistingBlock(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			arch, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
+			if err != nil {
+				t.Fatalf("failed to create empty archive; %s", err)
+			}
+			defer func() {
+				if err := arch.Close(); err != nil {
+					t.Fatalf("failed to close archive; %s", err)
+				}
+			}()
+
+			if _, err := arch.CreateWitnessProof(1, common.Address{1}, common.Key{2}); err == nil {
+				t.Errorf("creating witness proof for non-existing block should fail")
 			}
 		})
 	}
@@ -1935,7 +2103,7 @@ func TestStoreRoots_Cannot_Create(t *testing.T) {
 
 }
 
-func TestArchiveTrie_FailingGOperation_InvalidatesOtherArchiveOperations(t *testing.T) {
+func TestArchiveTrie_FailingOperation_InvalidatesOtherArchiveOperations(t *testing.T) {
 	injectedErr := fmt.Errorf("injectedError")
 
 	rotate := func(arr []string, k int) []string {
@@ -1955,9 +2123,14 @@ func TestArchiveTrie_FailingGOperation_InvalidatesOtherArchiveOperations(t *test
 
 			ctrl := gomock.NewController(t)
 			db := NewMockDatabase(ctrl)
-			db.EXPECT().CheckAll(gomock.Any())
+			db.EXPECT().CheckAll(gomock.Any()).AnyTimes()
+			db.EXPECT().getConfig().Return(S5ArchiveConfig).AnyTimes()
+			db.EXPECT().hashKey(gomock.Any()).Return(common.Hash{}).AnyTimes()
+			db.EXPECT().hashAddress(gomock.Any()).Return(common.Hash{}).AnyTimes()
+			db.EXPECT().getViewAccess(gomock.Any()).Return(shared.ViewHandle[Node]{}, injectedErr).MaxTimes(1)
 			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr).MaxTimes(1)
 			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr).MaxTimes(1)
+			db.EXPECT().VisitTrie(gomock.Any(), gomock.Any()).Return(injectedErr).MaxTimes(1)
 
 			live := NewMockLiveState(ctrl)
 			live.EXPECT().GetHash().Return(common.Hash{}, injectedErr).MaxTimes(1)
@@ -1995,10 +2168,6 @@ func TestArchiveTrie_FailingGOperation_InvalidatesOtherArchiveOperations(t *test
 				CreatedAccounts: []common.Address{{0xB}},
 			}
 
-			nodeVisitor := NewMockNodeVisitor(ctrl)
-			if err := archive.VisitTrie(0, nodeVisitor); !errors.Is(err, injectedErr) {
-				t.Errorf("expected failure did not happen: got: %v != want: %v", err, injectedErr)
-			}
 			if err := archive.Add(0, update, nil); !errors.Is(err, injectedErr) {
 				t.Errorf("expected failure did not happen: got: %v != want: %v", err, injectedErr)
 			}
@@ -2116,36 +2285,42 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 	}
 }
 
-var archiveOps = map[string]func(archive archive.Archive) error{
-	"exists": func(archive archive.Archive) error {
+var archiveOps = map[string]func(archive *ArchiveTrie) error{
+	"exists": func(archive *ArchiveTrie) error {
 		_, err := archive.Exists(uint64(0), common.Address{})
 		return err
 	},
-	"balance": func(archive archive.Archive) error {
+	"balance": func(archive *ArchiveTrie) error {
 		_, err := archive.GetBalance(uint64(0), common.Address{})
 		return err
 	},
-	"code": func(archive archive.Archive) error {
+	"code": func(archive *ArchiveTrie) error {
 		_, err := archive.GetCode(uint64(0), common.Address{})
 		return err
 	},
-	"nonce": func(archive archive.Archive) error {
+	"nonce": func(archive *ArchiveTrie) error {
 		_, err := archive.GetNonce(uint64(0), common.Address{})
 		return err
 	},
-	"storage": func(archive archive.Archive) error {
+	"storage": func(archive *ArchiveTrie) error {
 		_, err := archive.GetStorage(uint64(0), common.Address{}, common.Key{})
 		return err
 	},
-	"flush": func(archive archive.Archive) error {
+	"flush": func(archive *ArchiveTrie) error {
 		return archive.Flush()
 	},
-	"add": func(archive archive.Archive) error {
+	"add": func(archive *ArchiveTrie) error {
 		return archive.Add(uint64(rand.Int()), common.Update{}, nil)
 	},
-	"create witness proof": func(archive archive.Archive) error {
+	"create witness proof": func(archive *ArchiveTrie) error {
 		_, err := archive.CreateWitnessProof(0, common.Address{}, common.Key{})
 		return err
+	},
+	"visit account": func(archive *ArchiveTrie) error {
+		return archive.VisitAccountStorage(0, common.Address{}, nil)
+	},
+	"visit": func(archive *ArchiveTrie) error {
+		return archive.VisitTrie(0, nil)
 	},
 }
 

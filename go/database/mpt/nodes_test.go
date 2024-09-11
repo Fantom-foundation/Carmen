@@ -3568,6 +3568,29 @@ func TestAccountNode_VisitPrune(t *testing.T) {
 	}
 }
 
+func TestAccountNode_visitStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	storage := NewMockNode(ctrl)
+	storage.EXPECT().Visit(gomock.Any(), gomock.Any(), 2, gomock.Any()).Return(false, nil)
+
+	_, node := ctxt.Build(&Account{
+		info:    AccountInfo{Nonce: common.Nonce{1}},
+		storage: &Mock{storage},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	visitor := NewMockNodeVisitor(ctrl)
+
+	accountNode := handle.Get().(*AccountNode)
+	if abort, err := accountNode.visitStorage(ctxt, 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
 func TestAccountNode_VisitAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
