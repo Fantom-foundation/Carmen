@@ -1111,6 +1111,10 @@ func (n *ExtensionNode) GetNext() NodeReference {
 	return n.next
 }
 
+func (n *ExtensionNode) Path() Path {
+	return n.path
+}
+
 func (n *ExtensionNode) getNextNodeInExtension(
 	source NodeSource,
 	path []Nibble,

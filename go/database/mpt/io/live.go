@@ -113,12 +113,13 @@ func (e exportableArchiveTrie) GetCodeForHash(hash common.Hash) []byte {
 // exportableLiveTrie is a wrapper for a LiveDB instance that allows for
 // exporting its content by the ability to visit archive trie nodes.
 type exportableLiveTrie struct {
-	db *mpt.MptState
+	directory string
+	db        *mpt.MptState
 }
 
 func (e *exportableLiveTrie) Visit(visitor noResponseNodeVisitor, pruneStorage bool) error {
-	adapter := &noResponseVisitorAdapter{visitor: visitor, pruneStorage: pruneStorage}
-	return errors.Join(e.db.Visit(adapter), adapter.err)
+	root := e.db.Root()
+	return visitAllWithSources(&nodeSourceHashWithChildNodesFactory{e.directory}, root.Id(), visitor, pruneStorage)
 }
 
 func (e *exportableLiveTrie) GetHash() (common.Hash, error) {
@@ -127,25 +128,6 @@ func (e *exportableLiveTrie) GetHash() (common.Hash, error) {
 
 func (e *exportableLiveTrie) GetCodeForHash(hash common.Hash) []byte {
 	return e.db.GetCodeForHash(hash)
-}
-
-type noResponseVisitorAdapter struct {
-	visitor      noResponseNodeVisitor
-	pruneStorage bool
-	err          error
-}
-
-func (n *noResponseVisitorAdapter) Visit(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-	if err := n.visitor.Visit(node, info); err != nil {
-		n.err = err
-		return mpt.VisitResponseAbort
-	}
-	if n.pruneStorage {
-		if _, ok := node.(*mpt.AccountNode); ok {
-			return mpt.VisitResponsePrune
-		}
-	}
-	return mpt.VisitResponseContinue
 }
 
 // Export opens a LiveDB instance retained in the given directory and writes
@@ -169,7 +151,7 @@ func Export(ctx context.Context, logger *Log, directory string, out io.Writer) e
 	}
 	defer db.Close()
 
-	_, err = ExportLive(ctx, logger, &exportableLiveTrie{db: db}, out)
+	_, err = ExportLive(ctx, logger, &exportableLiveTrie{db: db, directory: directory}, out)
 	return err
 }
 

@@ -37,7 +37,7 @@ func visitAll(
 	visitor noResponseNodeVisitor,
 	pruneStorage bool,
 ) error {
-	return visitAllWithSources(&stockNodeSourceFactory{directory}, root, visitor, pruneStorage)
+	return visitAllWithSources(&nodeSourceHashWithNodesFactory{directory}, root, visitor, pruneStorage)
 }
 
 // visitAllWithSources is an internal implementation of visitAll that allows to provide a custom node source factory.
@@ -374,12 +374,14 @@ type nodeSource interface {
 	get(mpt.NodeId) (mpt.Node, error)
 }
 
-// stockNodeSourceFactory is a nodeSourceFactory implementation that creates stock backed sources to access nodes.
-type stockNodeSourceFactory struct {
+// nodeSourceHashWithNodesFactory is a nodeSourceFactory implementation;
+// that creates stock backed sources to access nodes, using the node encoders
+// storing hashes with nodes.
+type nodeSourceHashWithNodesFactory struct {
 	directory string
 }
 
-func (f *stockNodeSourceFactory) open() (nodeSource, error) {
+func (f *nodeSourceHashWithNodesFactory) open() (nodeSource, error) {
 	var toClose []io.Closer
 	closeWithErr := func(err error) error {
 		for _, s := range toClose {
@@ -407,6 +409,54 @@ func (f *stockNodeSourceFactory) open() (nodeSource, error) {
 	toClose = append(toClose, extensions)
 
 	values, err := file.OpenReadOnlyStock[uint64, mpt.ValueNode](path.Join(f.directory, "values"), mpt.ValueNodeWithPathLengthEncoderWithNodeHash{})
+	if err != nil {
+		return nil, closeWithErr(err)
+	}
+	toClose = append(toClose, values)
+
+	return &stockNodeSource{
+		accounts:   accounts,
+		branches:   branches,
+		extensions: extensions,
+		values:     values,
+	}, nil
+}
+
+// nodeSourceHashWithChildNodesFactory is a nodeSourceFactory implementation;
+// that creates stock backed sources to access nodes, using the node encoders
+// storing hashes of children with parent nodes.
+type nodeSourceHashWithChildNodesFactory struct {
+	directory string
+}
+
+func (f *nodeSourceHashWithChildNodesFactory) open() (nodeSource, error) {
+	var toClose []io.Closer
+	closeWithErr := func(err error) error {
+		for _, s := range toClose {
+			err = errors.Join(err, s.Close())
+		}
+		return err
+	}
+
+	accounts, err := file.OpenReadOnlyStock[uint64, mpt.AccountNode](path.Join(f.directory, "accounts"), mpt.AccountNodeWithPathLengthEncoderWithChildHash{})
+	if err != nil {
+		return nil, closeWithErr(err)
+	}
+	toClose = append(toClose, accounts)
+
+	branches, err := file.OpenReadOnlyStock[uint64, mpt.BranchNode](path.Join(f.directory, "branches"), mpt.BranchNodeEncoderWithChildHashes{})
+	if err != nil {
+		return nil, closeWithErr(err)
+	}
+	toClose = append(toClose, branches)
+
+	extensions, err := file.OpenReadOnlyStock[uint64, mpt.ExtensionNode](path.Join(f.directory, "extensions"), mpt.ExtensionNodeEncoderWithChildHash{})
+	if err != nil {
+		return nil, closeWithErr(err)
+	}
+	toClose = append(toClose, extensions)
+
+	values, err := file.OpenReadOnlyStock[uint64, mpt.ValueNode](path.Join(f.directory, "values"), mpt.ValueNodeWithPathLengthEncoderWithoutNodeHash{})
 	if err != nil {
 		return nil, closeWithErr(err)
 	}
