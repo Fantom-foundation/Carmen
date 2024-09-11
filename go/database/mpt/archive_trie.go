@@ -41,6 +41,7 @@ import (
 // Its main task is to keep track of state roots and to freeze the head
 // state after each block.
 type ArchiveTrie struct {
+	directory    string
 	head         LiveState // the current head-state
 	forest       Database  // global forest with all versions of LiveState
 	nodeSource   NodeSource
@@ -141,6 +142,7 @@ func OpenArchiveTrie(
 	lastCheckpointTime = lastCheckpointTime.Add(time.Duration(-1 * float64(checkpointPeriod) * rand.Float64()))
 
 	return &ArchiveTrie{
+		directory:             directory,
 		head:                  state,
 		forest:                forest,
 		nodeSource:            forest,
@@ -248,6 +250,13 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	}
 
 	return nil
+}
+
+func (a *ArchiveTrie) GetBlockRoot(block uint64) (NodeId, error) {
+	if block >= uint64(a.roots.length()) {
+		return EmptyId(), fmt.Errorf("block %d not present in archive", block)
+	}
+	return a.roots.get(block).NodeRef.id, nil
 }
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
@@ -577,6 +586,11 @@ func (a *ArchiveTrie) addError(err error) error {
 	return a.archiveError
 }
 
+// Directory returns the directory where the archive is stored on disk.
+func (a *ArchiveTrie) Directory() string {
+	return a.directory
+}
+
 // ---- Reading and Writing Root Node ID Lists ----
 
 // rootList is a utility type managing an in-memory copy of the list of roots
@@ -731,6 +745,9 @@ func (l *rootList) Prepare(checkpoint checkpoint.Checkpoint) error {
 	if l.checkpoint+1 != checkpoint {
 		return fmt.Errorf("checkpoint mismatch, expected %v, got %v", l.checkpoint+1, checkpoint)
 	}
+	if err := l.storeRoots(); err != nil {
+		return err
+	}
 	pendingFile := filepath.Join(l.directory, fileNameArchiveRootsPreparedCheckpoint)
 	return writeRootListCheckpointData(pendingFile, rootListCheckpointData{
 		Checkpoint: checkpoint,
@@ -776,16 +793,21 @@ func getRootListRestorer(archiveDir string) rootListRestorer {
 }
 
 func (r rootListRestorer) Restore(checkpoint checkpoint.Checkpoint) error {
-	meta, err := readRootListCheckpointData(filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint))
+	committedFile := filepath.Join(r.directory, fileNameArchiveRootsCommittedCheckpoint)
+	meta, err := readRootListCheckpointData(committedFile)
 	if err != nil {
 		return err
 	}
 
 	// If the given checkpoint is one step in the future, check whether there is a pending checkpoint.
 	if meta.Checkpoint+1 == checkpoint {
-		pending, err := readRootListCheckpointData(filepath.Join(r.directory, fileNameArchiveRootsPreparedCheckpoint))
+		pendingFile := filepath.Join(r.directory, fileNameArchiveRootsPreparedCheckpoint)
+		pending, err := readRootListCheckpointData(pendingFile)
 		if err == nil && pending.Checkpoint == checkpoint {
 			meta = pending
+			if err := os.Rename(pendingFile, committedFile); err != nil {
+				return err
+			}
 		}
 	}
 
