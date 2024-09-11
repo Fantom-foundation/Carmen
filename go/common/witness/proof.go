@@ -17,6 +17,8 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 )
 
+//go:generate mockgen -source proof.go -destination proof_mocks.go -package witness
+
 // Proof is an interface for witness proofs. A witness proof is a data structure that
 // contains a witness for a subset of the state. The witness proof can be used to
 // extract information, such as account balances, nonces, code hashes,
