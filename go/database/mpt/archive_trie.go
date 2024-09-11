@@ -41,6 +41,7 @@ import (
 // Its main task is to keep track of state roots and to freeze the head
 // state after each block.
 type ArchiveTrie struct {
+	directory    string
 	head         LiveState // the current head-state
 	forest       Database  // global forest with all versions of LiveState
 	nodeSource   NodeSource
@@ -141,6 +142,7 @@ func OpenArchiveTrie(
 	lastCheckpointTime = lastCheckpointTime.Add(time.Duration(-1 * float64(checkpointPeriod) * rand.Float64()))
 
 	return &ArchiveTrie{
+		directory:             directory,
 		head:                  state,
 		forest:                forest,
 		nodeSource:            forest,
@@ -248,6 +250,13 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	}
 
 	return nil
+}
+
+func (a *ArchiveTrie) GetBlockRoot(block uint64) (NodeId, error) {
+	if block >= uint64(a.roots.length()) {
+		return EmptyId(), fmt.Errorf("block %d not present in archive", block)
+	}
+	return a.roots.get(block).NodeRef.id, nil
 }
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
@@ -575,6 +584,11 @@ func (a *ArchiveTrie) addError(err error) error {
 	defer a.errorMutex.Unlock()
 	a.archiveError = errors.Join(a.archiveError, err)
 	return a.archiveError
+}
+
+// Directory returns the directory where the archive is stored on disk.
+func (a *ArchiveTrie) Directory() string {
+	return a.directory
 }
 
 // ---- Reading and Writing Root Node ID Lists ----
