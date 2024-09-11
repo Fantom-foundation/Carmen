@@ -16,7 +16,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -29,14 +28,13 @@ import (
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
-	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
-	"golang.org/x/exp/maps"
-
-	"go.uber.org/mock/gomock"
-
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils/checkpoint"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
+	"go.uber.org/mock/gomock"
+	"golang.org/x/exp/maps"
 )
 
 // Note: most properties of the ArchiveTrie are tested through the common
@@ -3094,6 +3092,30 @@ func TestRootList_GuaranteeCheckpoint_CommitsPendingCheckpoint(t *testing.T) {
 	}
 }
 
+func TestRootList_Prepare_FlushesRootsToDisk(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(2))})
+
+	if want, got := 0, roots.numRootsInFile; want != got {
+		t.Fatalf("unexpected number of roots in file, wanted %d, got %d", want, got)
+	}
+
+	cp := checkpoint.Checkpoint(1)
+	if err := roots.Prepare(cp); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+
+	if want, got := 2, roots.numRootsInFile; want != got {
+		t.Fatalf("unexpected number of roots in file, wanted %d, got %d", want, got)
+	}
+}
+
 func TestRootList_Prepare_OnlyAcceptsIncrementalCheckpoints(t *testing.T) {
 	dir := t.TempDir()
 	roots, err := loadRoots(dir)
@@ -3104,6 +3126,28 @@ func TestRootList_Prepare_OnlyAcceptsIncrementalCheckpoints(t *testing.T) {
 	cp := checkpoint.Checkpoint(2)
 	if err := roots.Prepare(cp); err == nil {
 		t.Fatalf("expected error when preparing non-incremental checkpoint")
+	}
+}
+
+func TestRootList_Prepare_DetectsFlushIssue(t *testing.T) {
+	dir := t.TempDir()
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+	if err := roots.storeRoots(); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+	if err := os.Chmod(roots.filename, 0400); err != nil {
+		t.Fatalf("failed to make roots file read-only: %v", err)
+	}
+
+	roots.append(Root{NodeRef: NewNodeReference(ValueId(1))})
+	cp := checkpoint.Checkpoint(1)
+	if err := roots.Prepare(cp); err == nil {
+		t.Fatalf("expected error when roots could not be flushed to disk")
 	}
 }
 
@@ -3208,6 +3252,9 @@ func TestRootList_Restore_CanRecoverCorruptedRoots(t *testing.T) {
 	for _, name := range []string{"prepared", "committed"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
+			committedFile := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory, fileNameArchiveRootsCommittedCheckpoint)
+			pendingFile := filepath.Join(dir, fileNameArchiveRootsCheckpointDirectory, fileNameArchiveRootsPreparedCheckpoint)
+
 			roots, err := loadRoots(dir)
 			if err != nil {
 				t.Fatalf("failed to load roots: %v", err)
@@ -3215,17 +3262,27 @@ func TestRootList_Restore_CanRecoverCorruptedRoots(t *testing.T) {
 			roots.append(Root{NodeRef: NewNodeReference(ValueId(123))})
 			roots.append(Root{NodeRef: NewNodeReference(ValueId(123))})
 
-			if err := roots.storeRoots(); err != nil {
-				t.Fatalf("failed to store roots: %v", err)
-			}
-
 			cp := checkpoint.Checkpoint(1)
 			if err := roots.Prepare(cp); err != nil {
 				t.Fatalf("failed to prepare checkpoint: %v", err)
 			}
+
+			if _, err := os.Stat(committedFile); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("expected committed checkpoint file not to exist")
+			}
+			if _, err := os.Stat(pendingFile); err != nil {
+				t.Errorf("expected pending checkpoint file to exist")
+			}
+
 			if name == "committed" {
 				if err := roots.Commit(cp); err != nil {
 					t.Fatalf("failed to commit checkpoint: %v", err)
+				}
+				if _, err := os.Stat(committedFile); err != nil {
+					t.Errorf("expected committed checkpoint file to exist")
+				}
+				if _, err := os.Stat(pendingFile); !errors.Is(err, os.ErrNotExist) {
+					t.Errorf("expected pending checkpoint file to be deleted")
 				}
 			}
 
@@ -3251,6 +3308,13 @@ func TestRootList_Restore_CanRecoverCorruptedRoots(t *testing.T) {
 			if !bytes.Equal(backup, restored) {
 				t.Fatalf("unexpected restored file content")
 			}
+
+			if _, err := os.Stat(committedFile); err != nil {
+				t.Errorf("expected committed checkpoint file to exist")
+			}
+			if _, err := os.Stat(pendingFile); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("expected pending checkpoint file to be deleted")
+			}
 		})
 	}
 }
@@ -3270,6 +3334,29 @@ func TestRootList_Restore_FailsIfCheckpointFileCanNotBeRead(t *testing.T) {
 	cp := checkpoint.Checkpoint(1)
 	if err := getRootListRestorer(dir).Restore(cp); err == nil {
 		t.Fatalf("expected recovery error due to invalid checkpoint file")
+	}
+}
+
+func TestRootList_Restore_FailsIfPendingCheckpointFileCanNotBeRenamed(t *testing.T) {
+	dir := t.TempDir()
+
+	roots, err := loadRoots(dir)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+	cp := checkpoint.Checkpoint(1)
+	if err := roots.Prepare(cp); err != nil {
+		t.Fatalf("failed to prepare checkpoint: %v", err)
+	}
+
+	// sabotage the renaming of the pending to the committed checkpoint
+	if err := os.Chmod(roots.directory, 0500); err != nil {
+		t.Fatalf("failed to make directory read-only: %v", err)
+	}
+	defer os.Chmod(roots.directory, 0700)
+
+	if err := getRootListRestorer(dir).Restore(cp); err == nil {
+		t.Errorf("expected recovery error due to read-only directory")
 	}
 }
 
