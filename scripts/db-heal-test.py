@@ -116,7 +116,7 @@ def has_program_failed(return_code, log, log_path):
 
 
 # Function which checks every line added to aida_log_file and behaves accordingly to the line.
-def check_aida_log(sleep_time, log_path):
+def check_aida_log(process, sleep_time, log_path):
     start = 0.0
     with open(log_path, 'r') as f:
         while True:
@@ -200,7 +200,7 @@ with open(aida_log_file, 'w') as f:
 print("Creating database with aida-vm-sdb...")
 
 # Start monitoring the log file
-has_failed = check_aida_log(window, aida_log_file)
+has_failed = check_aida_log(process, window, aida_log_file)
 
 # Wait for the first command to complete
 process.wait()
@@ -278,7 +278,7 @@ for i in range(1, number_of_iterations + 1):
         process = subprocess.Popen(command, stdout=f, stderr=subprocess.STDOUT)
 
     # Start monitoring the log file
-    has_failed = check_aida_log(window, aida_log_file)
+    has_failed = check_aida_log(process, window, aida_log_file)
 
     # Wait for the command to complete
     process.wait()
