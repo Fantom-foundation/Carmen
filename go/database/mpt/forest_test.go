@@ -260,11 +260,8 @@ func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
 					}
 
 					defer func() {
-						if err = forest.Close(); err == nil {
-							t.Fatal("close must fail")
-						}
-						if !errors.Is(err, injectedErr) {
-							t.Errorf("unexpected error\ngot: %v\nwant: %v", err, injectedErr)
+						if err = forest.Close(); !errors.Is(err, injectedErr) {
+							t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedErr)
 						}
 					}()
 
@@ -313,11 +310,8 @@ func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err == nil {
-							t.Fatal("close must fail")
-						}
-						if !errors.Is(err, injectedErr) {
-							t.Errorf("unexpected error:\ngot: %v\nwant: %v", err, injectedErr)
+						if err = forest.Close(); !errors.Is(err, injectedErr) {
+							t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedErr)
 						}
 					}()
 
@@ -355,11 +349,8 @@ func TestForest_Freeze_Fails(t *testing.T) {
 					t.Fatalf("failed to open forest: %v", err)
 				}
 				defer func() {
-					if err = forest.Close(); err == nil {
-						t.Fatal("close must fail")
-					}
-					if !errors.Is(err, injectedErr) {
-						t.Errorf("unexpected error:\ngot: %v\nwant: %v", err, injectedErr)
+					if err = forest.Close(); !errors.Is(err, injectedErr) {
+						t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedErr)
 					}
 				}()
 
@@ -2022,10 +2013,7 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 			}
 
 			defer func() {
-				if err = forest.Close(); err == nil {
-					t.Fatalf("close should fail")
-				}
-				if !errors.Is(err, injectedError) {
+				if err = forest.Close(); !errors.Is(err, injectedError) {
 					t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedError)
 				}
 			}()
@@ -2069,11 +2057,8 @@ func TestForest_MultipleErrorsCanBeCollected(t *testing.T) {
 	}
 
 	defer func() {
-		if err = forest.Close(); err == nil {
-			t.Fatal("close must fail")
-		}
-		if !errors.Is(err, injectedErrorB) {
-			t.Errorf("unexpected error\ngot: %v\nwant: %v", err, injectedErrorB)
+		if err = forest.Close(); !errors.Is(err, injectedErrorB) {
+			t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedErrorB)
 		}
 	}()
 
@@ -2190,11 +2175,7 @@ func TestForest_FailingFlush_Invalidates_Forest(t *testing.T) {
 	}
 
 	defer func() {
-		if err = forest.Close(); err == nil {
-			t.Fatalf("close should fail")
-		}
-		// Error returned by first flush is kept up to this point
-		if !errors.Is(err, injectedError) {
+		if err = forest.Close(); !errors.Is(err, injectedError) {
 			t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedError)
 		}
 	}()
