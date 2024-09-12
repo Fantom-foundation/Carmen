@@ -256,7 +256,6 @@ func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call New")
@@ -296,7 +295,6 @@ func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Get")
@@ -326,7 +324,6 @@ func TestForest_Freeze_Fails(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
-				defer forest.Close()
 
 				// inject failing stock to trigger an error applying the update
 				var injectedErr = errors.New("failed to call Get")
@@ -444,7 +441,6 @@ func TestForest_Release_Queue_Error_Get_Node(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Get")
@@ -513,7 +509,6 @@ func TestForest_getAccess_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Get")
@@ -616,7 +611,6 @@ func TestForest_Flush_Fail_MissingCachedNode(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
 
 					// inject failing stock to trigger an error applying the update
 					ctrl := gomock.NewController(t)
@@ -645,7 +639,6 @@ func TestForest_Flush_Fail_CannotReadNode(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Set")
@@ -758,7 +751,6 @@ func TestForest_getMutableNodeByPath_CannotReadNode(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Get")
