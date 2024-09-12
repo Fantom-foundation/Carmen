@@ -63,6 +63,7 @@ func main() {
 			&Info,
 			&InitArchive,
 			&Verify,
+			&VerifyProof,
 			&Benchmark,
 			&Block,
 			&StressTestCmd,
