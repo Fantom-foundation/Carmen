@@ -206,7 +206,11 @@ func TestForest_GettingAccountInfo_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Errorf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to get value from stock")
@@ -260,8 +264,8 @@ func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
 					}
 
 					defer func() {
-						if err = forest.Close(); !errors.Is(err, injectedErr) {
-							t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedErr)
+						if err := forest.Close(); !errors.Is(err, injectedErr) {
+							t.Errorf("unexpected error: got: %v, want :%v", err, injectedErr)
 						}
 					}()
 
@@ -310,8 +314,8 @@ func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); !errors.Is(err, injectedErr) {
-							t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedErr)
+						if err := forest.Close(); !errors.Is(err, injectedErr) {
+							t.Errorf("unexpected error: got: %v, want :%v", err, injectedErr)
 						}
 					}()
 
@@ -349,8 +353,8 @@ func TestForest_Freeze_Fails(t *testing.T) {
 					t.Fatalf("failed to open forest: %v", err)
 				}
 				defer func() {
-					if err = forest.Close(); !errors.Is(err, injectedErr) {
-						t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedErr)
+					if err := forest.Close(); !errors.Is(err, injectedErr) {
+						t.Errorf("unexpected error: got: %v, want :%v", err, injectedErr)
 					}
 				}()
 
@@ -386,7 +390,7 @@ func TestForest_CreatingNodes_Fails(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -456,7 +460,7 @@ func TestForest_Cannot_Release_Node(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -484,7 +488,7 @@ func TestForest_Release_Queue_Error_Get_Node(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Errorf("failed to close forest: %v", err)
 						}
 					}()
@@ -526,7 +530,7 @@ func TestForest_Release_Queue_Error_Release_Node(t *testing.T) {
 					t.Fatalf("failed to open forest: %v", err)
 				}
 				defer func() {
-					if err = forest.Close(); err != nil {
+					if err := forest.Close(); err != nil {
 						t.Errorf("failed to close forest: %v", err)
 					}
 				}()
@@ -567,7 +571,11 @@ func TestForest_getAccess_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Errorf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Get")
@@ -575,11 +583,11 @@ func TestForest_getAccess_Fails(t *testing.T) {
 					cache := NewMockNodeCache(ctrl)
 					cache.EXPECT().Get(gomock.Any()).AnyTimes().Return(nil, false)
 					var n Node
-					// only the second call must fail - repeats four times for four calls
 					cache.EXPECT().GetOrSet(gomock.Any(), gomock.Any()).AnyTimes().Return(shared.MakeShared(n), false, EmptyId(), nil, false)
 					cache.EXPECT().Touch(gomock.Any()).AnyTimes()
 
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+					// only the second call must fail - repeats four times for four calls
 					calls := make([]*gomock.Call, 0, 8)
 					for i := 0; i < 4; i++ {
 						calls = append(calls, accounts.EXPECT().Get(gomock.Any()).Return(AccountNode{}, nil))
@@ -629,7 +637,7 @@ func TestForest_getSharedNode_Fails_Get_Copy(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -693,7 +701,7 @@ func TestForest_Flush_Fail_MissingCachedNode(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -731,7 +739,7 @@ func TestForest_Flush_Fail_CannotReadNode(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -833,7 +841,7 @@ func TestForest_flushNode_EmptyId(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -859,7 +867,7 @@ func TestForest_getMutableNodeByPath_CannotReadNode(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -898,7 +906,7 @@ func TestForest_getMutableNodeByPath_TypeOfNodesReachable(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -969,7 +977,7 @@ func TestForest_Dump(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -1150,7 +1158,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 					t.Fatalf("failed to open forest: %v", err)
 				}
 				defer func() {
-					if err = forest.Close(); err != nil {
+					if err := forest.Close(); err != nil {
 						t.Fatalf("failed to close forest: %v", err)
 					}
 				}()
@@ -1198,7 +1206,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 					t.Fatalf("failed to open forest: %v", err)
 				}
 				defer func() {
-					if err = forest.Close(); err != nil {
+					if err := forest.Close(); err != nil {
 						t.Fatalf("failed to close forest: %v", err)
 					}
 				}()
@@ -1261,7 +1269,7 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
@@ -1471,7 +1479,7 @@ func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
 		t.Fatalf("failed to delete account: %v", err)
 	}
 
-	if err = forest.Close(); err != nil {
+	if err := forest.Close(); err != nil {
 		t.Fatalf("failed to close the forest: %v", err)
 	}
 }
@@ -2014,8 +2022,8 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 			}
 
 			defer func() {
-				if err = forest.Close(); !errors.Is(err, injectedError) {
-					t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedError)
+				if err := forest.Close(); !errors.Is(err, injectedError) {
+					t.Errorf("unexpected error: got: %v, want :%v", err, injectedError)
 				}
 			}()
 
@@ -2058,8 +2066,8 @@ func TestForest_MultipleErrorsCanBeCollected(t *testing.T) {
 	}
 
 	defer func() {
-		if err = forest.Close(); !errors.Is(err, injectedErrorB) {
-			t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedErrorB)
+		if err := forest.Close(); !errors.Is(err, injectedErrorB) {
+			t.Errorf("unexpected error: got: %v, want :%v", err, injectedErrorB)
 		}
 	}()
 
@@ -2176,8 +2184,8 @@ func TestForest_FailingFlush_Invalidates_Forest(t *testing.T) {
 	}
 
 	defer func() {
-		if err = forest.Close(); !errors.Is(err, injectedError) {
-			t.Errorf("unexpected error:\ngot: %v\nwant :%v", err, injectedError)
+		if err := forest.Close(); !errors.Is(err, injectedError) {
+			t.Errorf("unexpected error: got: %v, want :%v", err, injectedError)
 		}
 	}()
 
@@ -2609,7 +2617,7 @@ func TestVisitPathTo_Node_Hashes_Same_S5_Archive_non_Archive_Config_For_Witness_
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err = forest.Close(); err != nil {
+						if err := forest.Close(); err != nil {
 							t.Fatalf("failed to close forest: %v", err)
 						}
 					}()
