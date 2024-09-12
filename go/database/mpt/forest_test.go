@@ -628,6 +628,12 @@ func TestForest_getSharedNode_Fails_Get_Copy(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err = forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
+
 					// backup stocks and re-assign them for proper close
 					accountsBackup := forest.accounts
 					valuesBackup := forest.values
@@ -635,11 +641,6 @@ func TestForest_getSharedNode_Fails_Get_Copy(t *testing.T) {
 					defer func() {
 						forest.accounts = accountsBackup
 						forest.values = valuesBackup
-					}()
-					defer func() {
-						if err = forest.Close(); err != nil {
-							t.Fatalf("failed to close forest: %v", err)
-						}
 					}()
 
 					// inject failing stock to trigger an error applying the update
