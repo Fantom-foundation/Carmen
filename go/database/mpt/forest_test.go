@@ -863,6 +863,10 @@ func TestForest_Dump(t *testing.T) {
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to call Get"))
+					accountsBackup := forest.accounts
+					defer func() {
+						forest.accounts = accountsBackup
+					}()
 					forest.accounts = accounts
 
 					root2 := NewNodeReference(AccountId(2))

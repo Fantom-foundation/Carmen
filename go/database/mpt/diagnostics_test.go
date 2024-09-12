@@ -5,11 +5,31 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"runtime"
+	"strconv"
 )
 
 func init() {
-	port := 6060
+	// This init function starts a diagnostic server running in parallel to the unit tests
+	// of this package. The main intention of the server is to facilitate the diagnoses of
+	// performance issues and memory leaks tests. The server is started only if the
+	// environment variable MPT_DIAGNOSTIC_PORT is set to a valid port number.
+	//
+	// Example:
+	// $ MPT_DIAGNOSTIC_PORT=6060 go test -v ./database/mpt
+	//
+	portSpec := os.Getenv("MPT_DIAGNOSTIC_PORT")
+	if portSpec == "" {
+		return
+	}
+
+	port, err := strconv.Atoi(portSpec)
+	if err != nil {
+		fmt.Printf("invalid diagnostic port: %s\n", portSpec)
+		os.Exit(1)
+	}
+
 	fmt.Printf("Starting diagnostic server at port http://localhost:%d\n", port)
 	fmt.Printf("(see https://pkg.go.dev/net/http/pprof#hdr-Usage_examples for usage examples)\n")
 	fmt.Printf("Block and mutex sampling rate is set to 100%% for diagnostics, which may impact overall performance\n")

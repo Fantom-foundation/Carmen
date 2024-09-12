@@ -2262,6 +2262,13 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 			if err != nil {
 				t.Fatalf("cannot open archive: %v", err)
 			}
+			defer archive.Close()
+			headBackup := archive.head
+			forestBackup := archive.forest
+			defer func() {
+				archive.head = headBackup
+				archive.forest = forestBackup
+			}()
 			archive.head = liveState
 			archive.forest = db
 			archive.roots.roots = append(archive.roots.roots, Root{NodeRef: NewNodeReference(ValueId(1))})
