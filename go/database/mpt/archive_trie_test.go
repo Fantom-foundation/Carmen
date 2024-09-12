@@ -804,6 +804,7 @@ func TestArchiveTrie_Add_DuplicatedBlock(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			if err = archive.Add(2, common.Update{
 				CreatedAccounts: []common.Address{{1}, {2}},
@@ -829,6 +830,7 @@ func TestArchiveTrie_Add_UpdateFailsHashing(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			// inject a failing hasher
 			var injectedError = errors.New("injectedError")
@@ -839,6 +841,13 @@ func TestArchiveTrie_Add_UpdateFailsHashing(t *testing.T) {
 			live.EXPECT().GetHash().Return(common.Hash{}, nil)
 			live.EXPECT().Root().AnyTimes()
 			live.EXPECT().UpdateHashes().Return(common.Hash{}, nil, injectedError)
+
+			headBackup := archive.head
+			forestBackup := archive.forest
+			defer func() {
+				archive.head = headBackup
+				archive.forest = forestBackup
+			}()
 			archive.head = live
 			archive.forest = db
 
@@ -1082,12 +1091,17 @@ func TestArchiveTrie_Add_LiveStateFailsHashing(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			// inject a failing hasher
 			var injectedError = errors.New("injectedError")
 			ctrl := gomock.NewController(t)
 			live := NewMockLiveState(ctrl)
 			live.EXPECT().GetHash().Return(common.Hash{}, injectedError)
+			headBackup := archive.head
+			defer func() {
+				archive.head = headBackup
+			}()
 			archive.head = live
 
 			// fails for computing missing blocks
@@ -1109,12 +1123,17 @@ func TestArchiveTrie_Add_LiveStateFailsCreateAccount(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			// inject a failing hasher
 			var injectedError = errors.New("injectedError")
 			ctrl := gomock.NewController(t)
 			live := NewMockLiveState(ctrl)
 			live.EXPECT().CreateAccount(gomock.Any()).Return(injectedError)
+			headBackup := archive.head
+			defer func() {
+				archive.head = headBackup
+			}()
 			archive.head = live
 
 			// fails for computing this block
@@ -1136,6 +1155,7 @@ func TestArchiveTrie_Add_FreezingFails(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open archive, err %v", err)
 			}
+			defer archive.Close()
 
 			// inject failing stock to trigger an error applying the update
 			var injectedErr = errors.New("failed to get value from stock")
@@ -1144,6 +1164,10 @@ func TestArchiveTrie_Add_FreezingFails(t *testing.T) {
 			db.EXPECT().Freeze(gomock.Any()).Return(injectedErr)
 			live := NewMockLiveState(ctrl)
 			live.EXPECT().Root().Return(NewNodeReference(ValueId(123)))
+			headBackup := archive.head
+			defer func() {
+				archive.head = headBackup
+			}()
 			archive.head = live
 			archive.forest = db
 
@@ -1164,6 +1188,7 @@ func TestArchiveTrie_GettingView_Block_OutOfRange(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			if _, err := archive.Exists(100, common.Address{1}); err == nil {
 				t.Errorf("block out of range should fail")
@@ -1260,6 +1285,7 @@ func TestArchiveTrie_GetHash(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			hash, err := archive.GetHash(0)
 			if err != nil {
@@ -1285,6 +1311,7 @@ func TestArchiveTrie_CannotGet_AccountHash(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 			if _, err := archive.GetAccountHash(0, common.Address{1}); err == nil {
 				t.Errorf("getting account hash should always fail")
 			}
@@ -1612,6 +1639,7 @@ func TestArchiveTrie_GetMemoryFootprint(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			mf := archive.GetMemoryFootprint()
 			if child := mf.GetChild("head"); child == nil {
@@ -1632,6 +1660,7 @@ func TestArchiveTrie_Dump(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			if err = archive.Add(0, common.Update{
 				CreatedAccounts: []common.Address{{1}},
