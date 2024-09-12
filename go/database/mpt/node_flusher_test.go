@@ -44,7 +44,7 @@ func TestNodeFlusher_StartAndStopWithDisabledFlusher(t *testing.T) {
 }
 
 func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
-	const period = time.Millisecond * 100
+	const period = 1 * time.Second
 	ctrl := gomock.NewController(t)
 	cache := NewMockNodeCache(ctrl)
 

@@ -113,7 +113,7 @@ func TestForest_Cannot_Open_Cannot_Parse_Meta(t *testing.T) {
 
 func TestForest_Cannot_Open_Meta_DoesNot_Match(t *testing.T) {
 	for _, variant := range fileAndMemVariants {
-		t.Run(fmt.Sprintf("%s", variant.name), func(t *testing.T) {
+		t.Run(variant.name, func(t *testing.T) {
 			dir := t.TempDir()
 			meta := "{\"Configuration\":\"S4-Live\",\"Mutable\":true}"
 			if err := os.WriteFile(filepath.Join(dir, "forest.json"), []byte(meta), 0644); err != nil {

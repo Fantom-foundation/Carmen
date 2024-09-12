@@ -14,12 +14,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
