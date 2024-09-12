@@ -397,8 +397,6 @@ func TestHashing_S5EmbeddedValuesAreHandledCorrectly(t *testing.T) {
 			t.Errorf("invalid hash, wanted %v, got %v", want, got)
 		}
 
-		state.trie.Dump()
-
 		if err := state.Close(); err != nil {
 			t.Fatalf("failed to close state: %v", err)
 		}
