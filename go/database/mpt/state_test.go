@@ -178,7 +178,11 @@ func BenchmarkStorageChanges(b *testing.B) {
 				if err != nil {
 					b.Fail()
 				}
-				defer state.Close()
+				defer func() {
+					if err := state.Close(); err != nil {
+						b.Fatalf("failed to close the state: %v", err)
+					}
+				}()
 
 				address := common.Address{}
 				state.SetNonce(address, common.ToNonce(12))
@@ -283,99 +287,109 @@ func TestState_OpenGoMemoryState_Corrupted_Meta(t *testing.T) {
 }
 
 func TestState_StateModifications_Failing(t *testing.T) {
-	for name, open := range mptStateFactories {
-		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
+	// inject failing stock to trigger an error applying the update
+	var injectedErr = errors.New("injectedError")
+	ctrl := gomock.NewController(t)
+	db := NewMockDatabase(ctrl)
+	db.EXPECT().updateHashesFor(gomock.Any()).Return(common.Hash{}, nil, injectedErr).AnyTimes()
+	db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr).AnyTimes()
+	db.EXPECT().SetAccountInfo(gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr).AnyTimes()
+	db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr).AnyTimes()
+	db.EXPECT().SetValue(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr).AnyTimes()
+	db.EXPECT().VisitTrie(gomock.Any(), gomock.Any()).Return(injectedErr)
+	db.EXPECT().CheckErrors()
+	db.EXPECT().Close()
 
-			state, err := open(dir)
-			if err != nil {
-				t.Fatalf("cannot open state: %s", err)
-			}
+	lock, err := common.CreateLockFile(filepath.Join(t.TempDir(), "lock"))
+	if err != nil {
+		t.Fatalf("cannot create lock file: %v", err)
+	}
 
-			// inject failing stock to trigger an error applying the update
-			var injectedErr = errors.New("injectedError")
-			ctrl := gomock.NewController(t)
-			db := NewMockDatabase(ctrl)
-			db.EXPECT().updateHashesFor(gomock.Any()).Return(common.Hash{}, nil, injectedErr).AnyTimes()
-			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr).AnyTimes()
-			db.EXPECT().SetAccountInfo(gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr).AnyTimes()
-			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr).AnyTimes()
-			db.EXPECT().SetValue(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr).AnyTimes()
-			db.EXPECT().VisitTrie(gomock.Any(), gomock.Any()).Return(injectedErr)
-			state.trie.forest = db
+	state := &MptState{trie: &LiveTrie{forest: db}, codes: &codes{}, lock: lock}
+	defer func() {
+		if err := state.Close(); !errors.Is(err, injectedErr) {
+			t.Errorf("unexpected error: %v != %v", err, injectedErr)
+		}
+	}()
 
-			if _, err := state.Exists(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if err := state.DeleteAccount(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if _, err := state.GetBalance(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if err := state.SetBalance(common.Address{1}, amount.New(1)); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if _, err := state.GetNonce(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if err := state.SetNonce(common.Address{1}, common.Nonce{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if _, err := state.GetStorage(common.Address{1}, common.Key{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if err := state.SetStorage(common.Address{1}, common.Key{1}, common.Value{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if _, err := state.GetCode(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if err := state.SetCode(common.Address{1}, make([]byte, 10)); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if _, err := state.GetCodeHash(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if _, err := state.GetCodeSize(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			if _, err := state.GetHash(); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			update := common.Update{}
-			update.CreatedAccounts = []common.Address{{1}}
-			if _, err := state.Apply(0, update); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-			nodeVisitor := NewMockNodeVisitor(ctrl)
-			if err := state.Visit(nodeVisitor); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
-		})
+	if _, err := state.Exists(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if err := state.DeleteAccount(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if _, err := state.GetBalance(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if err := state.SetBalance(common.Address{1}, amount.New(1)); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if _, err := state.GetNonce(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if err := state.SetNonce(common.Address{1}, common.Nonce{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if _, err := state.GetStorage(common.Address{1}, common.Key{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if err := state.SetStorage(common.Address{1}, common.Key{1}, common.Value{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if _, err := state.GetCode(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if err := state.SetCode(common.Address{1}, make([]byte, 10)); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if _, err := state.GetCodeHash(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if _, err := state.GetCodeSize(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	if _, err := state.GetHash(); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	update := common.Update{}
+	update.CreatedAccounts = []common.Address{{1}}
+	if _, err := state.Apply(0, update); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
+	}
+	nodeVisitor := NewMockNodeVisitor(ctrl)
+	if err := state.Visit(nodeVisitor); !errors.Is(err, injectedErr) {
+		t.Errorf("accessing data should fail")
 	}
 }
 
 func TestState_HasEmptyStorage(t *testing.T) {
-	for name, open := range mptStateFactories {
-		t.Run(name, func(t *testing.T) {
-			t.Run(name, func(t *testing.T) {
-				dir := t.TempDir()
+	addr := common.Address{0x1}
+	ctrl := gomock.NewController(t)
+	db := NewMockDatabase(ctrl)
+	db.EXPECT().HasEmptyStorage(gomock.Any(), addr)
+	db.EXPECT().CheckErrors()
+	db.EXPECT().updateHashesFor(gomock.Any()).AnyTimes()
+	db.EXPECT().Flush().AnyTimes()
+	db.EXPECT().Close()
 
-				state, err := open(dir)
-				if err != nil {
-					t.Fatalf("cannot open state: %s", err)
-				}
+	dir := t.TempDir()
+	lock, err := common.CreateLockFile(filepath.Join(dir, "lock"))
+	if err != nil {
+		t.Fatalf("cannot create lock file: %v", err)
+	}
+	if err := markDirty(dir); err != nil {
+		t.Fatalf("failed to mark directory dirty: %v", err)
+	}
 
-				addr := common.Address{0x1}
-				ctrl := gomock.NewController(t)
-				db := NewMockDatabase(ctrl)
-				db.EXPECT().HasEmptyStorage(gomock.Any(), addr)
+	state := &MptState{trie: &LiveTrie{forest: db, metaDataFile: filepath.Join(dir, "metadata.dat")}, codes: &codes{}, lock: lock, directory: dir}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close the state: %v", err)
+		}
+	}()
 
-				state.trie.forest = db
-				state.HasEmptyStorage(addr)
-			})
-		})
+	if _, err := state.HasEmptyStorage(addr); err != nil {
+		t.Errorf("failed to check storage: %v", err)
 	}
 }
 
@@ -388,6 +402,11 @@ func TestState_StateModificationsWithoutErrorHaveExpectedEffects(t *testing.T) {
 			if err != nil {
 				t.Fatalf("cannot open state: %s", err)
 			}
+			defer func() {
+				if err := state.Close(); err != nil {
+					t.Fatalf("failed to close the state: %v", err)
+				}
+			}()
 
 			balance := amount.New(1)
 			if err := state.SetBalance(common.Address{1}, balance); err != nil {
@@ -494,6 +513,11 @@ func TestMptState_GetRootId(t *testing.T) {
 			if err != nil {
 				t.Fatalf("cannot open state: %s", err)
 			}
+			defer func() {
+				if err := state.Close(); err != nil {
+					t.Fatalf("failed to close the state: %v", err)
+				}
+			}()
 
 			if got, want := state.GetRootId(), EmptyId(); got != want {
 				t.Errorf("values do not match: got %v != want %v", got, want)
@@ -507,11 +531,15 @@ func TestState_GetCodes(t *testing.T) {
 	for name, open := range mptStateFactories {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-
 			state, err := open(dir)
 			if err != nil {
 				t.Fatalf("cannot open state: %s", err)
 			}
+			defer func() {
+				if err := state.Close(); err != nil {
+					t.Fatalf("failed to close the state: %v", err)
+				}
+			}()
 
 			const size = 1000
 			for i := 1; i < size; i++ {
@@ -540,21 +568,25 @@ func TestState_GetCodes(t *testing.T) {
 }
 
 func TestState_ForestErrorIsReportedInFlushAndClose(t *testing.T) {
-
-	dir := t.TempDir()
-	state, err := OpenGoFileState(dir, S4LiveConfig, NodeCacheConfig{Capacity: 1024})
-	if err != nil {
-		t.Fatalf("failed to open test state: %v", err)
-	}
-
 	injectedError := fmt.Errorf("injected error")
 	ctrl := gomock.NewController(t)
 	db := NewMockDatabase(ctrl)
 	db.EXPECT().updateHashesFor(gomock.Any()).AnyTimes()
 	db.EXPECT().Flush().AnyTimes()
 	db.EXPECT().Close().AnyTimes()
-	db.EXPECT().CheckErrors().Return(injectedError).Times(2)
-	state.trie.forest = db
+	db.EXPECT().CheckErrors().Return(injectedError).AnyTimes()
+
+	lock, err := common.CreateLockFile(filepath.Join(t.TempDir(), "lock"))
+	if err != nil {
+		t.Fatalf("cannot create lock file: %v", err)
+	}
+
+	state := &MptState{trie: &LiveTrie{forest: db}, codes: &codes{}, lock: lock}
+	defer func() {
+		if err := state.Close(); !errors.Is(err, injectedError) {
+			t.Fatalf("unexpected error: %v != %v", err, injectedError)
+		}
+	}()
 
 	if want, got := injectedError, state.Flush(); !errors.Is(got, want) {
 		t.Errorf("missing forest error in Flush result, wanted %v, got %v", want, got)
@@ -570,6 +602,12 @@ func TestState_Flush_WriteDirtyCodesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test state: %v", err)
 	}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close the state: %v", err)
+		}
+	}()
+
 	if err := state.SetCode(common.Address{}, []byte{0x12}); err != nil {
 		t.Errorf("SetCode failed: %v", err)
 	}
