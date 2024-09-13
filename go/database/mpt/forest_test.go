@@ -154,7 +154,6 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 			for forestConfigName, forestConfig := range forestConfigs {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
 					directory := t.TempDir()
-
 					forest, err := variant.factory(directory, config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
@@ -196,6 +195,7 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 }
 
 func TestForest_GettingAccountInfo_Fails(t *testing.T) {
+	var injectedErr = errors.New("failed to get value from stock")
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			for forestConfigName, forestConfig := range forestConfigs {
@@ -207,15 +207,14 @@ func TestForest_GettingAccountInfo_Fails(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						if err := forest.Close(); err != nil {
-							t.Errorf("failed to close forest: %v", err)
+						if err := forest.Close(); !errors.Is(err, injectedErr) {
+							t.Errorf("unexpected error: got: %v, want :%v", err, injectedErr)
 						}
 					}()
 
-					// inject failing stock to trigger an error applying the update
-					var injectedErr = errors.New("failed to get value from stock")
 					ctrl := gomock.NewController(t)
 					stock := stock.NewMockStock[uint64, AccountNode](ctrl)
+					// inject failing stock to trigger an error applying the update
 					stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
 					// backup stocks and re-assign them for proper close
 					stockBackup := forest.accounts
