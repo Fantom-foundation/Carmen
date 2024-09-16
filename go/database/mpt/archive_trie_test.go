@@ -2609,20 +2609,25 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 		return nil
 	}
 
-	tests := map[string]func(*ArchiveTrie) error{
-		"clean_close": func(archive *ArchiveTrie) error {
+	tests := map[string]func(*testing.T, *ArchiveTrie) error{
+		"clean_close": func(t *testing.T, archive *ArchiveTrie) error {
 			return archive.Close()
 		},
-		"clean_close_with_extra_blocks": func(archive *ArchiveTrie) error {
+		"clean_close_with_extra_blocks": func(t *testing.T, archive *ArchiveTrie) error {
 			return errors.Join(
 				addBlocks(archive, 92, 98),
 				archive.Close(),
 			)
 		},
-		"no_close": func(archive *ArchiveTrie) error {
+		"no_close": func(t *testing.T, archive *ArchiveTrie) error {
 			// close the inner forest to release resources
 			// In order to allow the recovery to access the directory, the lock needs to be released
-			return errors.Join(archive.head.(*MptState).lock.Release(), archive.forest.Close())
+			t.Cleanup(func() {
+				if err := archive.forest.Close(); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			})
+			return archive.head.(*MptState).lock.Release()
 		},
 		/* -- disabled due to flaky behavior in race condition CI (see issue #994) --
 		"no_close_with_extra_blocks": func(archive *ArchiveTrie) error {
@@ -2666,7 +2671,7 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
 				}
 
-				if err := test(archive); err != nil {
+				if err := test(t, archive); err != nil {
 					t.Fatalf("failed to close archive: %v", err)
 				}
 			}
