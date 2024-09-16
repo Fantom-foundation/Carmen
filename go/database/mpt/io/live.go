@@ -99,7 +99,7 @@ func (e exportableArchiveTrie) Visit(visitor noResponseNodeVisitor, pruneStorage
 		return err
 	}
 
-	return visitAll(e.trie.Directory(), root, visitor, pruneStorage)
+	return visitAll(e.trie.Directory(), e.trie.GetConfig(), root, visitor, pruneStorage)
 }
 
 func (e exportableArchiveTrie) GetHash() (common.Hash, error) {
@@ -119,7 +119,7 @@ type exportableLiveTrie struct {
 
 func (e *exportableLiveTrie) Visit(visitor noResponseNodeVisitor, pruneStorage bool) error {
 	root := e.db.Root()
-	return visitAllWithSources(&nodeSourceHashWithChildNodesFactory{e.directory}, root.Id(), visitor, pruneStorage)
+	return visitAll(e.directory, e.db.GetConfig(), root.Id(), visitor, pruneStorage)
 }
 
 func (e *exportableLiveTrie) GetHash() (common.Hash, error) {

@@ -10,6 +10,8 @@
 
 package mpt
 
+import "github.com/Fantom-foundation/Carmen/go/backend/stock"
+
 // MptConfig defines a set of configuration options for customizing the MPT
 // implementation. It is mainly intended to facilitate the accurate modeling
 // of Ethereum's MPT implementation (see schema 5) but may also be used for
@@ -82,6 +84,17 @@ func GetConfigByName(name string) (MptConfig, bool) {
 		}
 	}
 	return MptConfig{}, false
+}
+
+// GetEncoders returns the value encoders for the given MPT configuration.
+func (c MptConfig) GetEncoders() (
+	stock.ValueEncoder[AccountNode],
+	stock.ValueEncoder[BranchNode],
+	stock.ValueEncoder[ExtensionNode],
+	stock.ValueEncoder[ValueNode],
+) {
+
+	return getEncoder(c)
 }
 
 type HashStorageLocation bool
