@@ -154,7 +154,6 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 			for forestConfigName, forestConfig := range forestConfigs {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
 					directory := t.TempDir()
-
 					forest, err := variant.factory(directory, config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
@@ -196,6 +195,7 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 }
 
 func TestForest_GettingAccountInfo_Fails(t *testing.T) {
+	var injectedErr = errors.New("failed to get value from stock")
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			for forestConfigName, forestConfig := range forestConfigs {
@@ -206,13 +206,17 @@ func TestForest_GettingAccountInfo_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); !errors.Is(err, injectedErr) {
+							t.Errorf("unexpected error: got: %v, want :%v", err, injectedErr)
+						}
+					}()
 
-					// inject failing stock to trigger an error applying the update
-					var injectedErr = errors.New("failed to get value from stock")
 					ctrl := gomock.NewController(t)
 					stock := stock.NewMockStock[uint64, AccountNode](ctrl)
+					// inject failing stock to trigger an error applying the update
 					stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
+					// backup stocks and re-assign them for proper close
 					stockBackup := forest.accounts
 					defer func() {
 						forest.accounts = stockBackup
@@ -246,6 +250,7 @@ func TestForest_GettingAccountInfo_Fails(t *testing.T) {
 }
 
 func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
+	var injectedErr = errors.New("failed to call New")
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			for forestConfigName, forestConfig := range forestConfigs {
@@ -257,8 +262,12 @@ func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 
-					// inject failing stock to trigger an error applying the update
-					var injectedErr = errors.New("failed to call New")
+					defer func() {
+						if err := forest.Close(); !errors.Is(err, injectedErr) {
+							t.Errorf("unexpected error: got: %v, want :%v", err, injectedErr)
+						}
+					}()
+
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, nil)
@@ -268,6 +277,13 @@ func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
 					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
 					values.EXPECT().New().AnyTimes().Return(uint64(0), injectedErr)
 
+					// backup stocks and re-assign them for proper close
+					accountsBackup := forest.accounts
+					valuesBackup := forest.values
+					defer func() {
+						forest.accounts = accountsBackup
+						forest.values = valuesBackup
+					}()
 					forest.accounts = accounts
 					forest.values = values
 					root := NewNodeReference(AccountId(123))
@@ -285,6 +301,7 @@ func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
 }
 
 func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
+	var injectedErr = errors.New("failed to call Get")
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			for forestConfigName, forestConfig := range forestConfigs {
@@ -295,12 +312,21 @@ func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err := forest.Close(); !errors.Is(err, injectedErr) {
+							t.Errorf("unexpected error: got: %v, want :%v", err, injectedErr)
+						}
+					}()
 
-					// inject failing stock to trigger an error applying the update
-					var injectedErr = errors.New("failed to call Get")
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
+
+					// backup stocks and re-assign them for proper close
+					accountsBackup := forest.accounts
+					defer func() {
+						forest.accounts = accountsBackup
+					}()
 					forest.accounts = accounts
 					root := NewNodeReference(AccountId(123))
 
@@ -315,6 +341,7 @@ func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
 }
 
 func TestForest_Freeze_Fails(t *testing.T) {
+	var injectedErr = errors.New("failed to call Get")
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
@@ -324,12 +351,21 @@ func TestForest_Freeze_Fails(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
+				defer func() {
+					if err := forest.Close(); !errors.Is(err, injectedErr) {
+						t.Errorf("unexpected error: got: %v, want :%v", err, injectedErr)
+					}
+				}()
 
-				// inject failing stock to trigger an error applying the update
-				var injectedErr = errors.New("failed to call Get")
 				ctrl := gomock.NewController(t)
 				accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 				accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
+
+				// backup stocks and re-assign them for proper close
+				accountsBackup := forest.accounts
+				defer func() {
+					forest.accounts = accountsBackup
+				}()
 				forest.accounts = accounts
 				root := NewNodeReference(AccountId(123))
 
@@ -352,7 +388,11 @@ func TestForest_CreatingNodes_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call New")
@@ -373,6 +413,7 @@ func TestForest_CreatingNodes_Fails(t *testing.T) {
 					extensions.EXPECT().Get(gomock.Any()).AnyTimes().Return(ExtensionNode{}, nil)
 					extensions.EXPECT().New().AnyTimes().Return(uint64(0), injectedErr)
 
+					// backup stocks and re-assign them for proper close
 					accountsBackup := forest.accounts
 					valuesBackup := forest.values
 					branchesBackup := forest.branches
@@ -417,7 +458,11 @@ func TestForest_Cannot_Release_Node(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					// empty ID cannot be released
 					ref := NewNodeReference(EmptyId())
@@ -441,6 +486,11 @@ func TestForest_Release_Queue_Error_Get_Node(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Errorf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Get")
@@ -448,6 +498,12 @@ func TestForest_Release_Queue_Error_Get_Node(t *testing.T) {
 					values := stock.NewMockStock[uint64, ValueNode](ctrl)
 					// first call will succeed on getting the node but fails on releasing it
 					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, injectedErr)
+
+					// backup stocks and re-assign them for proper close
+					valuesBackup := forest.values
+					defer func() {
+						forest.values = valuesBackup
+					}()
 					forest.values = values
 
 					forest.releaseQueue <- ValueId(456)
@@ -472,7 +528,11 @@ func TestForest_Release_Queue_Error_Release_Node(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
-				defer forest.Close()
+				defer func() {
+					if err := forest.Close(); err != nil {
+						t.Errorf("failed to close forest: %v", err)
+					}
+				}()
 
 				// inject failing stock to trigger an error applying the update
 				var injectedErr = errors.New("failed to call Delete")
@@ -481,6 +541,7 @@ func TestForest_Release_Queue_Error_Release_Node(t *testing.T) {
 				// first call will succeed on getting the node but fails on releasing it
 				values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
 				values.EXPECT().Delete(gomock.Any()).AnyTimes().Return(injectedErr)
+				// backup stocks and re-assign them for proper close
 				valuesBackup := forest.values
 				defer func() {
 					forest.values = valuesBackup
@@ -509,6 +570,11 @@ func TestForest_getAccess_Fails(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Errorf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Get")
@@ -518,7 +584,6 @@ func TestForest_getAccess_Fails(t *testing.T) {
 					var n Node
 					cache.EXPECT().GetOrSet(gomock.Any(), gomock.Any()).AnyTimes().Return(shared.MakeShared(n), false, EmptyId(), nil, false)
 					cache.EXPECT().Touch(gomock.Any()).AnyTimes()
-					forest.nodeCache = cache
 
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 					// only the second call must fail - repeats four times for four calls
@@ -528,8 +593,17 @@ func TestForest_getAccess_Fails(t *testing.T) {
 						calls = append(calls, accounts.EXPECT().Get(gomock.Any()).Return(AccountNode{}, injectedErr))
 					}
 					gomock.InOrder(calls...)
-					forest.accounts = accounts
 
+					// backup stocks and cache and re-assign them for proper close
+					cacheBackup := forest.nodeCache
+					accountsBackup := forest.accounts
+					defer func() {
+						forest.nodeCache = cacheBackup
+						forest.accounts = accountsBackup
+					}()
+
+					forest.nodeCache = cache
+					forest.accounts = accounts
 					root := NewNodeReference(AccountId(123))
 
 					if _, err := forest.getReadAccess(&root); !errors.Is(err, injectedErr) {
@@ -561,7 +635,20 @@ func TestForest_getSharedNode_Fails_Get_Copy(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
+
+					// backup stocks and re-assign them for proper close
+					accountsBackup := forest.accounts
+					valuesBackup := forest.values
+
+					defer func() {
+						forest.accounts = accountsBackup
+						forest.values = valuesBackup
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					ctrl := gomock.NewController(t)
@@ -577,6 +664,7 @@ func TestForest_getSharedNode_Fails_Get_Copy(t *testing.T) {
 
 					buffer := NewMockWriteBuffer(ctrl)
 					buffer.EXPECT().Cancel(gomock.Any()).AnyTimes().Return(nil, true)
+					// backup buffer and re-assign it for proper close
 					writeBufferBackup := forest.writeBuffer
 					defer func() {
 						forest.writeBuffer = writeBufferBackup
@@ -611,11 +699,21 @@ func TestForest_Flush_Fail_MissingCachedNode(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					ctrl := gomock.NewController(t)
 					cache := NewMockNodeCache(ctrl)
 					cache.EXPECT().Get(gomock.Any()).AnyTimes().Return(nil, false)
+					// backup cache and re-assign it for proper close
+					cacheBackup := forest.nodeCache
+					defer func() {
+						forest.nodeCache = cacheBackup
+					}()
 					forest.nodeCache = cache
 
 					ids := []NodeId{AccountId(123)}
@@ -639,18 +737,30 @@ func TestForest_Flush_Fail_CannotReadNode(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Set")
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 					accounts.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes().Return(injectedErr)
-					forest.accounts = accounts
 
 					cache := NewMockNodeCache(ctrl)
 					var n Node = &AccountNode{}
 					cache.EXPECT().Get(gomock.Any()).AnyTimes().Return(shared.MakeShared(n), true)
+					// backup stocks and re-assign them for proper close
+					cacheBackup := forest.nodeCache
+					accountsBackup := forest.accounts
+					defer func() {
+						forest.nodeCache = cacheBackup
+						forest.accounts = accountsBackup
+					}()
 					forest.nodeCache = cache
+					forest.accounts = accounts
 
 					ids := []NodeId{AccountId(123)}
 					if err := forest.flushDirtyIds(ids); !errors.Is(err, injectedErr) {
@@ -729,7 +839,11 @@ func TestForest_flushNode_EmptyId(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					if err := forest.flushNode(EmptyId(), nil); err != nil {
 						t.Errorf("cannot flush empty node: %s", err)
@@ -751,12 +865,22 @@ func TestForest_getMutableNodeByPath_CannotReadNode(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					var injectedErr = errors.New("failed to call Get")
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
+					// backup stocks and re-assign them for proper close
+					accountsBackup := forest.accounts
+					defer func() {
+						forest.accounts = accountsBackup
+					}()
 					forest.accounts = accounts
 					root := NewNodeReference(AccountId(123))
 
@@ -780,7 +904,11 @@ func TestForest_getMutableNodeByPath_TypeOfNodesReachable(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					// inject failing stock to trigger an error applying the update
 					ctrl := gomock.NewController(t)
@@ -796,6 +924,7 @@ func TestForest_getMutableNodeByPath_TypeOfNodesReachable(t *testing.T) {
 					extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
 					extensions.EXPECT().Get(gomock.Any()).AnyTimes().Return(ExtensionNode{}, nil)
 
+					// backup stocks and re-assign them for proper close
 					accountsBackup := forest.accounts
 					valuesBackup := forest.values
 					branchesBackup := forest.branches
@@ -846,7 +975,11 @@ func TestForest_Dump(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					root := NewNodeReference(AccountId(1))
 					forest.Dump(&root) // ok case
@@ -1023,7 +1156,11 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
-				defer forest.Close()
+				defer func() {
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+				}()
 
 				addr := common.Address{1}
 				info1 := AccountInfo{Nonce: common.Nonce{12}}
@@ -1067,7 +1204,11 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
-				defer forest.Close()
+				defer func() {
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+				}()
 
 				addr := common.Address{1}
 				info1 := AccountInfo{Nonce: common.Nonce{12}}
@@ -1126,7 +1267,11 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					footprint := forest.GetMemoryFootprint()
 					if footprint.Total() <= uintptr(0) {
@@ -1333,7 +1478,7 @@ func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
 		t.Fatalf("failed to delete account: %v", err)
 	}
 
-	if err = forest.Close(); err != nil {
+	if err := forest.Close(); err != nil {
 		t.Fatalf("failed to close the forest: %v", err)
 	}
 }
@@ -1702,11 +1847,27 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 
 	prepareRootLookupFailure := func(m *mocks) {
 		m.branches.EXPECT().Get(rootId.Index()).Return(BranchNode{}, injectedError)
+		m.extensions.EXPECT().Flush()
+		m.extensions.EXPECT().Close()
+		m.branches.EXPECT().Flush()
+		m.branches.EXPECT().Close()
+		m.accounts.EXPECT().Flush()
+		m.accounts.EXPECT().Close()
+		m.values.EXPECT().Flush()
+		m.values.EXPECT().Close()
 	}
 
 	prepareTreeNavigationFailure := func(m *mocks) {
 		m.branches.EXPECT().Get(rootId.Index()).Return(*rootNode, nil)
 		m.accounts.EXPECT().Get(accountId.Index()).Return(*accountNode, injectedError)
+		m.extensions.EXPECT().Flush()
+		m.extensions.EXPECT().Close()
+		m.accounts.EXPECT().Flush()
+		m.accounts.EXPECT().Close()
+		m.branches.EXPECT().Flush()
+		m.branches.EXPECT().Close()
+		m.values.EXPECT().Flush()
+		m.values.EXPECT().Close()
 	}
 
 	tests := map[string]struct {
@@ -1859,6 +2020,12 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 				t.Fatalf("failed to create test forest: %v", err)
 			}
 
+			defer func() {
+				if err := forest.Close(); !errors.Is(err, injectedError) {
+					t.Errorf("unexpected error: got: %v, want :%v", err, injectedError)
+				}
+			}()
+
 			test.setExpectations(&mocks{branches, extensions, accounts, values})
 			err = test.runOperation(forest)
 			if !errors.Is(err, injectedError) {
@@ -1897,9 +2064,23 @@ func TestForest_MultipleErrorsCanBeCollected(t *testing.T) {
 		t.Fatalf("failed to create test forest: %v", err)
 	}
 
+	defer func() {
+		if err := forest.Close(); !errors.Is(err, injectedErrorB) {
+			t.Errorf("unexpected error: got: %v, want :%v", err, injectedErrorB)
+		}
+	}()
+
 	gomock.InOrder(
 		branches.EXPECT().Get(gomock.Any()).Return(BranchNode{}, injectedErrorA),
 		branches.EXPECT().Get(gomock.Any()).Return(BranchNode{}, injectedErrorB),
+		accounts.EXPECT().Flush(),
+		branches.EXPECT().Flush(),
+		extensions.EXPECT().Flush(),
+		values.EXPECT().Flush(),
+		accounts.EXPECT().Close(),
+		branches.EXPECT().Close(),
+		extensions.EXPECT().Close(),
+		values.EXPECT().Close(),
 	)
 
 	rootRef := NewNodeReference(BranchId(12))
@@ -2001,14 +2182,39 @@ func TestForest_FailingFlush_Invalidates_Forest(t *testing.T) {
 		t.Fatalf("failed to create test forest: %v", err)
 	}
 
-	// only call fails, but the forest must be invalidated
+	defer func() {
+		if err := forest.Close(); !errors.Is(err, injectedError) {
+			t.Errorf("unexpected error: got: %v, want :%v", err, injectedError)
+		}
+	}()
+
+	// First flush returns error
 	gomock.InOrder(
+		accounts.EXPECT().Flush().Return(nil),
 		branches.EXPECT().Flush().Return(injectedError),
-		branches.EXPECT().Flush().Return(nil),
+		extensions.EXPECT().Flush().Return(nil),
+		values.EXPECT().Flush().Return(nil),
 	)
-	extensions.EXPECT().Flush().Return(nil).AnyTimes()
-	accounts.EXPECT().Flush().Return(nil).AnyTimes()
-	values.EXPECT().Flush().Return(nil).AnyTimes()
+
+	// Second flush returns no error, but error is still expected
+	gomock.InOrder(
+		accounts.EXPECT().Flush().Return(nil),
+		branches.EXPECT().Flush().Return(nil),
+		extensions.EXPECT().Flush().Return(nil),
+		values.EXPECT().Flush().Return(nil),
+	)
+
+	// Close forest
+	gomock.InOrder(
+		accounts.EXPECT().Flush(),
+		branches.EXPECT().Flush(),
+		extensions.EXPECT().Flush(),
+		values.EXPECT().Flush(),
+		accounts.EXPECT().Close(),
+		branches.EXPECT().Close(),
+		extensions.EXPECT().Close(),
+		values.EXPECT().Close(),
+	)
 
 	if want, got := injectedError, forest.Flush(); !errors.Is(got, want) {
 		t.Errorf("missing operation error in flush, wanted %v, got %v", want, got)
@@ -2409,6 +2615,11 @@ func TestVisitPathTo_Node_Hashes_Same_S5_Archive_non_Archive_Config_For_Witness_
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("failed to close forest: %v", err)
+						}
+					}()
 
 					for i, addr := range addresses {
 						proof, err := CreateWitnessProof(forest, &root, addr, keys...)
@@ -2510,7 +2721,9 @@ func TestForest_RecoversNodesFromWriteBuffer(t *testing.T) {
 	ref, handle, _ := forest.createBranch()
 	original := handle.Get().(*BranchNode)
 	original.markDirty()
-	forest.release(&ref)
+	if err := forest.release(&ref); err != nil {
+		t.Fatalf("failed to close forest: %v", err)
+	}
 	handle.Release()
 
 	// At this point, b1 is still in the cache. With the

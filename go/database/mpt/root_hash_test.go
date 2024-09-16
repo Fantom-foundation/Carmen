@@ -31,6 +31,12 @@ func TestS5RootHash_EmptyTrie(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+	}()
+
 	hash, err := state.GetHash()
 	if err != nil {
 		t.Fatalf("failed to get hash for empty state: %v", err)
@@ -47,6 +53,12 @@ func TestS5RootHash_SingleAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+	}()
+
 	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{1}, balance)
@@ -67,6 +79,12 @@ func TestS5RootHash_SingleAccountWithSingleValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+	}()
+
 	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{1}, balance)
@@ -88,6 +106,12 @@ func TestS5RootHash_TwoAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+	}()
+
 	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{2}, balance)
@@ -108,6 +132,12 @@ func TestS5RootHash_TwoAccountsWithValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+	}()
+
 	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.trie.SetValue(common.Address{1}, common.Key{1}, common.Value{0, 0, 1})
@@ -140,6 +170,12 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithEvenLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+	}()
+
 	balance := amount.New(12)
 	state.SetNonce(addr1, common.ToNonce(10))
 	state.SetBalance(addr2, balance)
@@ -167,6 +203,12 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithOddLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
+	defer func() {
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+	}()
+
 	balance := amount.New(12)
 	state.SetNonce(addr1, common.ToNonce(10))
 	state.SetBalance(addr2, balance)
@@ -200,7 +242,11 @@ func TestS5RootHash_AddressAndKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
-	defer trie.Close()
+	defer func() {
+		if err := trie.Close(); err != nil {
+			t.Fatalf("failed to close trie: %v", err)
+		}
+	}()
 
 	address := getTestAddresses(N)
 	keys := getTestKeys(N)
@@ -266,7 +312,11 @@ func TestS5RootHash_Values(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
-	defer trie.Close()
+	defer func() {
+		if err := trie.Close(); err != nil {
+			t.Fatalf("failed to close trie: %v", err)
+		}
+	}()
 
 	trgAddr := common.Address{}
 	keys := getTestKeys(N)
