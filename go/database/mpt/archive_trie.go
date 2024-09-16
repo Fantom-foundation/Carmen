@@ -337,7 +337,7 @@ func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce comm
 func (a *ArchiveTrie) GetStorage(block uint64, account common.Address, slot common.Key) (value common.Value, err error) {
 	view, err := a.getView(block)
 	if err != nil {
-		return common.Value{}, a.addError(err)
+		return common.Value{}, err
 	}
 	value, err = view.GetValue(account, slot)
 	return value, a.addError(err)
@@ -485,7 +485,7 @@ func (a *ArchiveTrie) createCheckpoint() error {
 	if err == nil {
 		a.lastCheckpointTime = time.Now()
 	}
-	return err
+	return a.addError(err)
 }
 
 func GetCheckpointBlock(dir string) (uint64, error) {

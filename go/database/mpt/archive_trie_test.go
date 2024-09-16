@@ -369,7 +369,11 @@ func TestArchiveTrie_CanTrackBlocksHeight(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			block, empty, err := archive.GetBlockHeight()
 			if err != nil {
@@ -409,7 +413,11 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			addr1 := common.Address{1}
 			blc0 := amount.New()
@@ -589,7 +597,11 @@ func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			addr := common.Address{1}
 			balance := amount.New()
@@ -804,7 +816,11 @@ func TestArchiveTrie_Add_DuplicatedBlock(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			if err = archive.Add(2, common.Update{
 				CreatedAccounts: []common.Address{{1}, {2}},
@@ -822,40 +838,28 @@ func TestArchiveTrie_Add_DuplicatedBlock(t *testing.T) {
 }
 
 func TestArchiveTrie_Add_UpdateFailsHashing(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
+	// inject a failing hasher
+	var injectedError = errors.New("injectedError")
+	ctrl := gomock.NewController(t)
+	db := NewMockDatabase(ctrl)
+	db.EXPECT().Freeze(gomock.Any())
+	live := NewMockLiveState(ctrl)
+	live.EXPECT().GetHash().Return(common.Hash{}, nil)
+	live.EXPECT().Root().AnyTimes()
+	live.EXPECT().UpdateHashes().Return(common.Hash{}, nil, injectedError)
+	live.EXPECT().Flush()
+	live.EXPECT().closeWithError(gomock.Any())
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
-			if err != nil {
-				t.Fatalf("failed to create empty archive, err %v", err)
-			}
-			defer archive.Close()
+	archive := &ArchiveTrie{head: live, forest: db, roots: &rootList{}}
+	defer func() {
+		if err := archive.Close(); !errors.Is(err, injectedError) {
+			t.Errorf("closing should fail, got %v, want: %v", err, injectedError)
+		}
+	}()
 
-			// inject a failing hasher
-			var injectedError = errors.New("injectedError")
-			ctrl := gomock.NewController(t)
-			db := NewMockDatabase(ctrl)
-			db.EXPECT().Freeze(gomock.Any())
-			live := NewMockLiveState(ctrl)
-			live.EXPECT().GetHash().Return(common.Hash{}, nil)
-			live.EXPECT().Root().AnyTimes()
-			live.EXPECT().UpdateHashes().Return(common.Hash{}, nil, injectedError)
-
-			headBackup := archive.head
-			forestBackup := archive.forest
-			defer func() {
-				archive.head = headBackup
-				archive.forest = forestBackup
-			}()
-			archive.head = live
-			archive.forest = db
-
-			// fails for computing missing blocks
-			if err = archive.Add(20, common.Update{}, nil); !errors.Is(err, injectedError) {
-				t.Errorf("applying update should fail")
-			}
-		})
+	// fails for computing missing blocks
+	if err := archive.Add(20, common.Update{}, nil); !errors.Is(err, injectedError) {
+		t.Errorf("adding block should fail, got %v, want: %v", err, injectedError)
 	}
 }
 
@@ -870,7 +874,11 @@ func TestArchiveTrie_Add_CreatesCheckpointPeriodically(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			for i := 0; i < 20; i++ {
 				if err := archive.Add(uint64(i), common.Update{}, nil); err != nil {
@@ -912,7 +920,11 @@ func TestArchiveTrie_Add_CreatesCheckpointInRequestedTimePeriods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty archive: %v", err)
 	}
-	defer archive.Close()
+	defer func() {
+		if err := archive.Close(); err != nil {
+			t.Errorf("failed to close archive: %v", err)
+		}
+	}()
 
 	if err := archive.Add(0, common.Update{}, nil); err != nil {
 		t.Fatalf("failed to apply update: %v", err)
@@ -974,7 +986,11 @@ func TestArchiveTrie_Add_CheckpointsAreCreatedForMissingBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty archive: %v", err)
 	}
-	defer archive.Close()
+	defer func() {
+		if err := archive.Close(); err != nil {
+			t.Errorf("failed to close archive: %v", err)
+		}
+	}()
 
 	// Adding block 4 should not create a checkpoint.
 	if err := archive.Add(4, common.Update{}, nil); err != nil {
@@ -1021,7 +1037,11 @@ func TestArchiveTrie_Add_FailingToCreateCheckpointsIsDetected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty archive: %v", err)
 	}
-	defer archive.Close()
+	defer func() {
+		if err := archive.Close(); err == nil {
+			t.Errorf("closing should fail")
+		}
+	}()
 
 	// by creating a checkpoint only for the roots, the checkpoints
 	// of the various components will be out of sync, sabotaging the
@@ -1083,100 +1103,74 @@ func TestArchiveTrie_RootsGrowSubLinearly(t *testing.T) {
 }
 
 func TestArchiveTrie_Add_LiveStateFailsHashing(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
+	// inject a failing hasher
+	var injectedError = errors.New("injectedError")
+	ctrl := gomock.NewController(t)
+	live := NewMockLiveState(ctrl)
+	live.EXPECT().GetHash().Return(common.Hash{}, injectedError)
+	live.EXPECT().Flush()
+	live.EXPECT().closeWithError(gomock.Any())
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
-			if err != nil {
-				t.Fatalf("failed to create empty archive, err %v", err)
-			}
-			defer archive.Close()
+	archive := &ArchiveTrie{head: live, roots: &rootList{}}
+	defer func() {
+		if err := archive.Close(); !errors.Is(err, injectedError) {
+			t.Errorf("closing should fail, got %v, want: %v", err, injectedError)
+		}
+	}()
 
-			// inject a failing hasher
-			var injectedError = errors.New("injectedError")
-			ctrl := gomock.NewController(t)
-			live := NewMockLiveState(ctrl)
-			live.EXPECT().GetHash().Return(common.Hash{}, injectedError)
-			headBackup := archive.head
-			defer func() {
-				archive.head = headBackup
-			}()
-			archive.head = live
-
-			// fails for computing missing blocks
-			if err = archive.Add(20, common.Update{
-				CreatedAccounts: []common.Address{{1}, {2}},
-			}, nil); !errors.Is(err, injectedError) {
-				t.Errorf("applying update should fail")
-			}
-		})
+	// fails for computing missing blocks
+	if err := archive.Add(20, common.Update{
+		CreatedAccounts: []common.Address{{1}, {2}},
+	}, nil); !errors.Is(err, injectedError) {
+		t.Errorf("applying update should fail")
 	}
 }
 
 func TestArchiveTrie_Add_LiveStateFailsCreateAccount(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
+	// inject a failing hasher
+	var injectedError = errors.New("injectedError")
+	ctrl := gomock.NewController(t)
+	live := NewMockLiveState(ctrl)
+	live.EXPECT().CreateAccount(gomock.Any()).Return(injectedError)
+	live.EXPECT().Flush()
+	live.EXPECT().closeWithError(gomock.Any())
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
-			if err != nil {
-				t.Fatalf("failed to create empty archive, err %v", err)
-			}
-			defer archive.Close()
+	archive := &ArchiveTrie{head: live, roots: &rootList{}}
+	defer func() {
+		if err := archive.Close(); !errors.Is(err, injectedError) {
+			t.Errorf("closing should fail, got %v, want: %v", err, injectedError)
+		}
+	}()
 
-			// inject a failing hasher
-			var injectedError = errors.New("injectedError")
-			ctrl := gomock.NewController(t)
-			live := NewMockLiveState(ctrl)
-			live.EXPECT().CreateAccount(gomock.Any()).Return(injectedError)
-			headBackup := archive.head
-			defer func() {
-				archive.head = headBackup
-			}()
-			archive.head = live
-
-			// fails for computing this block
-			if err = archive.Add(0, common.Update{
-				CreatedAccounts: []common.Address{{1}, {2}},
-			}, nil); !errors.Is(err, injectedError) {
-				t.Errorf("applying update should fail")
-			}
-		})
+	// fails for computing this block
+	if err := archive.Add(0, common.Update{
+		CreatedAccounts: []common.Address{{1}, {2}},
+	}, nil); !errors.Is(err, injectedError) {
+		t.Errorf("applying update should fail")
 	}
 }
 
 func TestArchiveTrie_Add_FreezingFails(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
+	// inject failing stock to trigger an error applying the update
+	var injectedErr = errors.New("failed to get value from stock")
+	ctrl := gomock.NewController(t)
+	db := NewMockDatabase(ctrl)
+	db.EXPECT().Freeze(gomock.Any()).Return(injectedErr)
+	live := NewMockLiveState(ctrl)
+	live.EXPECT().Root().Return(NewNodeReference(ValueId(123)))
+	live.EXPECT().Flush()
+	live.EXPECT().closeWithError(gomock.Any())
 
-			archive, err := OpenArchiveTrie(dir, config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
-			if err != nil {
-				t.Fatalf("failed to open archive, err %v", err)
-			}
-			defer archive.Close()
+	archive := &ArchiveTrie{head: live, forest: db, roots: &rootList{}}
+	defer func() {
+		if err := archive.Close(); !errors.Is(err, injectedErr) {
+			t.Errorf("closing should fail, got %v, want: %v", err, injectedErr)
+		}
+	}()
 
-			// inject failing stock to trigger an error applying the update
-			var injectedErr = errors.New("failed to get value from stock")
-			ctrl := gomock.NewController(t)
-			db := NewMockDatabase(ctrl)
-			db.EXPECT().Freeze(gomock.Any()).Return(injectedErr)
-			live := NewMockLiveState(ctrl)
-			live.EXPECT().Root().Return(NewNodeReference(ValueId(123)))
-			headBackup := archive.head
-			defer func() {
-				archive.head = headBackup
-			}()
-			archive.head = live
-			archive.forest = db
-
-			// update to freeze a node fails
-			if err = archive.Add(0, common.Update{}, nil); !errors.Is(err, injectedErr) {
-				t.Errorf("applying update should fail")
-			}
-
-		})
+	// update to freeze a node fails
+	if err := archive.Add(0, common.Update{}, nil); !errors.Is(err, injectedErr) {
+		t.Errorf("applying update should fail, got %v, want: %v", err, injectedErr)
 	}
 }
 
@@ -1188,7 +1182,11 @@ func TestArchiveTrie_GettingView_Block_OutOfRange(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			if _, err := archive.Exists(100, common.Address{1}); err == nil {
 				t.Errorf("block out of range should fail")
@@ -1285,7 +1283,11 @@ func TestArchiveTrie_GetHash(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			hash, err := archive.GetHash(0)
 			if err != nil {
@@ -1311,7 +1313,12 @@ func TestArchiveTrie_CannotGet_AccountHash(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
+
 			if _, err := archive.GetAccountHash(0, common.Address{1}); err == nil {
 				t.Errorf("getting account hash should always fail")
 			}
@@ -1411,7 +1418,11 @@ func TestArchiveTrie_GetDiffProducesValidResults(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			addr1 := common.Address{1}
 			addr2 := common.Address{2}
@@ -1510,7 +1521,11 @@ func TestArchiveTrie_GetDiffDetectsInvalidInput(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			addr1 := common.Address{1}
 			addr2 := common.Address{2}
@@ -1561,7 +1576,11 @@ func TestArchiveTrie_GetDiffForBlockProducesValidResults(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			addr1 := common.Address{1}
 			addr2 := common.Address{2}
@@ -1621,7 +1640,11 @@ func TestArchiveTrie_GetDiffForBlockDetectsEmptyArchive(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			_, err = archive.GetDiffForBlock(0)
 			if err == nil {
@@ -1639,7 +1662,11 @@ func TestArchiveTrie_GetMemoryFootprint(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			mf := archive.GetMemoryFootprint()
 			if child := mf.GetChild("head"); child == nil {
@@ -1660,7 +1687,11 @@ func TestArchiveTrie_Dump(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			if err = archive.Add(0, common.Update{
 				CreatedAccounts: []common.Address{{1}},
@@ -2172,15 +2203,7 @@ func TestArchiveTrie_FailingOperation_InvalidatesOtherArchiveOperations(t *testi
 			nodeSource.EXPECT().hashAddress(gomock.Any()).Return(common.Hash{}).AnyTimes()
 			nodeSource.EXPECT().getViewAccess(gomock.Any()).Return(shared.ViewHandle[Node]{}, injectedErr).MaxTimes(1)
 
-			archive, err := OpenArchiveTrie(t.TempDir(), S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
-			if err != nil {
-				t.Fatalf("cannot open archive: %v", err)
-			}
-
-			// inject mocks
-			archive.forest = db
-			archive.head = live
-			archive.nodeSource = nodeSource
+			archive := &ArchiveTrie{forest: db, head: live, nodeSource: nodeSource, roots: &rootList{}}
 			archive.roots.roots = append(archive.roots.roots, Root{NodeRef: NewNodeReference(ValueId(1))})
 
 			// all operations must fail
@@ -2251,27 +2274,26 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			liveState := NewMockLiveState(ctrl)
 			liveState.EXPECT().Flush().AnyTimes()
-			liveState.EXPECT().closeWithError(gomock.Any())
+			liveState.EXPECT().closeWithError(gomock.Any()).AnyTimes()
 			liveState.EXPECT().Root().AnyTimes()
 
 			db := NewMockDatabase(ctrl)
 			db.EXPECT().Freeze(gomock.Any()).AnyTimes()
 			db.EXPECT().CheckAll(gomock.Any()).AnyTimes()
 
-			archive, err := OpenArchiveTrie(t.TempDir(), S5ArchiveConfig, NodeCacheConfig{Capacity: 1000}, ArchiveConfig{})
-			if err != nil {
-				t.Fatalf("cannot open archive: %v", err)
-			}
-			defer archive.Close()
-			headBackup := archive.head
-			forestBackup := archive.forest
-			defer func() {
-				archive.head = headBackup
-				archive.forest = forestBackup
-			}()
-			archive.head = liveState
-			archive.forest = db
+			nodeSource := NewMockNodeSource(ctrl)
+			nodeSource.EXPECT().getConfig().Return(S5ArchiveConfig).AnyTimes()
+			nodeSource.EXPECT().hashKey(gomock.Any()).DoAndReturn(common.Keccak256ForKey).AnyTimes()
+			nodeSource.EXPECT().hashAddress(gomock.Any()).DoAndReturn(common.Keccak256ForAddress).AnyTimes()
+			nodeSource.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared[Node](&EmptyNode{}).GetViewHandle(), nil).AnyTimes()
+
+			archive := &ArchiveTrie{forest: db, head: liveState, nodeSource: nodeSource, roots: &rootList{}}
 			archive.roots.roots = append(archive.roots.roots, Root{NodeRef: NewNodeReference(ValueId(1))})
+			defer func() {
+				if err := archive.Close(); !errors.Is(err, injectedErr) {
+					t.Errorf("expected error does not match: %v != %v", err, injectedErr)
+				}
+			}()
 
 			// mock up to the current loop
 			for j, liveOp := range liveStateOps {
@@ -2403,7 +2425,11 @@ func TestArchiveTrie_VisitTrie_CorrectDataIsVisited(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open empty archive: %v", err)
 				}
-				defer archive.Close()
+				defer func() {
+					if err := archive.Close(); err != nil {
+						t.Errorf("failed to close archive: %v", err)
+					}
+				}()
 
 				err = archive.Add(1, common.Update{
 					CreatedAccounts: []common.Address{addr},
@@ -2449,7 +2475,11 @@ func TestArchiveTrie_VisitTrie_InvalidBlock(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Errorf("failed to close archive: %v", err)
+				}
+			}()
 
 			addr := common.Address{1}
 
@@ -2499,7 +2529,11 @@ func TestArchiveTrie_createCheckpoint_forwardsErrors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("cannot open archive: %v", err)
 			}
-			defer archive.Close()
+			defer func() {
+				if err := archive.Close(); err == nil {
+					t.Errorf("expected closing archive to fail")
+				}
+			}()
 
 			if err := sabotage(archive); err != nil {
 				t.Fatalf("failed to sabotage archive: %v", err)
@@ -2575,18 +2609,24 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 		return nil
 	}
 
-	tests := map[string]func(*ArchiveTrie) error{
-		"clean_close": func(archive *ArchiveTrie) error {
+	tests := map[string]func(*testing.T, *ArchiveTrie) error{
+		"clean_close": func(t *testing.T, archive *ArchiveTrie) error {
 			return archive.Close()
 		},
-		"clean_close_with_extra_blocks": func(archive *ArchiveTrie) error {
+		"clean_close_with_extra_blocks": func(t *testing.T, archive *ArchiveTrie) error {
 			return errors.Join(
 				addBlocks(archive, 92, 98),
 				archive.Close(),
 			)
 		},
-		"no_close": func(archive *ArchiveTrie) error {
+		"no_close": func(t *testing.T, archive *ArchiveTrie) error {
+			// close the inner forest to release resources
 			// In order to allow the recovery to access the directory, the lock needs to be released
+			t.Cleanup(func() {
+				if err := archive.forest.Close(); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			})
 			return archive.head.(*MptState).lock.Release()
 		},
 		/* -- disabled due to flaky behavior in race condition CI (see issue #994) --
@@ -2631,7 +2671,7 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
 				}
 
-				if err := test(archive); err != nil {
+				if err := test(t, archive); err != nil {
 					t.Fatalf("failed to close archive: %v", err)
 				}
 			}
@@ -3610,7 +3650,11 @@ func BenchmarkArchiveFlush_Roots(b *testing.B) {
 	if err != nil {
 		b.Fatalf("cannot open archive: %v", err)
 	}
-	defer archive.Close()
+	defer func() {
+		if err := archive.Close(); err != nil {
+			b.Errorf("failed to close archive: %v", err)
+		}
+	}()
 	archive.Add(1_000_000, common.Update{}, nil)
 	for i := 0; i < b.N; i++ {
 		if err := archive.Flush(); err != nil {

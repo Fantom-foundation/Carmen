@@ -47,10 +47,11 @@ func OpenInMemoryLiveTrie(directory string, config MptConfig, cacheConfig NodeCa
 	if err != nil {
 		return nil, err
 	}
-	return makeTrie(directory, forest)
+
+	return openTrieOnForest(directory, forest)
 }
 
-// OpenInMemoryLiveTrie loads trie information from the given directory and
+// OpenFileLiveTrie loads trie information from the given directory and
 // creates a LiveTrie instance using a fixed-size cache for retaining nodes in
 // memory, backed by a file-based storage automatically kept in sync. If the
 // directory is empty, an empty trie is created.
@@ -60,7 +61,18 @@ func OpenFileLiveTrie(directory string, config MptConfig, cacheConfig NodeCacheC
 	if err != nil {
 		return nil, err
 	}
-	return makeTrie(directory, forest)
+
+	return openTrieOnForest(directory, forest)
+}
+
+// openTrieOnForest creates a LiveTrie instance based on the given forest.
+// The forest is closed if the trie creation fails.
+func openTrieOnForest(directory string, forest *Forest) (*LiveTrie, error) {
+	trie, err := makeTrie(directory, forest)
+	if err != nil {
+		return nil, errors.Join(err, forest.Close())
+	}
+	return trie, nil
 }
 
 // VerifyFileLiveTrie validates a file-based live trie stored in the given

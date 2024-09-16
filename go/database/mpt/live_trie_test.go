@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -36,7 +37,11 @@ func TestLiveTrie_EmptyTrieIsConsistent(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			if err := trie.Check(); err != nil {
 				t.Fatalf("empty try has consistency problems: %v", err)
@@ -131,14 +136,18 @@ func TestLiveTrie_Cannot_Verify(t *testing.T) {
 }
 
 func TestLiveTrie_Cannot_MakeTrie_CorruptForest(t *testing.T) {
+	injectedError := fmt.Errorf("injected error")
 	dir := t.TempDir()
 	forest, err := OpenInMemoryForest(dir, S5LiveConfig, ForestConfig{})
 	if err != nil {
 		t.Fatalf("failed to create test forest")
 	}
-	defer forest.Close()
+	defer func() {
+		if err := forest.Close(); !errors.Is(err, injectedError) {
+			t.Errorf("closing forest should have failed, wanted %v, got %v", injectedError, err)
+		}
+	}()
 
-	injectedError := fmt.Errorf("injected error")
 	forest.errors = []error{injectedError}
 
 	_, err = makeTrie(dir, forest)
@@ -147,48 +156,68 @@ func TestLiveTrie_Cannot_MakeTrie_CorruptForest(t *testing.T) {
 	}
 }
 
+func TestLiveTrie_Cannot_MakeTrie_ClosesForest(t *testing.T) {
+	dir := t.TempDir()
+
+	forest, err := OpenInMemoryForest(dir, S5LiveConfig, ForestConfig{})
+	if err != nil {
+		t.Fatalf("failed to create test forest")
+	}
+
+	// corrupt meta by making it a directory
+	if err := os.Mkdir(filepath.Join(dir, "meta.json"), os.FileMode(0644)); err != nil {
+		t.Fatalf("cannot change meta")
+	}
+
+	if _, err := openTrieOnForest(dir, forest); err == nil {
+		t.Errorf("opening trie should fail")
+	}
+
+	// forest must be closed after the error
+	if err := forest.Close(); !errors.Is(err, forestClosedErr) {
+		t.Errorf("closing forest should have failed, wanted %v, got %v", forestClosedErr, err)
+	}
+}
+
 func TestLiveTrie_Fail_Read_Data(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
+	// inject failing stock to trigger an error applying the update
+	var injectedErr = errors.New("injectedError")
+	ctrl := gomock.NewController(t)
+	db := NewMockDatabase(ctrl)
+	db.EXPECT().SetAccountInfo(gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
+	db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr)
+	db.EXPECT().SetValue(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
+	db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr)
+	db.EXPECT().ClearStorage(gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
+	db.EXPECT().VisitTrie(gomock.Any(), gomock.Any()).Return(injectedErr)
+	db.EXPECT().updateHashesFor(gomock.Any()).Return(common.Hash{}, nil, injectedErr)
+	db.EXPECT().Close()
 
-			mpt, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
-			if err != nil {
-				t.Fatalf("cannot open trie: %s", err)
-			}
+	mpt := &LiveTrie{forest: db}
+	defer func() {
+		if err := mpt.Close(); !errors.Is(err, injectedErr) {
+			t.Errorf("closing trie should have failed, wanted %v, got %v", injectedErr, err)
+		}
+	}()
 
-			// inject failing stock to trigger an error applying the update
-			var injectedErr = errors.New("injectedError")
-			ctrl := gomock.NewController(t)
-			db := NewMockDatabase(ctrl)
-			db.EXPECT().SetAccountInfo(gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
-			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr)
-			db.EXPECT().SetValue(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
-			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr)
-			db.EXPECT().ClearStorage(gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
-			db.EXPECT().VisitTrie(gomock.Any(), gomock.Any()).Return(injectedErr)
-			mpt.forest = db
-
-			if err := mpt.SetAccountInfo(common.Address{1}, AccountInfo{}); !errors.Is(err, injectedErr) {
-				t.Errorf("setting account should fail")
-			}
-			if _, _, err := mpt.GetAccountInfo(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("getting account should fail")
-			}
-			if err := mpt.SetValue(common.Address{1}, common.Key{2}, common.Value{}); !errors.Is(err, injectedErr) {
-				t.Errorf("setting value should fail")
-			}
-			if _, err := mpt.GetValue(common.Address{1}, common.Key{2}); !errors.Is(err, injectedErr) {
-				t.Errorf("getting value should fail")
-			}
-			if err := mpt.ClearStorage(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("getting account should fail")
-			}
-			nodeVisitor := NewMockNodeVisitor(ctrl)
-			if err := mpt.VisitTrie(nodeVisitor); !errors.Is(err, injectedErr) {
-				t.Errorf("getting account should fail")
-			}
-		})
+	if err := mpt.SetAccountInfo(common.Address{1}, AccountInfo{}); !errors.Is(err, injectedErr) {
+		t.Errorf("setting account should fail")
+	}
+	if _, _, err := mpt.GetAccountInfo(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("getting account should fail")
+	}
+	if err := mpt.SetValue(common.Address{1}, common.Key{2}, common.Value{}); !errors.Is(err, injectedErr) {
+		t.Errorf("setting value should fail")
+	}
+	if _, err := mpt.GetValue(common.Address{1}, common.Key{2}); !errors.Is(err, injectedErr) {
+		t.Errorf("getting value should fail")
+	}
+	if err := mpt.ClearStorage(common.Address{1}); !errors.Is(err, injectedErr) {
+		t.Errorf("getting account should fail")
+	}
+	nodeVisitor := NewMockNodeVisitor(ctrl)
+	if err := mpt.VisitTrie(nodeVisitor); !errors.Is(err, injectedErr) {
+		t.Errorf("getting account should fail")
 	}
 }
 
@@ -287,6 +316,11 @@ func TestLiveTrie_Cannot_Flush_Metadata(t *testing.T) {
 			if err != nil {
 				t.Fatalf("opening trie should not fail: %s", err)
 			}
+			defer func() {
+				if err := mpt.Close(); err == nil {
+					t.Errorf("closing trie should fail")
+				}
+			}()
 
 			// corrupt meta
 			if err := os.Mkdir(filepath.Join(dir, "meta.json"), os.FileMode(0644)); err != nil {
@@ -301,26 +335,22 @@ func TestLiveTrie_Cannot_Flush_Metadata(t *testing.T) {
 }
 
 func TestLiveTrie_Cannot_Flush_Hashes(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
+	// inject failing stock to trigger an error applying the update
+	var injectedErr = errors.New("injectedError")
+	ctrl := gomock.NewController(t)
+	db := NewMockDatabase(ctrl)
+	db.EXPECT().updateHashesFor(gomock.Any()).Return(common.Hash{}, nil, injectedErr).AnyTimes()
+	db.EXPECT().Close()
 
-			mpt, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
-			if err != nil {
-				t.Fatalf("opening trie should not fail: %s", err)
-			}
+	mpt := &LiveTrie{forest: db}
+	defer func() {
+		if err := mpt.Close(); !errors.Is(err, injectedErr) {
+			t.Errorf("closing trie should have failed, wanted %v, got %v", injectedErr, err)
+		}
+	}()
 
-			// inject failing stock to trigger an error applying the update
-			var injectedErr = errors.New("injectedError")
-			ctrl := gomock.NewController(t)
-			db := NewMockDatabase(ctrl)
-			db.EXPECT().updateHashesFor(gomock.Any()).Return(common.Hash{}, nil, injectedErr)
-			mpt.forest = db
-
-			if err := mpt.Flush(); !errors.Is(err, injectedErr) {
-				t.Errorf("flush should fail")
-			}
-		})
+	if err := mpt.Flush(); !errors.Is(err, injectedErr) {
+		t.Errorf("flushing trie should have failed, wanted %v, got %v", injectedErr, err)
 	}
 }
 
@@ -331,7 +361,11 @@ func TestLiveTrie_NonExistingAccountsHaveEmptyInfo(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			if err := trie.Check(); err != nil {
 				t.Fatalf("empty try has consistency problems: %v", err)
@@ -352,7 +386,11 @@ func TestLiveTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			if err := trie.Check(); err != nil {
 				t.Fatalf("empty try has consistency problems: %v", err)
@@ -393,7 +431,11 @@ func TestLiveTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			if err := trie.Check(); err != nil {
 				t.Fatalf("empty try has consistency problems: %v", err)
@@ -437,7 +479,11 @@ func TestLiveTrie_NonExistingValueHasZeroValue(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			addr := common.Address{1}
 			key := common.Key{1}
@@ -465,7 +511,11 @@ func TestLiveTrie_ValuesCanBeSetAndRetrieved(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			addr := common.Address{1}
 			key := common.Key{1}
@@ -500,10 +550,21 @@ func TestLiveTrie_SameContentProducesSameHash(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
+			defer func() {
+				if err := trie1.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
+
 			trie2, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
+			defer func() {
+				if err := trie2.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			hash1, _, err := trie1.UpdateHashes()
 			if err != nil {
@@ -560,6 +621,11 @@ func TestLiveTrie_ChangeInTrieSubstructureUpdatesHash(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			info1 := AccountInfo{Nonce: common.ToNonce(1)}
 			info2 := AccountInfo{Nonce: common.ToNonce(2)}
@@ -597,7 +663,11 @@ func TestLiveTrie_InsertLotsOfData(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			address := getTestAddresses(N)
 			keys := getTestKeys(N)
@@ -660,7 +730,11 @@ func TestLiveTrie_InsertLotsOfValues(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			addr := common.Address{}
 			keys := getTestKeys(N)
@@ -748,6 +822,11 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Errorf("failed to close trie: %v", err)
+				}
+			}()
 
 			// Create a single account with a large storage.
 			addr := common.Address{1, 2, 3}
@@ -827,10 +906,6 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 			}
 			if want, got := 0, getSize(ids); want != got {
 				t.Errorf("unexpected number of values, wanted %d, got %d", want, got)
-			}
-
-			if err := trie.Close(); err != nil {
-				t.Fatalf("failed to close trie: %v", err)
 			}
 		})
 	}
@@ -984,25 +1059,25 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 }
 
 func TestLiveTrie_HasEmptyStorage(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
+	addr := common.Address{0x1}
+	ctrl := gomock.NewController(t)
+	db := NewMockDatabase(ctrl)
+	db.EXPECT().updateHashesFor(gomock.Any())
+	db.EXPECT().HasEmptyStorage(gomock.Any(), gomock.Any()).Return(true, nil)
+	db.EXPECT().Flush()
+	db.EXPECT().Close()
 
-			addr := common.Address{0x1}
-			ctrl := gomock.NewController(t)
-			db := NewMockDatabase(ctrl)
-			db.EXPECT().HasEmptyStorage(gomock.Any(), addr)
+	metadata := path.Join(t.TempDir(), "metadata.dat")
+	mpt := &LiveTrie{forest: db, metaDataFile: metadata}
+	defer func() {
+		if err := mpt.Close(); err != nil {
+			t.Errorf("failed to close trie: %v", err)
+		}
+	}()
 
-			mpt, err := OpenFileLiveTrie(dir, config, NodeCacheConfig{Capacity: 1024})
-			if err != nil {
-				t.Fatalf("failed to open live trie: %v", err)
-			}
-			mpt.forest = db
-
-			mpt.HasEmptyStorage(addr)
-		})
+	if _, err := mpt.HasEmptyStorage(addr); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
-
 }
 
 func TestLiveTrie_CreateWitnessProof(t *testing.T) {
@@ -1022,12 +1097,7 @@ func TestLiveTrie_CreateWitnessProof(t *testing.T) {
 			db.EXPECT().getConfig().Return(config)
 			db.EXPECT().hashAddress(gomock.Any()).Return(common.Keccak256(addr[:])).AnyTimes()
 
-			mpt, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{})
-			if err != nil {
-				t.Fatalf("failed to open live trie: %v", err)
-			}
-
-			mpt.forest = db
+			mpt := LiveTrie{forest: db}
 
 			proof, err := mpt.CreateWitnessProof(addr)
 			if err != nil {
@@ -1099,7 +1169,11 @@ func BenchmarkValueInsertionInMemoryTrie(b *testing.B) {
 			if err != nil {
 				b.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					b.Errorf("failed to close trie: %v", err)
+				}
+			}()
 			b.StartTimer()
 			benchmarkValueInsertion(trie, b)
 			b.StopTimer()
@@ -1115,7 +1189,11 @@ func BenchmarkValueInsertionInFileTrie(b *testing.B) {
 			if err != nil {
 				b.Fatalf("failed to open trie: %v", err)
 			}
-			defer trie.Close()
+			defer func() {
+				if err := trie.Close(); err != nil {
+					b.Errorf("failed to close trie: %v", err)
+				}
+			}()
 			b.StartTimer()
 			benchmarkValueInsertion(trie, b)
 			b.StopTimer()
