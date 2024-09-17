@@ -526,6 +526,26 @@ func TestMptState_GetRootId(t *testing.T) {
 	}
 }
 
+func TestMptState_GetConfig(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			mptState, err := OpenGoMemoryState(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			if err != nil {
+				t.Fatalf("cannot open mptState: %v", err)
+			}
+			defer func() {
+				if err := mptState.Close(); err != nil {
+					t.Fatalf("failed to close mptState: %v", err)
+				}
+			}()
+
+			if got, want := mptState.GetConfig(), config; got.Name != want.Name {
+				t.Errorf("unexpected config, got: %v, want: %v", got, want)
+			}
+		})
+	}
+}
+
 func TestState_GetCodes(t *testing.T) {
 	hasher := sha3.NewLegacyKeccak256()
 	for name, open := range mptStateFactories {

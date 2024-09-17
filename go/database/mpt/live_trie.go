@@ -239,6 +239,11 @@ func (s *LiveTrie) Dump() {
 	s.forest.Dump(&s.root)
 }
 
+// GetConfig returns the configuration of the trie.
+func (s *LiveTrie) GetConfig() MptConfig {
+	return s.forest.getConfig()
+}
+
 // Check verifies internal invariants of the Trie instance. If the trie is
 // self-consistent, nil is returned and the Trie is read to be accessed. If
 // errors are detected, the Trie is to be considered in an invalid state and

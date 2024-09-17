@@ -15,16 +15,21 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"os"
 	"path"
 	"strings"
 	"testing"
 
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"go.uber.org/mock/gomock"
 )
+
+var allMptConfigs = []mpt.MptConfig{
+	mpt.S4LiveConfig, mpt.S4ArchiveConfig,
+	mpt.S5LiveConfig, mpt.S5ArchiveConfig,
+}
 
 func TestPosition_CanBeCreatedAndPrinted(t *testing.T) {
 	tests := []struct {
@@ -109,101 +114,115 @@ func TestPosition_AreOrderedAndWorkWithSharedPrefixes(t *testing.T) {
 }
 
 func TestNodeSource_CanRead_Nodes(t *testing.T) {
-	runTestWithArchive(t, func(trie *mpt.ArchiveTrie) {
-		// trie must be flushed before opening the parallel source
-		if err := trie.Flush(); err != nil {
-			t.Fatalf("failed to flush archive: %v", err)
-		}
+	for _, config := range allMptConfigs {
+		config := config
+		t.Run(config.Name, func(t *testing.T) {
+			runTestWithArchive(t, config, func(trie *mpt.ArchiveTrie) {
+				t.Parallel()
 
-		blocks, _, err := trie.GetBlockHeight()
-		if err != nil {
-			t.Fatalf("failed to get block height: %v", err)
-		}
-
-		factory := stockNodeSourceFactory{directory: trie.Directory()}
-		source, err := factory.open()
-		if err != nil {
-			t.Fatalf("failed to open node source: %v", err)
-		}
-
-		// iterate all nodes in the trie for all blocks
-		for i := uint64(0); i <= blocks; i++ {
-			if err := trie.VisitTrie(i, mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-				nodeHash, dirty := node.GetHash()
-				if dirty {
-					t.Fatalf("node %v is dirty", info.Id)
+				// trie must be flushed before opening the parallel source
+				if err := trie.Flush(); err != nil {
+					t.Fatalf("failed to flush archive: %v", err)
 				}
 
-				sourceNode, err := source.get(info.Id)
+				blocks, _, err := trie.GetBlockHeight()
 				if err != nil {
-					t.Fatalf("failed to get node from source: %v", err)
-				}
-				nodeSourceHash, dirty := sourceNode.GetHash()
-				if dirty {
-					t.Fatalf("node %v is dirty", info.Id)
+					t.Fatalf("failed to get block height: %v", err)
 				}
 
-				if nodeHash != nodeSourceHash {
-					t.Errorf("node %v hash mismatch, wanted %v, got %v", info.Id, nodeHash, nodeSourceHash)
+				factory := stockNodeSourceFactory{directory: trie.Directory(), config: trie.GetConfig()}
+				source, err := factory.open()
+				if err != nil {
+					t.Fatalf("failed to open node source: %v", err)
 				}
 
-				return mpt.VisitResponseContinue
-			})); err != nil {
-				t.Fatalf("failed to visit trie: %v", err)
-			}
-		}
-	})
+				// iterate all nodes in the trie for all blocks
+				for i := uint64(0); i <= blocks; i++ {
+					if err := trie.VisitTrie(i, mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+						sourceNode, err := source.get(info.Id)
+						if err != nil {
+							t.Fatalf("failed to get node from source: %v", err)
+						}
+						matchNodes(t, node, sourceNode)
+						return mpt.VisitResponseContinue
+					})); err != nil {
+						t.Fatalf("failed to visit trie: %v", err)
+					}
+				}
+			})
+		})
+	}
 }
 
 func TestVisit_Nodes_Failing_CannotOpenDir(t *testing.T) {
-	dir := path.Join(t.TempDir(), "missing")
-	if err := visitAll(dir, mpt.EmptyId(), nil, false); err == nil {
-		t.Errorf("expected error, got nil")
+	for _, config := range allMptConfigs {
+		config := config
+		t.Run(config.Name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := path.Join(t.TempDir(), "missing")
+			if err := visitAll(dir, config, mpt.EmptyId(), nil, false); err == nil {
+				t.Errorf("expected error, got nil")
+			}
+		})
 	}
 }
 
 func TestVisit_Nodes_Failing_MissingDir(t *testing.T) {
-	trie := createArchive(t)
-	dir := trie.Directory()
-	root, err := trie.GetBlockRoot(0)
-	if err != nil {
-		t.Fatalf("failed to get block root: %v", err)
-	}
+	for _, config := range allMptConfigs {
+		config := config
+		t.Run(config.Name, func(t *testing.T) {
+			t.Parallel()
 
-	if err := trie.Close(); err != nil {
-		t.Fatalf("failed to close archive: %v", err)
-	}
+			dir := t.TempDir()
+			trie := createArchive(t, dir, config)
+			root, err := trie.GetBlockRoot(0)
+			if err != nil {
+				t.Fatalf("failed to get block root: %v", err)
+			}
 
-	// break the directory by removing the files
-	if err := os.RemoveAll(path.Join(dir, "accounts")); err != nil {
-		t.Fatalf("failed to remove directory: %v", err)
-	}
+			if err := trie.Close(); err != nil {
+				t.Fatalf("failed to close archive: %v", err)
+			}
 
-	if err := visitAll(dir, root, nil, false); err == nil {
-		t.Errorf("expected error, got nil")
-	}
+			// corrupt the directory by removing the files
+			if err := os.RemoveAll(path.Join(dir, "accounts")); err != nil {
+				t.Fatalf("failed to remove directory: %v", err)
+			}
 
+			if err := visitAll(dir, config, root, nil, false); err == nil {
+				t.Errorf("expected error, got nil")
+			}
+		})
+	}
 }
 
 func TestVisit_Nodes_Failing_MissingData(t *testing.T) {
-	runTestWithArchive(t, func(trie *mpt.ArchiveTrie) {
-		// truncate file to simulate missing data
-		file, err := os.OpenFile(path.Join(trie.Directory(), "accounts", "values.dat"), os.O_WRONLY|os.O_TRUNC, 0666)
-		if err != nil {
-			t.Fatalf("failed to open file: %v", err)
-		}
-		if err := file.Close(); err != nil {
-			t.Fatalf("failed to close file: %v", err)
-		}
+	for _, config := range allMptConfigs {
+		config := config
+		t.Run(config.Name, func(t *testing.T) {
+			runTestWithArchive(t, config, func(trie *mpt.ArchiveTrie) {
+				t.Parallel()
 
-		nodeId, err := trie.GetBlockRoot(0)
-		if err != nil {
-			t.Fatalf("failed to get block root: %v", err)
-		}
-		if err := visitAll(trie.Directory(), nodeId, nil, false); err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
+				// truncate file to simulate missing data
+				file, err := os.OpenFile(path.Join(trie.Directory(), "accounts", "values.dat"), os.O_WRONLY|os.O_TRUNC, 0666)
+				if err != nil {
+					t.Fatalf("failed to open file: %v", err)
+				}
+				if err := file.Close(); err != nil {
+					t.Fatalf("failed to close file: %v", err)
+				}
+
+				nodeId, err := trie.GetBlockRoot(0)
+				if err != nil {
+					t.Fatalf("failed to get block root: %v", err)
+				}
+				if err := visitAll(trie.Directory(), config, nodeId, nil, false); err == nil {
+					t.Errorf("expected error, got nil")
+				}
+			})
+		})
+	}
 }
 
 func TestVisit_Nodes_CannotOpenFiles(t *testing.T) {
@@ -219,61 +238,75 @@ func TestVisit_Nodes_CannotOpenFiles(t *testing.T) {
 }
 
 func TestVisit_Nodes_CannotCloseSources(t *testing.T) {
+	sourceFactories := map[string]struct {
+		createData func(t *testing.T, dir string, config mpt.MptConfig) (root mpt.NodeId)
+	}{
+		"archive": {
+			createData: func(t *testing.T, dir string, config mpt.MptConfig) (root mpt.NodeId) {
+				trie := createArchive(t, dir, config)
+				root, err := trie.GetBlockRoot(0)
+				if err != nil {
+					t.Fatalf("failed to get block root: %v", err)
+				}
+				if err := trie.Close(); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+				return root
+			}},
+		"live": {
+			createData: func(t *testing.T, dir string, config mpt.MptConfig) (root mpt.NodeId) {
+				trie := createMptState(t, dir, config)
+				rootId := trie.GetRootId()
+				if err := trie.Close(); err != nil {
+					t.Fatalf("failed to close live db: %v", err)
+				}
+				return rootId
+			}},
+	}
+
 	injectedError := fmt.Errorf("injected error")
 
-	trie := createArchive(t)
+	for _, config := range allMptConfigs {
+		config := config
+		for name, factory := range sourceFactories {
+			factory := factory
+			t.Run(fmt.Sprintf("%s_%s", name, config.Name), func(t *testing.T) {
+				t.Parallel()
 
-	nodeId, err := trie.GetBlockRoot(0)
-	if err != nil {
-		t.Fatalf("failed to get block root: %v", err)
-	}
-	if err := trie.Close(); err != nil {
-		t.Fatalf("failed to close archive: %v", err)
-	}
+				dir := t.TempDir()
+				rootId := factory.createData(t, dir, config)
+				parentFc := stockNodeSourceFactory{directory: dir, config: config}
+				ctrl := gomock.NewController(t)
 
-	parentFc := &stockNodeSourceFactory{trie.Directory()}
-	ctrl := gomock.NewController(t)
+				mockFc := NewMocknodeSourceFactory(ctrl)
+				mockFc.EXPECT().open().DoAndReturn(func() (nodeSource, error) {
+					parentSource, err := parentFc.open()
+					if err != nil {
+						t.Fatalf("failed to open source: %v", err)
+					}
+					mockSource := NewMocknodeSource(ctrl)
+					mockSource.EXPECT().get(gomock.Any()).DoAndReturn(parentSource.get).AnyTimes()
+					mockSource.EXPECT().Close().Return(injectedError)
+					return mockSource, nil
+				}).Times(16)
 
-	mockFc := NewMocknodeSourceFactory(ctrl)
-	mockFc.EXPECT().open().DoAndReturn(func() (nodeSource, error) {
-		parentSource, err := parentFc.open()
-		if err != nil {
-			t.Fatalf("failed to open source: %v", err)
+				visitor := NewMocknoResponseNodeVisitor(ctrl)
+				visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
+
+				if err := visitAllWithSources(mockFc, rootId, visitor, false); !errors.Is(err, injectedError) {
+					t.Errorf("expected error %v, got %v", injectedError, err)
+				}
+			})
 		}
-		mockSource := NewMocknodeSource(ctrl)
-		mockSource.EXPECT().get(gomock.Any()).DoAndReturn(parentSource.get).AnyTimes()
-		mockSource.EXPECT().Close().Return(injectedError)
-		return mockSource, nil
-	}).Times(16)
-
-	visitor := NewMocknoResponseNodeVisitor(ctrl)
-	visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
-
-	if err := visitAllWithSources(mockFc, nodeId, visitor, false); !errors.Is(err, injectedError) {
-		t.Errorf("expected error %v, got %v", injectedError, err)
 	}
 }
 
 func TestVisit_Nodes_CannotGetNode_FailingSource(t *testing.T) {
 	injectedError := fmt.Errorf("injected error")
 
-	trie := createArchive(t)
-
-	nodeId, err := trie.GetBlockRoot(0)
-	if err != nil {
-		t.Fatalf("failed to get block root: %v", err)
-	}
-	if err := trie.Close(); err != nil {
-		t.Fatalf("failed to close archive: %v", err)
-	}
-
 	ctrl := gomock.NewController(t)
-
 	mockFc := NewMocknodeSourceFactory(ctrl)
 	mockFc.EXPECT().open().DoAndReturn(func() (nodeSource, error) {
-		if err != nil {
-			t.Fatalf("failed to open source: %v", err)
-		}
 		mockSource := NewMocknodeSource(ctrl)
 		mockSource.EXPECT().get(gomock.Any()).Return(nil, injectedError).AnyTimes()
 		mockSource.EXPECT().Close().Return(nil)
@@ -283,6 +316,7 @@ func TestVisit_Nodes_CannotGetNode_FailingSource(t *testing.T) {
 	visitor := NewMocknoResponseNodeVisitor(ctrl)
 	visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
 
+	var nodeId mpt.NodeId
 	if err := visitAllWithSources(mockFc, nodeId, visitor, false); !errors.Is(err, injectedError) {
 		t.Errorf("expected error %v, got %v", injectedError, err)
 	}
@@ -290,56 +324,62 @@ func TestVisit_Nodes_CannotGetNode_FailingSource(t *testing.T) {
 
 func TestVisit_Nodes_Iterated_Deterministic(t *testing.T) {
 	const N = 15
-	runTestWithArchive(t, func(trie *mpt.ArchiveTrie) {
-		// trie must be flushed before opening the parallel source
-		if err := trie.Flush(); err != nil {
-			t.Fatalf("failed to flush archive: %v", err)
-		}
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			runTestWithArchive(t, config, func(trie *mpt.ArchiveTrie) {
+				// trie must be flushed before opening the parallel source
+				if err := trie.Flush(); err != nil {
+					t.Fatalf("failed to flush archive: %v", err)
+				}
 
-		blocks, _, err := trie.GetBlockHeight()
-		if err != nil {
-			t.Fatalf("failed to get block height: %v", err)
-		}
+				blocks, _, err := trie.GetBlockHeight()
+				if err != nil {
+					t.Fatalf("failed to get block height: %v", err)
+				}
 
-		// iterate all nodes in the trie for all blocks
-		for block := uint64(0); block <= blocks; block++ {
-			var nodes []mpt.NodeId
-			if err := trie.VisitTrie(block, mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
-				nodes = append(nodes, info.Id)
-				return mpt.VisitResponseContinue
-			})); err != nil {
-				t.Fatalf("failed to visit trie: %v", err)
-			}
-
-			nodeId, err := trie.GetBlockRoot(block)
-			if err != nil {
-				t.Fatalf("failed to get block root: %v", err)
-			}
-
-			// visit all nodes in the trie and compare that the nodes are visited in the same order
-			// as the nodes in the trie
-			// run the experiment N times to ensure that the order is deterministic
-			for i := 0; i < N; i++ {
-				t.Run(fmt.Sprintf("block=%d,iteration=%d", block, i), func(t *testing.T) {
-					t.Parallel()
-					var position int
-					ctrl := gomock.NewController(t)
-					visitor := NewMocknoResponseNodeVisitor(ctrl)
-					visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).DoAndReturn(func(_ mpt.Node, info mpt.NodeInfo) error {
-						if got, want := info.Id, nodes[position]; got != want {
-							t.Errorf("expected node %v, got %v", want, got)
-						}
-						position++
-						return nil
-					}).Times(len(nodes))
-
-					if err := visitAll(trie.Directory(), nodeId, visitor, false); err != nil {
-						t.Fatalf("failed to visit nodes: %v", err)
+				// iterate all nodes in the trie for all blocks
+				for block := uint64(0); block <= blocks; block++ {
+					var nodes []mpt.NodeId
+					if err := trie.VisitTrie(block, mpt.MakeVisitor(
+						func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+							nodes = append(nodes, info.Id)
+							return mpt.VisitResponseContinue
+						})); err != nil {
+						t.Fatalf("failed to visit trie: %v", err)
 					}
-				})
-			}
-		}
-	})
+
+					nodeId, err := trie.GetBlockRoot(block)
+					if err != nil {
+						t.Fatalf("failed to get block root: %v", err)
+					}
+
+					// visit all nodes in the trie and compare that the nodes are visited in the same order
+					// as the nodes in the trie
+					// run the experiment N times to ensure that the order is deterministic
+					for i := 0; i < N; i++ {
+						t.Run(fmt.Sprintf("block=%d,iteration=%d", block, i), func(t *testing.T) {
+							t.Parallel()
+							var position int
+							ctrl := gomock.NewController(t)
+							visitor := NewMocknoResponseNodeVisitor(ctrl)
+							visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).DoAndReturn(
+								func(_ mpt.Node, info mpt.NodeInfo) error {
+									if got, want := info.Id, nodes[position]; got != want {
+										t.Errorf("expected node %v, got %v", want, got)
+									}
+									position++
+									return nil
+								}).Times(len(nodes))
+
+							if err := visitAll(trie.Directory(), config, nodeId, visitor, false); err != nil {
+								t.Fatalf("failed to visit nodes: %v", err)
+							}
+						})
+					}
+				}
+			})
+		})
+	}
 }
 
 func TestSource_EmptyNodeId(t *testing.T) {
@@ -353,60 +393,143 @@ func TestSource_EmptyNodeId(t *testing.T) {
 func TestOpenSource_Failing_MissingFiles(t *testing.T) {
 	tests := []string{"accounts", "extensions", "branches", "values"}
 
-	for _, test := range tests {
-		t.Run(test, func(t *testing.T) {
+	for _, config := range allMptConfigs {
+		config := config
+		for _, test := range tests {
+			test := test
+			t.Run(fmt.Sprintf("%s %s", config.Name, test), func(t *testing.T) {
+				t.Parallel()
+
+				dir := t.TempDir()
+				fmt.Printf("%s %s %s\n", config.Name, test, dir)
+				aEnc, bEnc, eEnc, vEnc := config.GetEncoders()
+				// create all stocks first
+				stock1, err := file.OpenStock[uint64, mpt.AccountNode](aEnc, path.Join(dir, "accounts"))
+				if err != nil {
+					t.Fatalf("failed to open stock: %v", err)
+				}
+				if err := stock1.Close(); err != nil {
+					t.Fatalf("failed to close stock: %v", err)
+				}
+
+				stock2, err := file.OpenStock[uint64, mpt.ExtensionNode](eEnc, path.Join(dir, "extensions"))
+				if err != nil {
+					t.Fatalf("failed to open stock: %v", err)
+				}
+				if err := stock2.Close(); err != nil {
+					t.Fatalf("failed to close stock: %v", err)
+				}
+
+				stock3, err := file.OpenStock[uint64, mpt.BranchNode](bEnc, path.Join(dir, "branches"))
+				if err != nil {
+					t.Fatalf("failed to open stock: %v", err)
+				}
+				if err := stock3.Close(); err != nil {
+					t.Fatalf("failed to close stock: %v", err)
+				}
+
+				stock4, err := file.OpenStock[uint64, mpt.ValueNode](vEnc, path.Join(dir, "values"))
+				if err != nil {
+					t.Fatalf("failed to open stock: %v", err)
+				}
+				if err := stock4.Close(); err != nil {
+					t.Fatalf("failed to close stock: %v", err)
+				}
+
+				// delete one of the stocks
+				if err := os.RemoveAll(path.Join(dir, test)); err != nil {
+					t.Fatalf("failed to remove directory: %v", err)
+				}
+
+				factory := stockNodeSourceFactory{directory: dir, config: config}
+				if _, err := factory.open(); err == nil {
+					t.Errorf("expected error, got nil")
+				}
+			})
+		}
+	}
+}
+
+func TestNodeSourceFactoryForLiveDB_CanRead_Nodes(t *testing.T) {
+	for _, config := range allMptConfigs {
+		config := config
+		t.Run(config.Name, func(t *testing.T) {
+			t.Parallel()
+
 			dir := t.TempDir()
+			live := createMptState(t, dir, config)
 
-			// create all stocks first
-			stock1, err := file.OpenStock[uint64, mpt.AccountNode](mpt.AccountNodeWithPathLengthEncoderWithNodeHash{}, path.Join(dir, "accounts"))
+			// collect all nodes from the live db
+			nodes := make(map[mpt.NodeId]mpt.Node)
+			// collect all nodes from the live db
+			if err := live.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+				nodes[info.Id] = node
+				return mpt.VisitResponseContinue
+			})); err != nil {
+				t.Fatalf("failed to visit trie: %v", err)
+			}
+
+			if err := live.Close(); err != nil {
+				t.Fatalf("failed to close live db: %v", err)
+			}
+
+			// check that all nodes can be read from the source
+			factory := stockNodeSourceFactory{directory: dir, config: config}
+			source, err := factory.open()
 			if err != nil {
-				t.Fatalf("failed to open stock: %v", err)
+				t.Fatalf("failed to open node source: %v", err)
 			}
-			if err := stock1.Close(); err != nil {
-				t.Fatalf("failed to close stock: %v", err)
-			}
+			defer func() {
+				if err := source.Close(); err != nil {
+					t.Fatalf("failed to close source: %v", err)
+				}
+			}()
 
-			stock2, err := file.OpenStock[uint64, mpt.ExtensionNode](mpt.ExtensionNodeEncoderWithNodeHash{}, path.Join(dir, "extensions"))
-			if err != nil {
-				t.Fatalf("failed to open stock: %v", err)
-			}
-			if err := stock2.Close(); err != nil {
-				t.Fatalf("failed to close stock: %v", err)
-			}
+			// compare that all nodes from the trie can be read from the source
+			for id, node := range nodes {
+				sourceNode, err := source.get(id)
+				if err != nil {
+					t.Fatalf("failed to get node from source: %v", err)
+				}
 
-			stock3, err := file.OpenStock[uint64, mpt.BranchNode](mpt.BranchNodeEncoderWithNodeHash{}, path.Join(dir, "branches"))
-			if err != nil {
-				t.Fatalf("failed to open stock: %v", err)
+				matchNodes(t, node, sourceNode)
 			}
-			if err := stock3.Close(); err != nil {
-				t.Fatalf("failed to close stock: %v", err)
-			}
-
-			stock4, err := file.OpenStock[uint64, mpt.ValueNode](mpt.ValueNodeWithPathLengthEncoderWithNodeHash{}, path.Join(dir, "values"))
-			if err != nil {
-				t.Fatalf("failed to open stock: %v", err)
-			}
-			if err := stock4.Close(); err != nil {
-				t.Fatalf("failed to close stock: %v", err)
-			}
-
-			// delete one of the stocks
-			if err := os.RemoveAll(path.Join(dir, test)); err != nil {
-				t.Fatalf("failed to remove directory: %v", err)
-			}
-
-			factory := stockNodeSourceFactory{directory: dir}
-			if _, err := factory.open(); err == nil {
-				t.Errorf("expected error, got nil")
-			}
-
 		})
 	}
 }
 
+// matchNodes compares two nodes and fails the test if they are not equal.
+func matchNodes(t *testing.T, a, b mpt.Node) {
+	switch n := a.(type) {
+	case *mpt.AccountNode:
+		if got, want := n.Address(), b.(*mpt.AccountNode).Address(); got != want {
+			t.Errorf("expected address %v, got %v", want, got)
+		}
+		if got, want := n.Info(), b.(*mpt.AccountNode).Info(); got != want {
+			t.Errorf("expected info %v, got %v", want, got)
+		}
+		if got, want := n.GetStorage(), b.(*mpt.AccountNode).GetStorage(); got.Id() != want.Id() {
+			t.Errorf("expected storage %v, got %v", want, got)
+		}
+	case *mpt.ExtensionNode:
+		if got, want := n.Path(), b.(*mpt.ExtensionNode).Path(); got != want {
+			t.Errorf("expected path %v, got %v", want, got)
+		}
+		if got, want := n.GetNext(), b.(*mpt.ExtensionNode).GetNext(); got.Id() != want.Id() {
+			t.Errorf("expected next %v, got %v", want, got)
+		}
+	case *mpt.BranchNode:
+		for i := 0; i < 16; i++ {
+			if got, want := n.GetChildren()[i], b.(*mpt.BranchNode).GetChildren()[i]; got.Id() != want.Id() {
+				t.Errorf("expected children %v, got %v", want, got)
+			}
+		}
+	}
+}
+
 // runTestWithArchive runs a test with a new archive that is pre-populated data.
-func runTestWithArchive(t *testing.T, action func(trie *mpt.ArchiveTrie)) {
-	trie := createArchive(t)
+func runTestWithArchive(t *testing.T, config mpt.MptConfig, action func(trie *mpt.ArchiveTrie)) {
+	trie := createArchive(t, t.TempDir(), config)
 	defer func() {
 		if err := trie.Close(); err != nil {
 			t.Fatalf("failed to close archive archive: %v", err)
@@ -417,8 +540,8 @@ func runTestWithArchive(t *testing.T, action func(trie *mpt.ArchiveTrie)) {
 }
 
 // createArchive creates a new archive with pre-populated data.
-func createArchive(t *testing.T) *mpt.ArchiveTrie {
-	archive, err := mpt.OpenArchiveTrie(t.TempDir(), mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
+func createArchive(t *testing.T, dir string, config mpt.MptConfig) *mpt.ArchiveTrie {
+	archive, err := mpt.OpenArchiveTrie(dir, config, mpt.NodeCacheConfig{Capacity: 1024}, mpt.ArchiveConfig{})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -436,10 +559,14 @@ func createArchive(t *testing.T) *mpt.ArchiveTrie {
 			newAddr := common.AddressFromNumber(j)
 
 			update.CreatedAccounts = append(update.CreatedAccounts, newAddr)
-			update.Balances = append(update.Balances, common.BalanceUpdate{Account: newAddr, Balance: amount.New(u + 1)})
-			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: newAddr, Nonce: common.ToNonce(u + 1)})
-			update.Codes = append(update.Codes, common.CodeUpdate{Account: newAddr, Code: code})
-			update.Slots = append(update.Slots, common.SlotUpdate{Account: newAddr, Key: common.Key{byte(j)}, Value: common.Value{byte(i)}})
+			update.Balances = append(update.Balances, common.BalanceUpdate{
+				Account: newAddr, Balance: amount.New(u + 1)})
+			update.Nonces = append(update.Nonces, common.NonceUpdate{
+				Account: newAddr, Nonce: common.ToNonce(u + 1)})
+			update.Codes = append(update.Codes, common.CodeUpdate{
+				Account: newAddr, Code: code})
+			update.Slots = append(update.Slots, common.SlotUpdate{
+				Account: newAddr, Key: common.Key{byte(j)}, Value: common.Value{byte(i)}})
 		}
 		err = archive.Add(u, update, nil)
 		if err != nil {
@@ -448,4 +575,32 @@ func createArchive(t *testing.T) *mpt.ArchiveTrie {
 	}
 
 	return archive
+}
+
+// createMptState creates a new live db with pre-populated data.
+func createMptState(t *testing.T, dir string, config mpt.MptConfig) *mpt.MptState {
+	live, err := mpt.OpenGoFileState(dir, config, mpt.NodeCacheConfig{Capacity: 1024})
+	if err != nil {
+		t.Fatalf("failed to open live db: %v", err)
+	}
+
+	const (
+		Accounts = 31
+		Key      = 32
+	)
+
+	// populate the live db with some data
+	for i := 0; i < Accounts; i++ {
+		addr := common.AddressFromNumber(i)
+		if err := live.SetNonce(addr, common.Nonce{1}); err != nil {
+			t.Fatalf("failed to set account info: %v", err)
+		}
+		for j := 0; j < Key; j++ {
+			if err := live.SetStorage(addr, common.Key{byte(i), byte(j)}, common.Value{1}); err != nil {
+				t.Fatalf("failed to set value: %v", err)
+			}
+		}
+	}
+
+	return live
 }

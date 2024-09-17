@@ -1127,6 +1127,26 @@ func TestLiveTrie_CreateWitnessProof(t *testing.T) {
 
 }
 
+func TestLiveTrie_GetConfig(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			live, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			if err != nil {
+				t.Fatalf("cannot open live: %v", err)
+			}
+			defer func() {
+				if err := live.Close(); err != nil {
+					t.Fatalf("failed to close live: %v", err)
+				}
+			}()
+
+			if got, want := live.GetConfig(), config; got.Name != want.Name {
+				t.Errorf("unexpected config, got: %v, want: %v", got, want)
+			}
+		})
+	}
+}
+
 func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 	accounts := getTestAddresses(100)
 	keys := getTestKeys(100)

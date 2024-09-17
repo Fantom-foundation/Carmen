@@ -598,6 +598,11 @@ func (a *ArchiveTrie) Directory() string {
 	return a.directory
 }
 
+// GetConfig returns the configuration of the archive.
+func (a *ArchiveTrie) GetConfig() MptConfig {
+	return a.nodeSource.getConfig()
+}
+
 // ---- Reading and Writing Root Node ID Lists ----
 
 // rootList is a utility type managing an in-memory copy of the list of roots

@@ -33,11 +33,12 @@ import (
 // before calling this function to avoid reading out-dated or inconsistent data.
 func visitAll(
 	directory string,
+	config mpt.MptConfig,
 	root mpt.NodeId,
 	visitor noResponseNodeVisitor,
 	pruneStorage bool,
 ) error {
-	return visitAllWithSources(&stockNodeSourceFactory{directory}, root, visitor, pruneStorage)
+	return visitAllWithSources(&stockNodeSourceFactory{directory, config}, root, visitor, pruneStorage)
 }
 
 // visitAllWithSources is an internal implementation of visitAll that allows to provide a custom node source factory.
@@ -377,6 +378,7 @@ type nodeSource interface {
 // stockNodeSourceFactory is a nodeSourceFactory implementation that creates stock backed sources to access nodes.
 type stockNodeSourceFactory struct {
 	directory string
+	config    mpt.MptConfig
 }
 
 func (f *stockNodeSourceFactory) open() (nodeSource, error) {
@@ -388,25 +390,27 @@ func (f *stockNodeSourceFactory) open() (nodeSource, error) {
 		return err
 	}
 
-	accounts, err := file.OpenReadOnlyStock[uint64, mpt.AccountNode](path.Join(f.directory, "accounts"), mpt.AccountNodeWithPathLengthEncoderWithNodeHash{})
+	aEncoder, bEncoder, eEncoder, vEncoder := f.config.GetEncoders()
+
+	accounts, err := file.OpenReadOnlyStock[uint64, mpt.AccountNode](path.Join(f.directory, "accounts"), aEncoder)
 	if err != nil {
 		return nil, closeWithErr(err)
 	}
 	toClose = append(toClose, accounts)
 
-	branches, err := file.OpenReadOnlyStock[uint64, mpt.BranchNode](path.Join(f.directory, "branches"), mpt.BranchNodeEncoderWithNodeHash{})
+	branches, err := file.OpenReadOnlyStock[uint64, mpt.BranchNode](path.Join(f.directory, "branches"), bEncoder)
 	if err != nil {
 		return nil, closeWithErr(err)
 	}
 	toClose = append(toClose, branches)
 
-	extensions, err := file.OpenReadOnlyStock[uint64, mpt.ExtensionNode](path.Join(f.directory, "extensions"), mpt.ExtensionNodeEncoderWithNodeHash{})
+	extensions, err := file.OpenReadOnlyStock[uint64, mpt.ExtensionNode](path.Join(f.directory, "extensions"), eEncoder)
 	if err != nil {
 		return nil, closeWithErr(err)
 	}
 	toClose = append(toClose, extensions)
 
-	values, err := file.OpenReadOnlyStock[uint64, mpt.ValueNode](path.Join(f.directory, "values"), mpt.ValueNodeWithPathLengthEncoderWithNodeHash{})
+	values, err := file.OpenReadOnlyStock[uint64, mpt.ValueNode](path.Join(f.directory, "values"), vEncoder)
 	if err != nil {
 		return nil, closeWithErr(err)
 	}

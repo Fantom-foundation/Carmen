@@ -354,6 +354,11 @@ func (s *MptState) GetCodes() map[common.Hash][]byte {
 	return s.codes.getCodes()
 }
 
+// GetConfig returns the configuration of the archive.
+func (s *MptState) GetConfig() MptConfig {
+	return s.trie.GetConfig()
+}
+
 // Flush codes and state trie
 func (s *MptState) Flush() error {
 	return errors.Join(

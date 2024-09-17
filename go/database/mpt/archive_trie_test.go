@@ -3034,6 +3034,26 @@ func TestArchiveTrie_RestoredTrieCanBeReused(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_GetConfig(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
+			if err != nil {
+				t.Fatalf("cannot open archive: %v", err)
+			}
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			}()
+
+			if got, want := archive.GetConfig(), config; got.Name != want.Name {
+				t.Errorf("unexpected config, got: %v, want: %v", got, want)
+			}
+		})
+	}
+}
+
 func TestRootList_LoadRoots_ForwardsIoIssues(t *testing.T) {
 	tests := map[string]func(t *testing.T, dir string) error{
 		"fail to create directory": func(t *testing.T, dir string) error {
