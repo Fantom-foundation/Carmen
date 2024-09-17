@@ -10,7 +10,10 @@
 
 package mpt
 
-import "github.com/Fantom-foundation/Carmen/go/backend/stock"
+import (
+	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+)
 
 // MptConfig defines a set of configuration options for customizing the MPT
 // implementation. It is mainly intended to facilitate the accurate modeling
@@ -94,7 +97,32 @@ func (c MptConfig) GetEncoders() (
 	stock.ValueEncoder[ValueNode],
 ) {
 
-	return getEncoder(c)
+	switch c.HashStorageLocation {
+	case HashStoredWithParent:
+		if c.TrackSuffixLengthsInLeafNodes {
+			return AccountNodeWithPathLengthEncoderWithChildHash{},
+				BranchNodeEncoderWithChildHashes{},
+				ExtensionNodeEncoderWithChildHash{},
+				ValueNodeWithPathLengthEncoderWithoutNodeHash{}
+		}
+		return AccountNodeEncoderWithChildHash{},
+			BranchNodeEncoderWithChildHashes{},
+			ExtensionNodeEncoderWithChildHash{},
+			ValueNodeEncoderWithoutNodeHash{}
+	case HashStoredWithNode:
+		if c.TrackSuffixLengthsInLeafNodes {
+			return AccountNodeWithPathLengthEncoderWithNodeHash{},
+				BranchNodeEncoderWithNodeHash{},
+				ExtensionNodeEncoderWithNodeHash{},
+				ValueNodeWithPathLengthEncoderWithNodeHash{}
+		}
+		return AccountNodeEncoderWithNodeHash{},
+			BranchNodeEncoderWithNodeHash{},
+			ExtensionNodeEncoderWithNodeHash{},
+			ValueNodeEncoderWithNodeHash{}
+	default:
+		panic(fmt.Sprintf("unknown mode: %v", c.HashStorageLocation))
+	}
 }
 
 type HashStorageLocation bool

@@ -1610,7 +1610,7 @@ func testForest_WriteBufferRecoveryIsThreadSafe(t *testing.T, withConcurrentNode
 // synchronization features of the file-based stock which have caused problems
 // in the past.
 func openFileShadowForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
-	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := mptConfig.GetEncoders()
 	branchesA, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/A/branches")
 	if err != nil {
 		return nil, err

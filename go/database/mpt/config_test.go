@@ -10,12 +10,16 @@
 
 package mpt
 
-import "testing"
+import (
+	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"testing"
+)
 
 func TestMptConfig_GetEncoders(t *testing.T) {
 	for _, config := range allMptConfigs {
 		a1, b1, e1, v1 := config.GetEncoders()
-		a2, b2, e2, v2 := getEncoder(config)
+		a2, b2, e2, v2 := getExpectedEncoders(config)
 
 		if a1 != a2 {
 			t.Errorf("unexpected account node encoder, got %v, want %v", a1, a2)
@@ -29,5 +33,39 @@ func TestMptConfig_GetEncoders(t *testing.T) {
 		if v1 != v2 {
 			t.Errorf("unexpected value node encoder, got %v, want %v", v1, v2)
 		}
+	}
+}
+
+func getExpectedEncoders(config MptConfig) (
+	stock.ValueEncoder[AccountNode],
+	stock.ValueEncoder[BranchNode],
+	stock.ValueEncoder[ExtensionNode],
+	stock.ValueEncoder[ValueNode],
+) {
+	switch config.HashStorageLocation {
+	case HashStoredWithParent:
+		if config.TrackSuffixLengthsInLeafNodes {
+			return AccountNodeWithPathLengthEncoderWithChildHash{},
+				BranchNodeEncoderWithChildHashes{},
+				ExtensionNodeEncoderWithChildHash{},
+				ValueNodeWithPathLengthEncoderWithoutNodeHash{}
+		}
+		return AccountNodeEncoderWithChildHash{},
+			BranchNodeEncoderWithChildHashes{},
+			ExtensionNodeEncoderWithChildHash{},
+			ValueNodeEncoderWithoutNodeHash{}
+	case HashStoredWithNode:
+		if config.TrackSuffixLengthsInLeafNodes {
+			return AccountNodeWithPathLengthEncoderWithNodeHash{},
+				BranchNodeEncoderWithNodeHash{},
+				ExtensionNodeEncoderWithNodeHash{},
+				ValueNodeWithPathLengthEncoderWithNodeHash{}
+		}
+		return AccountNodeEncoderWithNodeHash{},
+			BranchNodeEncoderWithNodeHash{},
+			ExtensionNodeEncoderWithNodeHash{},
+			ValueNodeEncoderWithNodeHash{}
+	default:
+		panic(fmt.Sprintf("unknown mode: %v", config.HashStorageLocation))
 	}
 }
