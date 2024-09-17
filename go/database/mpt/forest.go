@@ -148,7 +148,7 @@ func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig Fore
 		}
 	}()
 
-	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := mptConfig.GetEncoders()
 	branches, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
@@ -193,7 +193,7 @@ func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestCo
 	}()
 
 	accountsDir, branchsDir, extensionsDir, valuesDir := getForestDirectories(directory)
-	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := mptConfig.GetEncoders()
 	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, branchsDir)
 	if err != nil {
 		return nil, err
@@ -1043,40 +1043,6 @@ func getForestDirectories(root string) (
 		filepath.Join(root, "branches"),
 		filepath.Join(root, "extensions"),
 		filepath.Join(root, "values")
-}
-
-func getEncoder(config MptConfig) (
-	stock.ValueEncoder[AccountNode],
-	stock.ValueEncoder[BranchNode],
-	stock.ValueEncoder[ExtensionNode],
-	stock.ValueEncoder[ValueNode],
-) {
-	switch config.HashStorageLocation {
-	case HashStoredWithParent:
-		if config.TrackSuffixLengthsInLeafNodes {
-			return AccountNodeWithPathLengthEncoderWithChildHash{},
-				BranchNodeEncoderWithChildHashes{},
-				ExtensionNodeEncoderWithChildHash{},
-				ValueNodeWithPathLengthEncoderWithoutNodeHash{}
-		}
-		return AccountNodeEncoderWithChildHash{},
-			BranchNodeEncoderWithChildHashes{},
-			ExtensionNodeEncoderWithChildHash{},
-			ValueNodeEncoderWithoutNodeHash{}
-	case HashStoredWithNode:
-		if config.TrackSuffixLengthsInLeafNodes {
-			return AccountNodeWithPathLengthEncoderWithNodeHash{},
-				BranchNodeEncoderWithNodeHash{},
-				ExtensionNodeEncoderWithNodeHash{},
-				ValueNodeWithPathLengthEncoderWithNodeHash{}
-		}
-		return AccountNodeEncoderWithNodeHash{},
-			BranchNodeEncoderWithNodeHash{},
-			ExtensionNodeEncoderWithNodeHash{},
-			ValueNodeEncoderWithNodeHash{}
-	default:
-		panic(fmt.Sprintf("unknown mode: %v", config.HashStorageLocation))
-	}
 }
 
 type writeBufferSink struct {
