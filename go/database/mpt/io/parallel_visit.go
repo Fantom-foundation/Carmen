@@ -182,6 +182,10 @@ func visitAllWithConfig(
 	// This way, the trie is completely read multi-threaded.
 	// To favor the depth-first order, the node ids in the queue are
 	// sorted in a priority queue so that the deepest nodes are read first.
+	// To avoid prefetching too many far-future nodes, workers synchronize on a
+	// barrier periodically. This way, if worker processing the node with the
+	// highest priority is slow or stalled for some reason, the remaining
+	// workers are not able to rush ahead and prefetch far-future nodes.
 	for i := 0; i < config.numWorker; i++ {
 		go func(id int) {
 			defer workersDoneWg.Done()
