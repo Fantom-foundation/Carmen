@@ -676,7 +676,7 @@ func loadRoots(archiveDirectory string) (*rootList, error) {
 
 func loadRootsFrom(reader io.Reader, sizeInBytes int64) ([]Root, error) {
 	encoder := NodeIdEncoder{}
-	res := make([]Root, 0, sizeInBytes/int64(encoder.GetEncodedSize()))
+	res := make([]Root, 0, sizeInBytes/int64(encoder.GetEncodedSize()+32)) // NodeID size + 32 bytes Hash size
 	buffer := make([]byte, encoder.GetEncodedSize())
 	var hash common.Hash
 	for {

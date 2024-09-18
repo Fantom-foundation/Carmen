@@ -1815,6 +1815,24 @@ func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_LoadRootsCapacityIsCorrect(t *testing.T) {
+	for _, size := range []int64{1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 300, 500, 1000, 2000, 3000, 5000, 10000} {
+		reader := bytes.NewReader([]byte{})
+		res, err := loadRootsFrom(reader, size)
+		if err != nil {
+			t.Fatalf("error loading roots: %v", err)
+		}
+		if len(res) != 0 {
+			t.Errorf("unexpected len, wanted 0, got %d", len(res))
+		}
+
+		expected := size / int64(NodeIdEncoder{}.GetEncodedSize()+32)
+		if got, want := cap(res), int(expected); got > want {
+			t.Errorf("unexpected capacity, wanted %d, got %d", want, got)
+		}
+	}
+}
+
 func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 	dir := t.TempDir()
 	original, err := loadRoots(dir)
