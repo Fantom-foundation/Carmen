@@ -2647,14 +2647,17 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 			})
 			return archive.head.(*MptState).lock.Release()
 		},
-		/* -- disabled due to flaky behavior in race condition CI (see issue #994) --
-		"no_close_with_extra_blocks": func(archive *ArchiveTrie) error {
+		"no_close_with_extra_blocks": func(t *testing.T, archive *ArchiveTrie) error {
+			t.Cleanup(func() {
+				if err := archive.forest.Close(); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			})
 			return errors.Join(
 				addBlocks(archive, 92, 98),
 				archive.head.(*MptState).lock.Release(),
 			)
 		},
-		*/
 	}
 
 	for name, test := range tests {
@@ -2666,7 +2669,8 @@ func TestArchiveTrie_RestoreBlockHeight(t *testing.T) {
 				archive, err := OpenArchiveTrie(
 					dir, S5ArchiveConfig,
 					NodeCacheConfig{
-						Capacity: 1000,
+						Capacity:              1000,
+						BackgroundFlushPeriod: 1000 * time.Second, // disable background flush
 					},
 					ArchiveConfig{
 						CheckpointInterval: 10,
