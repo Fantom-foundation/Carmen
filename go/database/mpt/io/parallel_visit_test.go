@@ -14,13 +14,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
+	"path"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
-	"os"
-	"path"
-	"strings"
-	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"go.uber.org/mock/gomock"
@@ -154,6 +158,96 @@ func TestNodeSource_CanRead_Nodes(t *testing.T) {
 	}
 }
 
+func TestVisit_CanHandleSlowConsumer(t *testing.T) {
+	// Create a reasonable large trie.
+	config := mpt.S5LiveConfig
+	dir := t.TempDir()
+	live, err := mpt.OpenGoFileState(dir, config, mpt.NodeCacheConfig{Capacity: 1024})
+	if err != nil {
+		t.Fatalf("failed to open live db: %v", err)
+	}
+	defer func() {
+		if err := live.Close(); err != nil {
+			t.Fatalf("failed to close live db: %v", err)
+		}
+	}()
+
+	addr := common.Address{}
+	err = errors.Join(
+		live.CreateAccount(addr),
+		live.SetNonce(addr, common.Nonce{1}),
+	)
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+	for i := 0; i < 100; i++ {
+		for j := 0; j < 100; j++ {
+			key := common.Key{byte(i), byte(j)}
+			err = live.SetStorage(addr, key, common.Value{1})
+			if err != nil {
+				t.Fatalf("failed to set storage: %v", err)
+			}
+		}
+		if _, err := live.GetHash(); err != nil {
+			t.Fatalf("failed to get hash: %v", err)
+		}
+	}
+	if err := live.Flush(); err != nil {
+		t.Fatalf("failed to flush live db: %v", err)
+	}
+
+	numNodes := 0
+	err = live.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		numNodes++
+		return mpt.VisitResponseContinue
+	}))
+	if err != nil {
+		t.Fatalf("failed to visit trie: %v", err)
+	}
+
+	root := live.GetRootId()
+
+	// This visitor is stalling from time to time providing the pre-fetcher
+	// workers room to rush ahead and filling up the prefetch buffer.
+	numVisited := 0
+	visitor := makeNoResponseVisitor(func(mpt.Node, mpt.NodeInfo) error {
+		numVisited++
+		if numVisited%1000 == 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
+		return nil
+	})
+
+	err = visitAllWithConfig(
+		&stockNodeSourceFactory{dir, config},
+		root,
+		visitor,
+		visitAllConfig{
+			pruneStorage:      false,
+			numWorker:         4,
+			throttleThreshold: 100,
+			batchSize:         1,
+			monitor: func(numResponses int) {
+				// The actual upper limit is a combination of the threshold for
+				// throttling, the number of workers, the batch size, and the
+				// structure of the trie. The limit used here is a conservative
+				// upper bound which would get exceeded by a factor of 10 if the
+				// workers would not be throttled.
+				if got, limit := numResponses, 200; got > limit {
+					t.Errorf("expected at most %d responses, got %d", limit, got)
+				}
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("failed to visit all nodes: %v", err)
+	}
+
+	if numNodes != numVisited {
+		t.Errorf("expected %d nodes, got %d", numNodes, numVisited)
+	}
+}
+
 func TestVisit_Nodes_Failing_CannotOpenDir(t *testing.T) {
 	for _, config := range allMptConfigs {
 		config := config
@@ -230,7 +324,7 @@ func TestVisit_Nodes_CannotOpenFiles(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	fc := NewMocknodeSourceFactory(ctrl)
-	fc.EXPECT().open().Return(nil, injectedError).Times(16)
+	fc.EXPECT().open().Return(nil, injectedError).Times(16 + 1)
 
 	if err := visitAllWithSources(fc, mpt.EmptyId(), nil, false); !errors.Is(err, injectedError) {
 		t.Errorf("expected error %v, got %v", injectedError, err)
@@ -288,7 +382,7 @@ func TestVisit_Nodes_CannotCloseSources(t *testing.T) {
 					mockSource.EXPECT().get(gomock.Any()).DoAndReturn(parentSource.get).AnyTimes()
 					mockSource.EXPECT().Close().Return(injectedError)
 					return mockSource, nil
-				}).Times(16)
+				}).Times(16 + 1)
 
 				visitor := NewMocknoResponseNodeVisitor(ctrl)
 				visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
@@ -311,7 +405,7 @@ func TestVisit_Nodes_CannotGetNode_FailingSource(t *testing.T) {
 		mockSource.EXPECT().get(gomock.Any()).Return(nil, injectedError).AnyTimes()
 		mockSource.EXPECT().Close().Return(nil)
 		return mockSource, nil
-	}).Times(16)
+	}).Times(16 + 1)
 
 	visitor := NewMocknoResponseNodeVisitor(ctrl)
 	visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
@@ -603,4 +697,91 @@ func createMptState(t *testing.T, dir string, config mpt.MptConfig) *mpt.MptStat
 	}
 
 	return live
+}
+
+func TestBarrier_SyncsWorkers(t *testing.T) {
+	const NumWorker = 30
+	const NumIterations = 100
+
+	data := []int{}
+	dataLock := sync.Mutex{}
+
+	// produces data in the form of [0, 0, 0, 1, 1, 1, 2, 2, 2, ...]
+	var wg sync.WaitGroup
+	wg.Add(NumWorker)
+	barrier := newBarrier(NumWorker)
+	for i := 0; i < NumWorker; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < NumIterations; j++ {
+				barrier.wait()
+				dataLock.Lock()
+				data = append(data, j)
+				dataLock.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if len(data) != NumWorker*NumIterations {
+		t.Errorf("expected %d, got %d", NumWorker*NumIterations, len(data))
+	}
+
+	sorted := slices.Clone(data)
+	slices.Sort(sorted)
+
+	if !slices.Equal(data, sorted) {
+		t.Errorf("expected sorted data, got %v", data)
+	}
+}
+
+func TestBarrier_CanBeReleased(t *testing.T) {
+	const NumWorker = 3
+
+	var wg sync.WaitGroup
+	wg.Add(NumWorker)
+	barrier := newBarrier(NumWorker)
+	for i := 0; i < NumWorker; i++ {
+		go func(i int) {
+			defer wg.Done()
+			if i != 0 {
+				barrier.wait() // not all workers will reach the barrier
+			}
+			barrier.wait() // reached after releasing the barrier
+		}(i)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Errorf("should not have completed without releasing the barrier")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	barrier.release()
+	<-done
+}
+
+func TestBarrier_AReleasedBarrierDoesNotBlock(t *testing.T) {
+	barrier := newBarrier(2)
+	barrier.release()
+
+	done := make(chan struct{})
+	go func() {
+		close(done)
+		barrier.wait()
+	}()
+
+	select {
+	case <-done:
+		// all fine
+	case <-time.After(time.Second):
+		t.Errorf("the released barrier should not block")
+	}
 }
