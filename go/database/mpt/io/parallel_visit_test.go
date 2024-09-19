@@ -166,6 +166,11 @@ func TestVisit_CanHandleSlowConsumer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open live db: %v", err)
 	}
+	defer func() {
+		if err := live.Close(); err != nil {
+			t.Fatalf("failed to close live db: %v", err)
+		}
+	}()
 
 	addr := common.Address{}
 	err = errors.Join(
@@ -201,12 +206,9 @@ func TestVisit_CanHandleSlowConsumer(t *testing.T) {
 	}
 
 	root := live.GetRootId()
-	if err := live.Close(); err != nil {
-		t.Fatalf("failed to close live db: %v", err)
-	}
 
 	// This visitor is stalling from time to time providing the pre-fetcher
-	// workers from rushing ahead and filling up the prefetch buffer.
+	// workers room to rush ahead and filling up the prefetch buffer.
 	numVisited := 0
 	visitor := makeNoResponseVisitor(func(mpt.Node, mpt.NodeInfo) error {
 		numVisited++
