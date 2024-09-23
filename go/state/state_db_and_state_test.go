@@ -44,7 +44,7 @@ func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
-			db := state.CreateStateDBUsing(store)
+			db := state.CreateCustomStateDBUsing(store, 100000)
 			defer db.Close()
 
 			// First block: set up some balances.
@@ -161,7 +161,7 @@ func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 					t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 				}
 			}
-			db := state.CreateStateDBUsing(store)
+			db := state.CreateCustomStateDBUsing(store, 100000)
 			defer db.Close()
 
 			for i := 0; i < 10; i++ {
@@ -190,7 +190,7 @@ func TestCarmenBulkLoadsCanBeInterleavedWithRegularUpdates(t *testing.T) {
 					t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 				}
 			}
-			db := state.CreateStateDBUsing(store)
+			db := state.CreateCustomStateDBUsing(store, 100000)
 			defer db.Close()
 
 			for i := 0; i < 5; i++ {
