@@ -822,6 +822,22 @@ func TestState_All_Archive_Operations_May_Cause_Failure(t *testing.T) {
 	}
 }
 
+func TestGoState_CloseIsCalledIfFlushFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	live := state.NewMockLiveDB(ctrl)
+	injectedErr := errors.New("error")
+
+	gomock.InOrder(
+		live.EXPECT().Flush().Return(injectedErr),
+		live.EXPECT().Close(),
+	)
+
+	state := newGoState(live, nil, nil)
+	if err := state.Close(); !errors.Is(err, injectedErr) {
+		t.Errorf("unexpected error")
+	}
+}
+
 func runAddBlock(block uint64, stateDB state.StateDB) {
 	addr := common.Address{byte(block)}
 	key := common.Key{0xA}
