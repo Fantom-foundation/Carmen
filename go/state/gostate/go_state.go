@@ -264,8 +264,9 @@ func (s *GoState) Flush() error {
 }
 
 func (s *GoState) Close() error {
-	if err := s.Flush(); err != nil {
-		return err
+	err := s.Flush()
+	if err != nil {
+		s.stateError = errors.Join(s.stateError, err)
 	}
 
 	if err := s.live.Close(); err != nil {

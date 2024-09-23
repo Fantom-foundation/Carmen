@@ -226,7 +226,7 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s state.State
 		if err != nil {
 			t.Fatalf("failed to create reference state: %v", err)
 		}
-		ref := state.CreateStateDBUsing(ref_state)
+		ref := state.CreateCustomStateDBUsing(ref_state, 100000)
 		defer ref.Close()
 		mod(ref)
 		ref.EndTransaction()
@@ -246,7 +246,7 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s state.State
 						t.Fatalf("failed to initialize state %s: %v", config.name(), err)
 					}
 				}
-				stateDb := state.CreateStateDBUsing(store)
+				stateDb := state.CreateCustomStateDBUsing(store, 100000)
 				defer stateDb.Close()
 
 				mod(stateDb)
@@ -584,7 +584,9 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
-			defer s.Close()
+			defer func() {
+				s.Close()
+			}()
 
 			// Have multiple goroutines access the state concurrently.
 			ready := sync.WaitGroup{}
