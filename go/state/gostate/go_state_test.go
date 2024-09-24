@@ -624,6 +624,7 @@ func TestState_Flush_Or_Close_Corrupted_State_Detected(t *testing.T) {
 
 	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
 	liveDB.EXPECT().Flush().AnyTimes()
+	liveDB.EXPECT().Close().AnyTimes()
 
 	injectedErr := fmt.Errorf("injectedError")
 
@@ -791,10 +792,12 @@ func TestState_All_Archive_Operations_May_Cause_Failure(t *testing.T) {
 
 	liveDB := state.NewMockLiveDB(ctrl)
 	liveDB.EXPECT().Flush().AnyTimes()
+	liveDB.EXPECT().Close()
 
 	archiveDB := archive.NewMockArchive(ctrl)
 	archiveDB.EXPECT().GetBlockHeight().Return(uint64(0), false, injectedErr).Times(2)
 	archiveDB.EXPECT().Flush().AnyTimes()
+	archiveDB.EXPECT().Close()
 
 	db := newGoState(liveDB, archiveDB, []func(){})
 	// repeated calls must all fail
