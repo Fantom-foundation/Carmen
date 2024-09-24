@@ -828,7 +828,7 @@ func TestState_All_Archive_Operations_May_Cause_Failure(t *testing.T) {
 func TestGoState_CloseIsCalledIfFlushFails(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	live := state.NewMockLiveDB(ctrl)
-	injectedErr := errors.New("error")
+	injectedErr := errors.New("injectedError")
 
 	gomock.InOrder(
 		live.EXPECT().Flush().Return(injectedErr),

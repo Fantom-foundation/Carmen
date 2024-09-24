@@ -350,7 +350,7 @@ func TestPersistentStateDB(t *testing.T) {
 				}
 			}
 
-			stateDb := state.CreateStateDBUsing(s)
+			stateDb := state.CreateCustomStateDBUsing(s, 100000)
 
 			stateDb.BeginEpoch()
 			stateDb.BeginBlock()
@@ -407,11 +407,8 @@ func TestStateDBRead(t *testing.T) {
 	}
 
 	s := createState(t, *stateImpl, *stateDir)
-	defer func() {
-		_ = s.Close()
-	}()
-
-	stateDb := state.CreateStateDBUsing(s)
+	stateDb := state.CreateCustomStateDBUsing(s, 100000)
+	defer stateDb.Close()
 
 	if state := stateDb.Exist(address1); state != true {
 		t.Errorf("Unexpected value, val: %v != %v", state, true)
@@ -508,7 +505,6 @@ func TestStateDBRead(t *testing.T) {
 }
 
 func TestStateDBArchive(t *testing.T) {
-
 	for _, config := range initStates() {
 		// skip configurations without an archive
 		if config.config.Archive == state.NoArchive {
@@ -527,7 +523,7 @@ func TestStateDBArchive(t *testing.T) {
 				}
 			}
 			defer s.Close()
-			stateDb := state.CreateStateDBUsing(s)
+			stateDb := state.CreateCustomStateDBUsing(s, 100000)
 
 			stateDb.AddBalance(address2, amount.New(22))
 
@@ -550,11 +546,13 @@ func TestStateDBArchive(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get state of block 1; %s", err)
 			}
+			defer state1.Release()
 
 			state2, err := stateDb.GetArchiveStateDB(2)
 			if err != nil {
 				t.Fatalf("failed to get state of block 2; %s", err)
 			}
+			defer state2.Release()
 
 			if exist := state1.Exist(address1); err != nil || exist != true {
 				t.Errorf("invalid account state at block 1: %t", exist)
@@ -584,9 +582,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
-			defer func() {
-				s.Close()
-			}()
+			defer s.Close()
 
 			// Have multiple goroutines access the state concurrently.
 			ready := sync.WaitGroup{}
@@ -600,7 +596,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 					// Create a state and wait for other go-routines to be ready.
 					var stateDb state.VmStateDB
 					if isPrimary {
-						stateDb = state.CreateStateDBUsing(s)
+						stateDb = state.CreateCustomStateDBUsing(s, 100000)
 					} else {
 						stateDb = state.CreateNonCommittableStateDBUsing(s)
 					}
