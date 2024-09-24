@@ -232,7 +232,7 @@ func TestVisit_CanHandleSlowConsumer(t *testing.T) {
 				// throttling, the number of workers, the batch size, and the
 				// structure of the trie. The limit used here is a conservative
 				// upper bound which would get exceeded by a factor of 10 if the
-				// workers would not be throttled.
+				// workers were not throttled.
 				if got, limit := numResponses, 200; got > limit {
 					t.Errorf("expected at most %d responses, got %d", limit, got)
 				}
