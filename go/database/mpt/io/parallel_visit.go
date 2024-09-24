@@ -99,6 +99,7 @@ func visitAllWithConfig(
 	type response struct {
 		node mpt.Node
 		err  error
+		main bool // response comes from the main thread
 	}
 	responses := map[mpt.NodeId]response{}
 	responsesMutex := sync.Mutex{}
@@ -113,7 +114,7 @@ func visitAllWithConfig(
 
 	requests.Add(request{nil, root})
 
-	prefetchNext := func(source nodeSource) {
+	prefetchNext := func(source nodeSource, main bool) {
 		// get the next job
 		requestsMutex.Lock()
 		req, present := requests.Pop()
@@ -128,7 +129,7 @@ func visitAllWithConfig(
 		node, err := source.get(req.id)
 
 		responsesMutex.Lock()
-		responses[req.id] = response{node, err}
+		responses[req.id] = response{node, err, main}
 		responsesMutex.Unlock()
 
 		// if there was a fetch error, stop the workers
@@ -221,7 +222,7 @@ func visitAllWithConfig(
 
 				// Do the actual prefetching in parallel.
 				for i := 0; i < batchSize; i++ {
-					prefetchNext(source)
+					prefetchNext(source, false)
 				}
 			}
 		}(i)
@@ -263,7 +264,13 @@ func visitAllWithConfig(
 		responsesMutex.Lock()
 		for {
 			if config.monitor != nil {
-				config.monitor(len(responses))
+				var numResponses int
+				for _, res := range responses {
+					if !res.main {
+						numResponses++
+					}
+				}
+				config.monitor(numResponses)
 			}
 			found := false
 			res, found = responses[cur]
@@ -275,7 +282,7 @@ func visitAllWithConfig(
 				// If the node is not yet available, join the workers
 				// in loading the next node.
 				responsesMutex.Unlock()
-				prefetchNext(source)
+				prefetchNext(source, true)
 				responsesMutex.Lock()
 			}
 		}
