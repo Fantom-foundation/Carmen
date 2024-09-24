@@ -50,7 +50,7 @@ func (a *Archive) Flush() error {
 }
 
 func (a *Archive) Close() error {
-	// no-op
+	a.accountHashCache.Clear()
 	return nil
 }
 

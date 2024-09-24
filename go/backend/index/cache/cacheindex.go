@@ -80,6 +80,7 @@ func (m *Index[K, I]) Flush() error {
 
 // Close closes the storage and clean-ups all possible dirty values.
 func (m *Index[K, I]) Close() error {
+	m.cache.Clear()
 	return m.wrapped.Close()
 }
 

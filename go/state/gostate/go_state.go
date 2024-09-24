@@ -264,13 +264,11 @@ func (s *GoState) Flush() error {
 }
 
 func (s *GoState) Close() error {
-	if err := s.Flush(); err != nil {
-		return err
-	}
-
-	if err := s.live.Close(); err != nil {
-		s.stateError = errors.Join(s.stateError, err)
-	}
+	s.stateError = errors.Join(
+		s.stateError,
+		s.Flush(),
+		s.live.Close(),
+	)
 
 	// Shut down archive writer background worker.
 	if s.archiveWriter != nil {

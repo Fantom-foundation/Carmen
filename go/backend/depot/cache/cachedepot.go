@@ -95,6 +95,8 @@ func (m *Depot[I]) Flush() error {
 
 // Close the depot
 func (m *Depot[I]) Close() error {
+	m.cache.Clear()
+	m.sizeCache.Clear()
 	return m.depot.Close()
 }
 
