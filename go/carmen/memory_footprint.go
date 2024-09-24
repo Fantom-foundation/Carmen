@@ -10,9 +10,14 @@
 
 package carmen
 
-import "github.com/Fantom-foundation/Carmen/go/common"
+import (
+	"fmt"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+)
 
 type MemoryFootprint interface {
+	fmt.Stringer
 	// Total provides the number of bytes consumed by the database structure including all its subcomponents.
 	Total() uint64
 }
