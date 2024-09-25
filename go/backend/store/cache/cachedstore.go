@@ -11,6 +11,7 @@
 package cache
 
 import (
+	"errors"
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -75,10 +76,9 @@ func (m *Store[I, V]) Flush() error {
 }
 
 func (m *Store[I, V]) Close() error {
-	if err := m.Flush(); err != nil {
-		return err
-	}
-	return m.store.Close()
+	err := m.Flush()
+	m.cache.Clear()
+	return errors.Join(err, m.store.Close())
 }
 
 // GetMemoryFootprint provides the size of the store in memory in bytes
