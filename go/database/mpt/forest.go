@@ -310,9 +310,7 @@ func makeForest(
 	sink := writeBufferSink{res}
 
 	// Start a background worker flushing dirty nodes to disk.
-	res.flusher = startNodeFlusher(res.nodeCache, sink, nodeFlusherConfig{
-		period: forestConfig.BackgroundFlushPeriod,
-	})
+	res.flusher = startNodeFlusher(res.nodeCache, sink, newTimeTickerNodeFlusherConfig(forestConfig.BackgroundFlushPeriod))
 
 	// Run a background worker releasing entire tries of nodes on demand.
 	go func() {

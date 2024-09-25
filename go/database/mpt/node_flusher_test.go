@@ -13,6 +13,7 @@ package mpt
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/ticker"
 	"testing"
 	"time"
 
@@ -44,30 +45,41 @@ func TestNodeFlusher_StartAndStopWithDisabledFlusher(t *testing.T) {
 }
 
 func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
-	const period = 1 * time.Second
 	ctrl := gomock.NewController(t)
 	cache := NewMockNodeCache(ctrl)
 
+	const loops = 3
 	flushSignal := make(chan struct{}, 1)
-	cache.EXPECT().ForEach(gomock.Any()).Times(3).Do(func(f func(id NodeId, node *shared.Shared[Node])) {
+	cache.EXPECT().ForEach(gomock.Any()).Times(loops).Do(func(f func(id NodeId, node *shared.Shared[Node])) {
 		flushSignal <- struct{}{}
 	}).Return()
 
+	tickerC := make(chan time.Time, loops)
+	for i := 0; i < loops; i++ {
+		tickerC <- time.Now()
+	}
+
+	mockTicker := ticker.NewMockTicker(ctrl)
+	mockTicker.EXPECT().C().Return(tickerC).AnyTimes()
+	mockTicker.EXPECT().Stop()
+
 	flusher := startNodeFlusher(cache, nil, nodeFlusherConfig{
-		period: period,
+		tickerFactory: func(duration time.Duration) ticker.Ticker {
+			return mockTicker
+		},
 	})
 
-	last := time.Now()
-	for i := 0; i < 3; i++ {
+	var numTicks int
+	for i := 0; i < loops; i++ {
 		select {
 		case <-flushSignal:
-			if time.Since(last) < period/2 {
-				t.Fatalf("flush signal received too early")
-			}
-			last = time.Now()
-		case <-time.After(period * 2):
-			t.Fatalf("flush signal not received")
+			numTicks++
+		case <-time.After(30 * time.Second):
 		}
+	}
+
+	if got, want := numTicks, loops; got != want {
+		t.Errorf("unexpected number of ticks: got %v, want %v", got, want)
 	}
 
 	if err := flusher.Stop(); err != nil {
@@ -98,9 +110,7 @@ func TestNodeFlusher_ErrorsAreCollected(t *testing.T) {
 	cache.EXPECT().Get(RefTo(id)).Return(node, true).AnyTimes()
 	sink.EXPECT().Write(id, gomock.Any()).Return(injectedError).AnyTimes()
 
-	flusher := startNodeFlusher(cache, sink, nodeFlusherConfig{
-		period: period,
-	})
+	flusher := startNodeFlusher(cache, sink, newTimeTickerNodeFlusherConfig(period))
 
 	<-done
 
