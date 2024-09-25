@@ -137,7 +137,9 @@ func TestPageClose(t *testing.T) {
 		t.Errorf("Page was not created, %v != %v", actualPage, newPage)
 	}
 
-	_ = pagePool.Close()
+	if err := pagePool.Close(); err != nil {
+		t.Errorf("cannot close the page pool: %v", err)
+	}
 
 	// close must persist the page
 	// try to get the page from the storage, and it must exist there

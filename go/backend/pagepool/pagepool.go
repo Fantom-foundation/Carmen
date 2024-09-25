@@ -112,9 +112,10 @@ func (p *PagePool[ID, T]) Flush() (err error) {
 	return nil
 }
 
-func (p *PagePool[ID, T]) Close() (err error) {
+func (p *PagePool[ID, T]) Close() error {
+	err := p.Flush()
 	p.pagePool.Clear()
-	return p.Flush()
+	return err
 }
 
 // storePage persist the Page to the disk
