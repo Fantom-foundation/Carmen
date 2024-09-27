@@ -20,7 +20,10 @@ import "time"
 // the standard time.Ticker based on time.Duration intervals.
 // Furthermore, the ticker includes the method Stop to terminate
 // the ticker. When the ticker is stopped, no more ticks will be
-// sent via the channel.
+// sent via the channel. The Stop method should be called all
+// the time after the ticker is no longer necessary, even if further
+// ticking does not matter, because Stop also makes sure all the
+// resources are freed up.
 type Ticker interface {
 
 	// C returns the channel on which the ticks are delivered.

@@ -44,7 +44,7 @@ func TestNodeFlusher_StartAndStopWithDisabledFlusher(t *testing.T) {
 	}
 }
 
-func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
+func TestNodeFlusher_UsesTickerToTriggerFlushes(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cache := NewMockNodeCache(ctrl)
 
