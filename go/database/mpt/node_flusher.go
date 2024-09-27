@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"errors"
+	"github.com/Fantom-foundation/Carmen/go/common/ticker"
 	"slices"
 	"time"
 
@@ -25,7 +26,18 @@ type nodeFlusher struct {
 }
 
 type nodeFlusherConfig struct {
-	period time.Duration // uses a default period if zero and disables flushing if negative
+	period        time.Duration // uses a default period if zero and disables flushing if negative
+	tickerFactory func(time.Duration) ticker.Ticker
+}
+
+// newTimeTickerNodeFlusherConfig creates a new node flusher configuration with the standard time ticker.
+func newTimeTickerNodeFlusherConfig(d time.Duration) nodeFlusherConfig {
+	return nodeFlusherConfig{
+		period: d,
+		tickerFactory: func(duration time.Duration) ticker.Ticker {
+			return ticker.NewTimeTicker(duration)
+		},
+	}
 }
 
 func startNodeFlusher(cache NodeCache, sink NodeSink, config nodeFlusherConfig) *nodeFlusher {
@@ -43,16 +55,23 @@ func startNodeFlusher(cache NodeCache, sink NodeSink, config nodeFlusherConfig) 
 		period = 5 * time.Second
 	}
 
+	tickerFactory := config.tickerFactory
+	if tickerFactory == nil {
+		tickerFactory = func(duration time.Duration) ticker.Ticker {
+			return ticker.NewTimeTicker(duration)
+		}
+	}
+
 	if period > 0 {
 		go func() {
 			defer close(done)
-			ticker := time.NewTicker(period)
+			ticker := tickerFactory(period)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-shutdown:
 					return
-				case <-ticker.C:
+				case <-ticker.C():
 					if err := tryFlushDirtyNodes(cache, sink); err != nil {
 						res.errs = append(res.errs, err)
 					}
