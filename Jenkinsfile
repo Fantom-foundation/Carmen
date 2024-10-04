@@ -17,7 +17,6 @@ pipeline {
     }
 
     environment {
-        GOROOT = '/usr/lib/go-1.21/'
         GOMEMLIMIT = '5GiB'
         CC = 'clang-14'
         CXX = 'clang++-14'
