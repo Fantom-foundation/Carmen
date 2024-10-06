@@ -342,6 +342,9 @@ func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig
 
 	counter := 0
 
+	numAccounts := 0
+	numAccountsWithBalance := 0
+
 	progress := logger.NewProgressTracker("imported %d accounts, %.2f accounts/s", 1_000_000)
 	hashFound := false
 	var stateHash common.Hash
@@ -381,26 +384,37 @@ func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig
 			if _, err := io.ReadFull(in, balance[:]); err != nil {
 				return root, hash, err
 			}
-			if err := db.SetBalance(addr, amount.NewFromBytes(balance[:]...)); err != nil {
-				return root, hash, err
+			/*
+				if err := db.SetBalance(addr, amount.NewFromBytes(balance[:]...)); err != nil {
+					return root, hash, err
+				}
+			*/
+			numAccounts++
+			if !amount.NewFromBytes(balance[:]...).IsZero() {
+				numAccountsWithBalance++
 			}
+			fmt.Printf("number of accounts: %d, with balance: %d\n", numAccounts, numAccountsWithBalance)
+
 			if _, err := io.ReadFull(in, nonce[:]); err != nil {
 				return root, hash, err
 			}
-			if err := db.SetNonce(addr, nonce); err != nil {
-				return root, hash, err
-			}
+			/*
+				if err := db.SetNonce(addr, nonce); err != nil {
+					return root, hash, err
+				}
+			*/
 			if _, err := io.ReadFull(in, hash[:]); err != nil {
 				return root, hash, err
 			}
-			if code, found := codes[hash]; found {
-				if err := db.SetCode(addr, code); err != nil {
-					return root, hash, err
+			/*
+				if code, found := codes[hash]; found {
+					if err := db.SetCode(addr, code); err != nil {
+						return root, hash, err
+					}
+				} else {
+					return root, hash, fmt.Errorf("missing code with hash %x for account %x", hash[:], addr[:])
 				}
-			} else {
-				return root, hash, fmt.Errorf("missing code with hash %x for account %x", hash[:], addr[:])
-			}
-
+			*/
 		case 'S':
 			if _, err := io.ReadFull(in, key[:]); err != nil {
 				return root, hash, err
@@ -408,9 +422,11 @@ func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig
 			if _, err := io.ReadFull(in, value[:]); err != nil {
 				return root, hash, err
 			}
-			if err := db.SetStorage(addr, key, value); err != nil {
-				return root, hash, err
-			}
+			/*
+				if err := db.SetStorage(addr, key, value); err != nil {
+					return root, hash, err
+				}
+			*/
 
 		case 'C':
 			code, err := readCode(in)
