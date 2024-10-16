@@ -124,6 +124,10 @@ func (s *ArchiveState) GetCodeHash(address common.Address) (hash common.Hash, er
 	return codeHash, s.archiveError
 }
 
+func (s *ArchiveState) HasEmptyStorage(addr common.Address) (bool, error) {
+	panic("ArchiveState does not support HasEmptyStorage operation")
+}
+
 func (s *ArchiveState) Apply(block uint64, update common.Update) error {
 	panic("ArchiveState does not support Apply operation")
 }
