@@ -792,11 +792,11 @@ func TestState_All_Live_Operations_May_Cause_Failure(t *testing.T) {
 				if _, err := db.GetHash(); shouldFail && !errors.Is(err, injectedErr) {
 					t.Errorf("operation should fail")
 				}
-				shouldFail = shouldFail || errors.Is(results[7], injectedErr)
+				shouldFail = shouldFail || errors.Is(results[8], injectedErr)
 				if _, err := db.HasEmptyStorage(addr); shouldFail && !errors.Is(err, injectedErr) {
 					t.Errorf("operation should fail")
 				}
-				shouldFail = shouldFail || errors.Is(results[8], injectedErr)
+				shouldFail = shouldFail || errors.Is(results[9], injectedErr)
 				if err := db.Flush(); shouldFail && !errors.Is(err, injectedErr) {
 					t.Errorf("operation should fail")
 				}
