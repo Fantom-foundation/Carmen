@@ -3502,6 +3502,14 @@ func TestStateDB_CollectsErrorsAndReportsThemDuringACheck(t *testing.T) {
 				db.GetHash()
 			},
 		},
+		"has-empty-storage": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().HasEmptyStorage(gomock.Any()).Return(false, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.HasEmptyStorage(address1)
+			},
+		},
 	}
 
 	for name, test := range tests {
@@ -4359,11 +4367,7 @@ func TestStateDB_HasEmptyStorage(t *testing.T) {
 	st.EXPECT().HasEmptyStorage(addr).Return(true, nil)
 
 	statedb := stateDB{state: st}
-	empty, err := statedb.HasEmptyStorage(addr)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !empty {
+	if empty := statedb.HasEmptyStorage(addr); !empty {
 		t.Errorf("unexpected non-empty storage")
 	}
 }

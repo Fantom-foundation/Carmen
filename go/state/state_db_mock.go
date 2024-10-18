@@ -394,12 +394,11 @@ func (mr *MockVmStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.C
 }
 
 // HasEmptyStorage mocks base method.
-func (m *MockVmStateDB) HasEmptyStorage(addr common.Address) (bool, error) {
+func (m *MockVmStateDB) HasEmptyStorage(addr common.Address) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasEmptyStorage", addr)
 	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // HasEmptyStorage indicates an expected call of HasEmptyStorage.
@@ -1064,12 +1063,11 @@ func (mr *MockStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Cal
 }
 
 // HasEmptyStorage mocks base method.
-func (m *MockStateDB) HasEmptyStorage(addr common.Address) (bool, error) {
+func (m *MockStateDB) HasEmptyStorage(addr common.Address) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasEmptyStorage", addr)
 	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // HasEmptyStorage indicates an expected call of HasEmptyStorage.
@@ -1673,12 +1671,11 @@ func (mr *MockNonCommittableStateDBMockRecorder) GetTransientState(arg0, arg1 an
 }
 
 // HasEmptyStorage mocks base method.
-func (m *MockNonCommittableStateDB) HasEmptyStorage(addr common.Address) (bool, error) {
+func (m *MockNonCommittableStateDB) HasEmptyStorage(addr common.Address) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasEmptyStorage", addr)
 	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // HasEmptyStorage indicates an expected call of HasEmptyStorage.
