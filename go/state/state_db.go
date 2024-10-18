@@ -56,7 +56,7 @@ type VmStateDB interface {
 	SetState(common.Address, common.Key, common.Value)
 	GetTransientState(common.Address, common.Key) common.Value
 	SetTransientState(common.Address, common.Key, common.Value)
-	HasEmptyStorage(addr common.Address) (bool, error)
+	HasEmptyStorage(addr common.Address) bool
 
 	// Code management.
 	GetCode(common.Address) []byte
@@ -889,8 +889,12 @@ func (s *stateDB) SetTransientState(addr common.Address, key common.Key, value c
 	s.transientStorage.Put(sid, value)
 }
 
-func (s *stateDB) HasEmptyStorage(addr common.Address) (bool, error) {
-	return s.state.HasEmptyStorage(addr)
+func (s *stateDB) HasEmptyStorage(addr common.Address) bool {
+	empty, err := s.state.HasEmptyStorage(addr)
+	if err != nil {
+		s.errors = append(s.errors, fmt.Errorf("failed to check empty storage for address %v: %w", addr, err))
+	}
+	return empty
 }
 
 func (s *stateDB) GetCode(addr common.Address) []byte {
