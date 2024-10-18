@@ -288,6 +288,10 @@ func (cs *CppState) CreateWitnessProof(address common.Address, keys ...common.Ke
 	panic("not implemented")
 }
 
+func (cs *CppState) HasEmptyStorage(addr common.Address) (bool, error) {
+	panic("CppState does not support HasEmptyStorage operation")
+}
+
 func (cs *CppState) Export(context.Context, io.Writer) (common.Hash, error) {
 	return common.Hash{}, state.ExportNotSupported
 }

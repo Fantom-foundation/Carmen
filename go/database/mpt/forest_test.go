@@ -1995,6 +1995,20 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 				return err
 			},
 		},
+		"HasEmptyStorage-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				_, err := f.HasEmptyStorage(&rootRef, addr)
+				return err
+			},
+		},
+		"HasEmptyStorage-Failed-TreeNavigation": {
+			prepareTreeNavigationFailure,
+			func(f *Forest) error {
+				_, err := f.HasEmptyStorage(&rootRef, addr)
+				return err
+			},
+		},
 	}
 
 	for name, test := range tests {

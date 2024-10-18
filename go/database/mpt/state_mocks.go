@@ -653,6 +653,21 @@ func (mr *MockLiveStateMockRecorder) GetStorage(address, key any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockLiveState)(nil).GetStorage), address, key)
 }
 
+// HasEmptyStorage mocks base method.
+func (m *MockLiveState) HasEmptyStorage(addr common.Address) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", addr)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockLiveStateMockRecorder) HasEmptyStorage(addr any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockLiveState)(nil).HasEmptyStorage), addr)
+}
+
 // Root mocks base method.
 func (m *MockLiveState) Root() NodeReference {
 	m.ctrl.T.Helper()

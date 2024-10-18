@@ -423,6 +423,11 @@ func (s *Forest) HasEmptyStorage(rootRef *NodeReference, addr common.Address) (i
 		return VisitResponseContinue
 	})
 	exists, err := VisitPathToAccount(s, rootRef, addr, v)
+	if err != nil {
+		err = fmt.Errorf("failed to check storage for account %v: %w", addr, err)
+		s.errors = append(s.errors, err)
+	}
+
 	return isEmpty || !exists, err
 }
 

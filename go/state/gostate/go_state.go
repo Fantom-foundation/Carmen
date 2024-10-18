@@ -185,6 +185,18 @@ func (s *GoState) GetCodeHash(address common.Address) (common.Hash, error) {
 	return h, s.stateError
 }
 
+func (s *GoState) HasEmptyStorage(addr common.Address) (bool, error) {
+	if err := s.stateError; err != nil {
+		return false, err
+	}
+
+	empty, err := s.live.HasEmptyStorage(addr)
+	if err != nil {
+		s.stateError = errors.Join(s.stateError, err)
+	}
+	return empty, s.stateError
+}
+
 func (s *GoState) GetHash() (common.Hash, error) {
 	if err := s.stateError; err != nil {
 		return common.Hash{}, err

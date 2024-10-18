@@ -495,6 +495,24 @@ func TestGetMemoryFootprint(t *testing.T) {
 	}
 }
 
+func TestGoState_HasEmptyStorage(t *testing.T) {
+	addr := common.Address{0x1}
+	ctrl := gomock.NewController(t)
+	live := state.NewMockLiveDB(ctrl)
+
+	live.EXPECT().HasEmptyStorage(addr).Return(true, nil)
+
+	state := newGoState(live, nil, nil)
+
+	empty, err := state.HasEmptyStorage(addr)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !empty {
+		t.Errorf("unexpected non-empty storage")
+	}
+}
+
 func TestGoState_FlushFlushesLiveDbAndArchive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	live := state.NewMockLiveDB(ctrl)
@@ -715,7 +733,7 @@ func TestState_All_Live_Operations_May_Cause_Failure(t *testing.T) {
 	key := common.Key{0xB}
 	injectedErr := fmt.Errorf("injectedError")
 
-	const loops = 10
+	const loops = 11
 	for i := 0; i < loops; i++ {
 		i := i
 		t.Run(fmt.Sprintf("operation_%d", i), func(t *testing.T) {
@@ -733,8 +751,9 @@ func TestState_All_Live_Operations_May_Cause_Failure(t *testing.T) {
 			liveDB.EXPECT().GetCodeSize(addr).Return(0, results[5]).AnyTimes()
 			liveDB.EXPECT().GetCodeHash(addr).Return(common.Hash{}, results[6]).AnyTimes()
 			liveDB.EXPECT().GetHash().Return(common.Hash{}, results[7]).AnyTimes()
-			liveDB.EXPECT().Flush().Return(results[8]).AnyTimes()
-			liveDB.EXPECT().Close().Return(results[9]).AnyTimes()
+			liveDB.EXPECT().HasEmptyStorage(gomock.Any()).Return(false, results[8]).AnyTimes()
+			liveDB.EXPECT().Flush().Return(results[9]).AnyTimes()
+			liveDB.EXPECT().Close().Return(results[10]).AnyTimes()
 
 			db := newGoState(liveDB, nil, []func(){})
 			// calls must succeed until the first failure,
@@ -774,6 +793,10 @@ func TestState_All_Live_Operations_May_Cause_Failure(t *testing.T) {
 					t.Errorf("operation should fail")
 				}
 				shouldFail = shouldFail || errors.Is(results[8], injectedErr)
+				if _, err := db.HasEmptyStorage(addr); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[9], injectedErr)
 				if err := db.Flush(); shouldFail && !errors.Is(err, injectedErr) {
 					t.Errorf("operation should fail")
 				}

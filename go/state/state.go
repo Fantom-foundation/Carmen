@@ -49,6 +49,9 @@ type State interface {
 	// GetCodeHash returns the hash of the code of the input contract address.
 	GetCodeHash(address common.Address) (common.Hash, error)
 
+	// HasEmptyStorage returns true if the contract has no storage attached to it.
+	HasEmptyStorage(addr common.Address) (bool, error)
+
 	// Apply applies the provided updates to the state content.
 	Apply(block uint64, update common.Update) error
 
@@ -102,6 +105,7 @@ type LiveDB interface {
 	GetCode(address common.Address) (value []byte, err error)
 	GetCodeSize(address common.Address) (size int, err error)
 	GetCodeHash(address common.Address) (hash common.Hash, err error)
+	HasEmptyStorage(addr common.Address) (bool, error)
 	GetHash() (hash common.Hash, err error)
 	Apply(block uint64, update common.Update) (archiveUpdateHints common.Releaser, err error)
 	Flush() error

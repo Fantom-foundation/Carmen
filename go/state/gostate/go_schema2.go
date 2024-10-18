@@ -245,6 +245,10 @@ func (s *GoSchema2) GetCodeHash(address common.Address) (hash common.Hash, err e
 	return hash, nil
 }
 
+func (s *GoSchema2) HasEmptyStorage(addr common.Address) (bool, error) {
+	panic("HasEmptyStorage is not implemented for Scheme2")
+}
+
 func (s *GoSchema2) GetHash() (hash common.Hash, err error) {
 	sources := []common.HashProvider{
 		s.addressIndex,

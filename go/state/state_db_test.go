@@ -4351,6 +4351,23 @@ func TestStateDB_ContractCreationAndDeletionCanBeRolledBack(t *testing.T) {
 	}
 }
 
+func TestStateDB_HasEmptyStorage(t *testing.T) {
+	addr := common.Address{0x1}
+	ctrl := gomock.NewController(t)
+	st := NewMockState(ctrl)
+
+	st.EXPECT().HasEmptyStorage(addr).Return(true, nil)
+
+	statedb := stateDB{state: st}
+	empty, err := statedb.HasEmptyStorage(addr)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !empty {
+		t.Errorf("unexpected non-empty storage")
+	}
+}
+
 type sameEffectAs struct {
 	want common.Update
 }

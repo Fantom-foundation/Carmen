@@ -95,6 +95,12 @@ func (s *syncedState) GetCodeHash(address common.Address) (common.Hash, error) {
 	return s.state.GetCodeHash(address)
 }
 
+func (s *syncedState) HasEmptyStorage(addr common.Address) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.state.HasEmptyStorage(addr)
+}
+
 func (s *syncedState) Apply(block uint64, update common.Update) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
