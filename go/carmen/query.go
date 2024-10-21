@@ -106,6 +106,18 @@ func (c *queryContext) GetStateHash() Hash {
 	return Hash(res)
 }
 
+func (c *queryContext) HasEmptyStorage(addr Address) bool {
+	if c.err != nil {
+		return false
+	}
+	empty, err := c.state.HasEmptyStorage(common.Address(addr))
+	if err != nil {
+		c.err = err
+		return false
+	}
+	return empty
+}
+
 func (c *queryContext) Check() error {
 	return errors.Join(c.err, c.state.Check())
 }
