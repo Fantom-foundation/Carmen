@@ -101,7 +101,7 @@ func makeWriteBuffer(sink NodeSink, capacity int) WriteBuffer {
 		defer close(done)
 		defer close(flushDone)
 		for flush := range emptyBufferSignal {
-			res.emptyBuffer()
+			res.emptyBuffer(flush)
 			if flush {
 				flushDone <- struct{}{}
 			}
@@ -178,7 +178,26 @@ func (b *writeBuffer) Close() error {
 	return errors.Join(b.errs...)
 }
 
-func (b *writeBuffer) emptyBuffer() {
+func (b *writeBuffer) emptyBuffer(forceFullFlush bool) {
+	for {
+		b.tryEmptyBuffer()
+
+		// We can stop if we are not forced to flush all nodes.
+		if !forceFullFlush {
+			break
+		}
+
+		// We are also done if the buffer is empty.
+		b.bufferMutex.Lock()
+		size := len(b.buffer)
+		b.bufferMutex.Unlock()
+		if size == 0 {
+			break
+		}
+	}
+}
+
+func (b *writeBuffer) tryEmptyBuffer() {
 
 	// Collect a list of all IDs in the buffer.
 	ids := make([]NodeId, 0, 2*b.capacity)
@@ -202,8 +221,14 @@ func (b *writeBuffer) emptyBuffer() {
 			continue
 		}
 
-		// Write a snapshot of the node to the disk.
-		handle := node.GetWriteHandle() // write access is needed to clear the dirty flag.
+		// Write a snapshot of the node to the disk. Write access is needed
+		// to clear the dirty flag. However, if the node is busy, we continue
+		// with the next node.
+		handle, success := node.TryGetWriteHandle()
+		if !success {
+			b.bufferMutex.Unlock()
+			continue
+		}
 
 		// To prevent the current node from being restored from the buffer
 		// and modified by another goroutine, we need to keep the buffer
