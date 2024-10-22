@@ -162,6 +162,7 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	stateDB.EXPECT().IsSlotInAccessList(gomock.Any(), gomock.Any())
 	stateDB.EXPECT().Snapshot()
 	stateDB.EXPECT().RevertToSnapshot(10)
+	stateDB.EXPECT().HasEmptyStorage(gomock.Any())
 
 	stateDB.EXPECT().EndTransaction()
 	stateDB.EXPECT().Check()
@@ -208,6 +209,7 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	tx.AddSlotToAccessList(address, key)
 	tx.IsAddressInAccessList(address)
 	tx.IsSlotInAccessList(address, key)
+	tx.HasEmptyStorage(address)
 	tx.Snapshot()
 	tx.RevertToSnapshot(10)
 
@@ -268,6 +270,7 @@ func TestTransaction_AfterCommitAllOperationsAreNoops(t *testing.T) {
 	tx.AddSlotToAccessList(address, key)
 	tx.IsAddressInAccessList(address)
 	tx.IsSlotInAccessList(address, key)
+	tx.HasEmptyStorage(address)
 	tx.Snapshot()
 	tx.RevertToSnapshot(10)
 }
