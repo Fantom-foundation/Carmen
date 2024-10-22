@@ -377,6 +377,9 @@ type TransactionContext interface {
 	// marked by call to Snapshot.
 	RevertToSnapshot(int)
 
+	// HasEmptyStorage returns true if the contract has no storage attached to it.
+	HasEmptyStorage(addr Address) bool
+
 	// Commit completes this transaction. Pending changes are considered
 	// committed for subsequent transactions in the same block. However,
 	// changes are only persisted when committing the enclosing block.
@@ -424,6 +427,9 @@ type QueryContext interface {
 	// GetStateHash get the state root hash for the state queried
 	// by this context.
 	GetStateHash() Hash
+
+	// HasEmptyStorage returns true if the contract has no storage attached to it.
+	HasEmptyStorage(addr Address) bool
 }
 
 // BulkLoad provides a context for fast filling of the database.

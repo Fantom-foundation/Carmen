@@ -267,6 +267,13 @@ func (t *transactionContext) GetStateHash() Hash {
 	return Hash(t.state.GetHash())
 }
 
+func (t *transactionContext) HasEmptyStorage(addr Address) bool {
+	if t.state != nil {
+		return t.state.HasEmptyStorage(common.Address(addr))
+	}
+	return false
+}
+
 func (t *transactionContext) Commit() error {
 	if t.state == nil {
 		return fmt.Errorf("transaction context is invalid")
