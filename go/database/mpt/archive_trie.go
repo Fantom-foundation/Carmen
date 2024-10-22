@@ -376,6 +376,16 @@ func (a *ArchiveTrie) CreateWitnessProof(block uint64, address common.Address, k
 	return proof, a.addError(err)
 }
 
+// HasEmptyStorage returns true if account has empty storage in a certain block.
+func (a *ArchiveTrie) HasEmptyStorage(block uint64, addr common.Address) (bool, error) {
+	view, err := a.getView(block)
+	if err != nil {
+		return false, err
+	}
+	empty, err := view.HasEmptyStorage(addr)
+	return empty, a.addError(err)
+}
+
 // GetDiff computes the difference between the given source and target blocks.
 func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 	a.rootsMutex.Lock()

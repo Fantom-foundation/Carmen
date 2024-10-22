@@ -517,6 +517,10 @@ func (a *Archive) CreateWitnessProof(block uint64, address common.Address, keys 
 	return nil, archive.ErrWitnessProofNotSupported
 }
 
+func (a *Archive) HasEmptyStorage(_ uint64, _ common.Address) (bool, error) {
+	return false, archive.ErrEmptyStorageNotSupported
+}
+
 // GetMemoryFootprint provides the size of the archive in memory in bytes
 func (a *Archive) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*a))
