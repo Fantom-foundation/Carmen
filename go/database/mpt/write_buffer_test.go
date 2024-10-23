@@ -399,7 +399,7 @@ func TestWriteBuffer_Add_Cancel_Empty_DoesNotLock(t *testing.T) {
 	go func() {
 		started.Done()
 		for run.Load() {
-			buffer.(*writeBuffer).emptyBuffer()
+			buffer.(*writeBuffer).emptyBuffer(true)
 			heartbeat <- struct{}{}
 		}
 	}()
@@ -418,7 +418,7 @@ func TestWriteBuffer_Add_Cancel_Empty_DoesNotLock(t *testing.T) {
 	}()
 
 	started.Wait()
-	const loops = 10_000
+	const loops = 10_000_000
 	for i := 0; i < loops; i++ {
 		buffer.Add(id, node)
 	}
