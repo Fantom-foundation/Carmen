@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -351,4 +352,76 @@ func TestWriteBuffer_contains(t *testing.T) {
 		t.Errorf("check for canceled item failed")
 	}
 
+}
+
+func TestWriteBuffer_Add_Cancel_Empty_DoesNotLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	sink := NewMockNodeSink(ctrl)
+
+	sink.EXPECT().Write(gomock.Any(), gomock.Any()).AnyTimes()
+
+	buffer := makeWriteBuffer(sink, 0)
+	defer func() {
+		if err := buffer.Close(); err != nil {
+			t.Fatalf("failed to close buffer: %v", err)
+		}
+	}()
+
+	node := shared.MakeShared[Node](&BranchNode{})
+
+	var started sync.WaitGroup
+	var run atomic.Bool
+	run.Store(true)
+	id := BranchId(123)
+	heartbeat := make(chan struct{}, 1000)
+
+	started.Add(1)
+	go func() {
+		started.Done()
+		for run.Load() {
+			handle := node.GetReadHandle()
+			buffer.Cancel(id)
+			handle.Release()
+			heartbeat <- struct{}{}
+		}
+	}()
+
+	started.Add(1)
+	go func() {
+		started.Done()
+		for run.Load() {
+			buffer.Cancel(id)
+			heartbeat <- struct{}{}
+		}
+	}()
+
+	started.Add(1)
+	go func() {
+		started.Done()
+		for run.Load() {
+			buffer.(*writeBuffer).emptyBuffer()
+			heartbeat <- struct{}{}
+		}
+	}()
+
+	started.Add(1)
+	go func() {
+		started.Done()
+		for run.Load() {
+			select {
+			case <-heartbeat:
+			case <-time.After(10 * time.Second):
+				run.Store(false)
+				t.Errorf("likely deadlock detected")
+			}
+		}
+	}()
+
+	started.Wait()
+	const loops = 10_000
+	for i := 0; i < loops; i++ {
+		buffer.Add(id, node)
+	}
+
+	run.Store(false)
 }
