@@ -18,8 +18,13 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
 )
 
-// ErrWitnessProofNotSupported is returned when the archive does not support witness proofs.
-const ErrWitnessProofNotSupported = common.ConstError("witness proof not supported")
+const (
+	// ErrWitnessProofNotSupported is returned when the archive does not support witness proofs.
+	ErrWitnessProofNotSupported = common.ConstError("witness proof not supported")
+
+	// ErrEmptyStorageNotSupported is returned when the archive does not support empty storage queries.
+	ErrEmptyStorageNotSupported = common.ConstError("empty storage query not supported")
+)
 
 // An Archive retains a history of state mutations in a blockchain on a
 // block-level granularity. The history is recorded by adding per-block updates.
@@ -59,6 +64,9 @@ type Archive interface {
 
 	// CreateWitnessProof creates a witness proof for the given account and keys.
 	CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error)
+
+	// HasEmptyStorage returns true if the storage of the given account is empty.
+	HasEmptyStorage(block uint64, addr common.Address) (bool, error)
 
 	// MemoryFootprintProvider provides the size of the store in memory in bytes.
 	common.MemoryFootprintProvider

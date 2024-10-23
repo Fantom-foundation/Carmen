@@ -330,6 +330,51 @@ func TestArchive_CreateWitnessProof(t *testing.T) {
 	}
 }
 
+func TestArchive_HasEmptyStorage(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer func() {
+				if err := a.Close(); err != nil {
+					t.Fatalf("failed to close archive; %s", err)
+				}
+			}()
+
+			const blocks = 10
+			for i := uint64(1); i <= blocks; i++ {
+				if err := a.Add(i, common.Update{
+					CreatedAccounts: []common.Address{{1, 2}},
+					Balances: []common.BalanceUpdate{
+						{Account: common.Address{1}, Balance: amount.New(12)},
+						{Account: common.Address{2}, Balance: amount.New(12)},
+					},
+					Slots: []common.SlotUpdate{
+						{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
+					},
+				}, nil); err != nil {
+					t.Fatalf("failed to add block: %v", err)
+				}
+			}
+
+			for i := uint64(1); i <= blocks; i++ {
+				for j := 1; j <= 3; j++ {
+					empty, err := a.HasEmptyStorage(i, common.Address{byte(j)})
+					if err != nil {
+						if errors.Is(err, archive.ErrEmptyStorageNotSupported) {
+							t.Skip(err)
+						}
+						t.Errorf("failed to check empty storage; %s", err)
+					}
+					// only address == 1 has storage
+					if got, want := empty, j != 1; got != want {
+						t.Errorf("unexpected empty storage; got: %t, want: %t", got, want)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestAccountStatusOnly(t *testing.T) {
 	for _, factory := range getArchiveFactories(t) {
 		t.Run(factory.label, func(t *testing.T) {

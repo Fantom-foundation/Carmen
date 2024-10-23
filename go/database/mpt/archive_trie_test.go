@@ -1390,6 +1390,51 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_HasEmptyStorage(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			arch, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024}, ArchiveConfig{})
+			if err != nil {
+				t.Fatalf("failed to create empty archive; %s", err)
+			}
+			defer func() {
+				if err := arch.Close(); err != nil {
+					t.Fatalf("failed to close archive; %s", err)
+				}
+			}()
+
+			const blocks = 10
+			for i := uint64(1); i <= blocks; i++ {
+				if err := arch.Add(i, common.Update{
+					CreatedAccounts: []common.Address{{1, 2}},
+					Balances: []common.BalanceUpdate{
+						{Account: common.Address{1}, Balance: amount.New(12)},
+						{Account: common.Address{2}, Balance: amount.New(12)},
+					},
+					Slots: []common.SlotUpdate{
+						{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
+					},
+				}, nil); err != nil {
+					t.Fatalf("failed to add block: %v", err)
+				}
+			}
+
+			for i := uint64(1); i <= blocks; i++ {
+				for j := 1; j <= 3; j++ {
+					empty, err := arch.HasEmptyStorage(i, common.Address{byte(j)})
+					if err != nil {
+						t.Errorf("failed to check empty storage; %s", err)
+					}
+					// only address == 1 has storage
+					if got, want := empty, j != 1; got != want {
+						t.Errorf("unexpected empty storage; got: %t, want: %t", got, want)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestArchiveTrie_CreateWitnessProof_NonExistingBlock(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
@@ -2207,6 +2252,7 @@ func TestArchiveTrie_FailingOperation_InvalidatesOtherArchiveOperations(t *testi
 			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr).MaxTimes(1)
 			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr).MaxTimes(1)
 			db.EXPECT().VisitTrie(gomock.Any(), gomock.Any()).Return(injectedErr).MaxTimes(1)
+			db.EXPECT().HasEmptyStorage(gomock.Any(), gomock.Any()).Return(false, injectedErr).MaxTimes(1)
 
 			live := NewMockLiveState(ctrl)
 			live.EXPECT().GetHash().Return(common.Hash{}, injectedErr).MaxTimes(1)
@@ -2388,6 +2434,10 @@ var archiveOps = map[string]func(archive *ArchiveTrie) error{
 	},
 	"create witness proof": func(archive *ArchiveTrie) error {
 		_, err := archive.CreateWitnessProof(0, common.Address{}, common.Key{})
+		return err
+	},
+	"has empty storage": func(archive *ArchiveTrie) error {
+		_, err := archive.HasEmptyStorage(0, common.Address{})
 		return err
 	},
 	"visit account": func(archive *ArchiveTrie) error {

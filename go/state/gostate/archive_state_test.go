@@ -109,6 +109,15 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 				return err
 			},
 		},
+		"hasEmptyStorage": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().HasEmptyStorage(gomock.Any(), gomock.Any()).Return(false, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.HasEmptyStorage(common.Address{})
+				return err
+			},
+		},
 	}
 
 	testNames := make([]string, 0, len(tests))
