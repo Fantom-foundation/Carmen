@@ -890,10 +890,19 @@ func (s *stateDB) SetTransientState(addr common.Address, key common.Key, value c
 }
 
 func (s *stateDB) HasEmptyStorage(addr common.Address) bool {
+	if state, exists := s.accounts[addr]; exists {
+		// an account was either self-destructed or is known not to exist
+		// in these cases the storage is always considered empty
+		if state.current == accountNonExisting || state.current == accountSelfDestructed {
+			return true
+		}
+	}
+
 	empty, err := s.state.HasEmptyStorage(addr)
 	if err != nil {
 		s.errors = append(s.errors, fmt.Errorf("failed to check empty storage for address %v: %w", addr, err))
 	}
+
 	return empty
 }
 

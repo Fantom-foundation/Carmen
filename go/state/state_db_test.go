@@ -4372,6 +4372,33 @@ func TestStateDB_HasEmptyStorage(t *testing.T) {
 	}
 }
 
+func TestStateDB_HasEmptyStorage_ReportEmpty_Destructed_Contract(t *testing.T) {
+	addr := common.Address{0x1}
+	ctrl := gomock.NewController(t)
+	st := NewMockState(ctrl)
+
+	// state reports there are data in the storage
+	st.EXPECT().HasEmptyStorage(addr).Return(false, nil)
+	st.EXPECT().Exists(addr).Return(true, nil)
+
+	statedb := stateDB{
+		accounts:        make(map[common.Address]*accountState),
+		balances:        make(map[common.Address]*balanceValue),
+		clearedAccounts: make(map[common.Address]accountClearingState),
+		state:           st,
+	}
+
+	if empty := statedb.HasEmptyStorage(addr); empty {
+		t.Errorf("storage should not be empty")
+	}
+
+	statedb.Suicide(addr) // must make storage empty
+
+	if empty := statedb.HasEmptyStorage(addr); !empty {
+		t.Errorf("storage should be empty")
+	}
+}
+
 type sameEffectAs struct {
 	want common.Update
 }
