@@ -4372,7 +4372,7 @@ func TestStateDB_HasEmptyStorage(t *testing.T) {
 	}
 }
 
-func TestStateDB_HasEmptyStorage_ReportEmpty_Destructed_Contract(t *testing.T) {
+func TestStateDB_HasEmptyStorage_DestructedContract_ReportEmpty(t *testing.T) {
 	addr := common.Address{0x1}
 	ctrl := gomock.NewController(t)
 	st := NewMockState(ctrl)
