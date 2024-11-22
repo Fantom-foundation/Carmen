@@ -45,7 +45,10 @@ import (
 
 var stateMagicNumber []byte = []byte("Fantom-World-State")
 
-const formatVersion = byte(1)
+const (
+	formatVersion           = byte(1)
+	exportCacheCapacitySize = 2000
+)
 
 type HashType byte
 
@@ -145,7 +148,7 @@ func Export(ctx context.Context, logger *Log, directory string, out io.Writer) e
 	}
 
 	logger.Printf("opening liveDb: %s", directory)
-	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.NodeCacheConfig{})
+	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.NodeCacheConfig{Capacity: exportCacheCapacitySize})
 	if err != nil {
 		return fmt.Errorf("failed to open LiveDB: %v", err)
 	}
@@ -167,7 +170,7 @@ func ExportBlockFromArchive(ctx context.Context, logger *Log, directory string, 
 		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
-	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{}, mpt.ArchiveConfig{})
+	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{Capacity: exportCacheCapacitySize}, mpt.ArchiveConfig{})
 	if err != nil {
 		return err
 	}
