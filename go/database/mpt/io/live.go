@@ -134,7 +134,7 @@ func (e *exportableLiveTrie) GetCodeForHash(hash common.Hash) []byte {
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
 // state of the LiveDB.
-func Export(ctx context.Context, logger *Log, directory string, out io.Writer) error {
+func Export(ctx context.Context, logger *Log, directory string, out io.Writer, cacheConfig mpt.NodeCacheConfig) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -145,7 +145,7 @@ func Export(ctx context.Context, logger *Log, directory string, out io.Writer) e
 	}
 
 	logger.Printf("opening liveDb: %s", directory)
-	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.NodeCacheConfig{})
+	db, err := mpt.OpenGoFileState(directory, info.Config, cacheConfig)
 	if err != nil {
 		return fmt.Errorf("failed to open LiveDB: %v", err)
 	}
@@ -248,17 +248,17 @@ func ExportLive(ctx context.Context, logger *Log, db mptStateVisitor, out io.Wri
 
 // ImportLiveDb creates a fresh StateDB in the given directory and fills it
 // with the content read from the given reader.
-func ImportLiveDb(logger *Log, directory string, in io.Reader) error {
-	_, _, err := runImport(logger, directory, in, mpt.S5LiveConfig)
+func ImportLiveDb(logger *Log, directory string, in io.Reader, nodeCache mpt.NodeCacheConfig) error {
+	_, _, err := runImport(logger, directory, in, mpt.S5LiveConfig, nodeCache)
 	return err
 }
 
 // InitializeArchive creates a fresh Archive in the given directory containing
 // the state read from the input stream at the given block. All states before
 // the given block are empty.
-func InitializeArchive(logger *Log, directory string, in io.Reader, block uint64) (err error) {
+func InitializeArchive(logger *Log, directory string, in io.Reader, block uint64, nodeCacheCfg mpt.NodeCacheConfig) (err error) {
 	// The import creates a live-DB state that initializes the Archive.
-	root, hash, err := runImport(logger, directory, in, mpt.S5ArchiveConfig)
+	root, hash, err := runImport(logger, directory, in, mpt.S5ArchiveConfig, nodeCacheCfg)
 	if err != nil {
 		return err
 	}
@@ -292,7 +292,7 @@ func InitializeArchive(logger *Log, directory string, in io.Reader, block uint64
 	return nil
 }
 
-func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig) (root mpt.NodeId, hash common.Hash, err error) {
+func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig, nodeCache mpt.NodeCacheConfig) (root mpt.NodeId, hash common.Hash, err error) {
 	// check that the destination directory is an empty directory
 	if err := checkEmptyDirectory(directory); err != nil {
 		return root, hash, err
@@ -318,7 +318,7 @@ func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig
 	}
 
 	// Create a state.
-	db, err := mpt.OpenGoFileState(directory, config, mpt.NodeCacheConfig{})
+	db, err := mpt.OpenGoFileState(directory, config, nodeCache)
 	if err != nil {
 		return root, hash, fmt.Errorf("failed to create empty state: %v", err)
 	}

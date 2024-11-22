@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -2228,7 +2229,7 @@ func TestDatabase_Export(t *testing.T) {
 	if err := os.MkdirAll(liveDbLocation, 0755); err != nil {
 		t.Fatalf("cannot create live db location: %v", err)
 	}
-	if err = io.ImportLiveDb(io.NewLog(), liveDbLocation, b); err != nil {
+	if err = io.ImportLiveDb(io.NewLog(), liveDbLocation, b, mpt.NodeCacheConfig{}); err != nil {
 		t.Fatalf("cannot import live db: %v", err)
 	}
 

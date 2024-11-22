@@ -15,6 +15,7 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"io"
 	"os"
 
@@ -62,7 +63,7 @@ func doArchiveInit(context *cli.Context) error {
 		return err
 	}
 	return errors.Join(
-		mptIo.InitializeArchive(logger, dir, in, height),
+		mptIo.InitializeArchive(logger, dir, in, height, mpt.NodeCacheConfig{}),
 		file.Close(),
 	)
 }

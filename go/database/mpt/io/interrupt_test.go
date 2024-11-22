@@ -38,7 +38,9 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 
 	tests := map[string]testFuncs{
 		"live": {
-			export:   Export,
+			export: func(ctx context.Context, log *Log, s string, writer io.Writer) error {
+				return Export(ctx, log, s, writer, mpt.NodeCacheConfig{})
+			},
 			createDB: createTestLive,
 			check:    checkCanOpenLiveDB,
 		},

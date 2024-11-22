@@ -15,6 +15,7 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"io"
 	"os"
 
@@ -44,7 +45,10 @@ var ImportLiveAndArchiveCmd = cli.Command{
 }
 
 func doLiveDbImport(context *cli.Context) error {
-	return doImport(context, mptIo.ImportLiveDb)
+	f := func(logger *mptIo.Log, directory string, in io.Reader) error {
+		return mptIo.ImportLiveDb(logger, directory, in, mpt.NodeCacheConfig{})
+	}
+	return doImport(context, f)
 }
 
 func doArchiveImport(context *cli.Context) error {

@@ -71,7 +71,7 @@ func doExport(context *cli.Context) error {
 		}
 	} else {
 		// Passed LiveDB
-		exportErr = io.Export(ctx, logger, dir, out)
+		exportErr = io.Export(ctx, logger, dir, out, mpt.NodeCacheConfig{})
 	}
 
 	if err = errors.Join(

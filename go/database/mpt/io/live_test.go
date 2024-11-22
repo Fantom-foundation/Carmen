@@ -28,7 +28,7 @@ func TestIO_ExportAndImportAsLiveDb(t *testing.T) {
 
 	buffer := bytes.NewBuffer(genesis)
 	targetDir := t.TempDir()
-	if err := ImportLiveDb(NewLog(), targetDir, buffer); err != nil {
+	if err := ImportLiveDb(NewLog(), targetDir, buffer, mpt.NodeCacheConfig{}); err != nil {
 		t.Fatalf("failed to import DB: %v", err)
 	}
 
@@ -60,7 +60,7 @@ func TestIO_ExportAndImportAsArchive(t *testing.T) {
 	buffer := bytes.NewBuffer(genesis)
 	targetDir := t.TempDir()
 	genesisBlock := uint64(12)
-	if err := InitializeArchive(NewLog(), targetDir, buffer, genesisBlock); err != nil {
+	if err := InitializeArchive(NewLog(), targetDir, buffer, genesisBlock, mpt.NodeCacheConfig{}); err != nil {
 		t.Fatalf("failed to import DB: %v", err)
 	}
 
@@ -209,7 +209,7 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 
 	// Export database to buffer.
 	var buffer bytes.Buffer
-	if err := Export(context.Background(), NewLog(), sourceDir, &buffer); err != nil {
+	if err := Export(context.Background(), NewLog(), sourceDir, &buffer, mpt.NodeCacheConfig{}); err != nil {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 
@@ -222,7 +222,7 @@ func TestImport_ImportIntoNonEmptyTargetDirectoryFails(t *testing.T) {
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	if err := ImportLiveDb(NewLog(), dir, nil); err == nil || !strings.Contains(err.Error(), "is not empty") {
+	if err := ImportLiveDb(NewLog(), dir, nil, mpt.NodeCacheConfig{}); err == nil || !strings.Contains(err.Error(), "is not empty") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -233,7 +233,7 @@ func TestInitializeArchive_ImportIntoNonEmptyTargetDirectoryFails(t *testing.T) 
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	if err := InitializeArchive(NewLog(), dir, nil, 0); err == nil || !strings.Contains(err.Error(), "is not empty") {
+	if err := InitializeArchive(NewLog(), dir, nil, 0, mpt.NodeCacheConfig{}); err == nil || !strings.Contains(err.Error(), "is not empty") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -336,7 +336,7 @@ func TestIO_ExportBlockFromArchive(t *testing.T) {
 
 		// Import live database.
 		targetDir := t.TempDir()
-		if err := ImportLiveDb(NewLog(), targetDir, buffer); err != nil {
+		if err := ImportLiveDb(NewLog(), targetDir, buffer, mpt.NodeCacheConfig{}); err != nil {
 			t.Fatalf("failed to import DB: %v", err)
 		}
 
@@ -412,7 +412,7 @@ func TestIO_ExportBlockFromOnlineArchive(t *testing.T) {
 
 		// Import live database.
 		targetDir := t.TempDir()
-		if err := ImportLiveDb(nil, targetDir, buffer); err != nil {
+		if err := ImportLiveDb(nil, targetDir, buffer, mpt.NodeCacheConfig{}); err != nil {
 			t.Fatalf("failed to import DB: %v", err)
 		}
 
@@ -448,7 +448,7 @@ func TestIO_Live_Import_IncorrectMagicNumberIsNoticed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot write magic number: %v", err)
 	}
-	_, _, err = runImport(NewLog(), t.TempDir(), b, mpt.MptConfig{})
+	_, _, err = runImport(NewLog(), t.TempDir(), b, mpt.MptConfig{}, mpt.NodeCacheConfig{})
 	if err == nil {
 		t.Fatal("import must fail")
 	}

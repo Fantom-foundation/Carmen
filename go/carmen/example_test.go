@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"log"
 	"os"
 	"path/filepath"
@@ -574,7 +575,7 @@ func ExampleHistoricBlockContext_Export() {
 	}
 	liveDbLocation := filepath.Join(importedDbPath, "live")
 
-	err = io.ImportLiveDb(io.NewLog(), liveDbLocation, b)
+	err = io.ImportLiveDb(io.NewLog(), liveDbLocation, b, mpt.NodeCacheConfig{})
 	if err != nil {
 		log.Fatalf("cannot import live db")
 	}
