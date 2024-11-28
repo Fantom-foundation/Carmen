@@ -346,16 +346,17 @@ func runImport(logger *Log, directory string, in io.Reader, config mpt.MptConfig
 		common.Keccak256([]byte{}): {},
 	}
 
-	counter := 0
-
 	progress := logger.NewProgressTracker("imported %d accounts, %.2f accounts/s", 1_000_000)
+
+	const changesToRecomputeHash = 1000
+	counter := 0
 	hashFound := false
 	var stateHash common.Hash
 	for {
 		// Update hashes periodically to avoid running out of memory
 		// for nodes with dirty hashes.
 		counter++
-		if (counter % 1000) == 0 {
+		if (counter % changesToRecomputeHash) == 0 {
 			if _, err := db.GetHash(); err != nil {
 				return root, hash, fmt.Errorf("failed to update hashes: %v", err)
 			}
