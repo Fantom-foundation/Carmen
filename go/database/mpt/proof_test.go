@@ -1096,20 +1096,25 @@ func TestCreateWitnessProof_GetStorageElementsOfEmptyStorage(t *testing.T) {
 	// test correct account with empty storage, and an empty account, which has implicitly an empty storage
 	for _, address := range []common.Address{address, {2}} {
 		t.Run(fmt.Sprintf("address %v", address), func(t *testing.T) {
-			elements, storageRoot, complete := proof.GetStorageElements(rootHash, address, common.Key{})
+			_, storageRoot, complete := proof.GetAccountElements(rootHash, address)
 			if !complete {
 				t.Fatalf("proof is not complete")
 			}
+
 			if storageRoot != EmptyNodeEthereumHash {
 				t.Errorf("unexpected storage root: got %v, want %v", storageRoot, EmptyNodeEthereumHash)
 			}
+
+			elements, complete := proof.GetStorageElements(rootHash, address, common.Key{})
+			if !complete {
+				t.Fatalf("proof is not complete")
+			}
+
 			if len(elements) != 1 {
 				t.Fatalf("unexpected number of elements: got %d, want 1", len(elements))
 			}
 
-			want := storageRoot
-			got := common.Keccak256(elements[0].ToBytes())
-			if want != got {
+			if got, want := common.Keccak256(elements[0].ToBytes()), EmptyNodeEthereumHash; got != want {
 				t.Errorf("invalid proof element: got %v, want %v", got, want)
 			}
 		})
