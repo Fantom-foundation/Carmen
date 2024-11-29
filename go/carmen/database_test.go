@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 
@@ -1216,6 +1217,7 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 			}
 
 			// extract storage nodes only
+			allStorageElements := []Bytes{}
 			for _, key := range keys {
 				gotStorageElements, _, complete := recovered.GetStorageElements(root, addr, key)
 				if !complete {
@@ -1235,20 +1237,26 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 					}
 				}
 
-				// putting nodes together must provide the original proof
-				merged := CreateWitnessProofFromNodes(append(gotStorageElements, gotAccount.GetElements()...)...)
-
-				gotElements := merged.GetElements()
-				wantElements := shadowProofs[addr].GetElements()
-				slices.SortFunc(gotElements, func(a, b Bytes) int {
-					return bytes.Compare(a.ToBytes(), b.ToBytes())
-				})
-				slices.SortFunc(wantElements, func(a, b Bytes) int {
-					return bytes.Compare(a.ToBytes(), b.ToBytes())
-				})
-				if got, want := gotElements, wantElements; !slices.Equal(got, want) {
-					t.Errorf("unexpected proof, wanted %v, got %v", want, got)
+				for _, storageElement := range gotStorageElements {
+					if storageElement != mpt.EmptyNodeEthereumEncoding {
+						allStorageElements = append(allStorageElements, storageElement)
+					}
 				}
+			}
+
+			// putting nodes together must provide the original proof
+			merged := CreateWitnessProofFromNodes(append(allStorageElements, gotAccount.GetElements()...)...)
+
+			gotElements := merged.GetElements()
+			wantElements := shadowProofs[addr].GetElements()
+			slices.SortFunc(gotElements, func(a, b Bytes) int {
+				return bytes.Compare(a.ToBytes(), b.ToBytes())
+			})
+			slices.SortFunc(wantElements, func(a, b Bytes) int {
+				return bytes.Compare(a.ToBytes(), b.ToBytes())
+			})
+			if got, want := gotElements, wantElements; !slices.Equal(got, want) {
+				t.Errorf("unexpected proof, wanted %v, got %v", want, got)
 			}
 		}
 	})

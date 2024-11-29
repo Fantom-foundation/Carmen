@@ -287,7 +287,7 @@ func (p WitnessProof) GetStorageElements(root common.Hash, address common.Addres
 
 	// If the account does not exist, its storage is empty, and this can be proven.
 	if !found {
-		return []immutable.Bytes{EmptyNodeEthereumEncoding}, emptyCodeHash, true
+		return []immutable.Bytes{EmptyNodeEthereumEncoding}, EmptyNodeEthereumHash, true
 	}
 
 	// If an account was found, a storage proof can be extracted.
@@ -295,7 +295,7 @@ func (p WitnessProof) GetStorageElements(root common.Hash, address common.Addres
 	visitor.path = nil
 	_, keyComplete, err := visitWitnessPathTo(p.proofDb, storageRoot, keyToHashedPathNibbles(key), visitor)
 	if err != nil {
-		return []immutable.Bytes{}, common.Hash{}, complete
+		return []immutable.Bytes{}, common.Hash{}, false
 	}
 
 	return visitor.path, storageRoot, keyComplete

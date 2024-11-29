@@ -14,12 +14,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"reflect"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/maps"
@@ -893,11 +893,14 @@ func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 			t.Fatalf("storage proof is not valid")
 		}
 
-		if got, want := storageHash, (common.Hash{}); got != want {
+		if got, want := storageHash, EmptyNodeEthereumHash; got != want {
 			t.Errorf("unexpected storage hash: got %v, want %v", got, want)
 		}
 
-		if got, want := storageProof, (WitnessProof{}); !want.Equals(got) {
+		emptyStorageProof := make(proofDb)
+		emptyStorageProof[EmptyNodeEthereumHash] = rlpEncodedNode(EmptyNodeEthereumEncoding.ToBytes())
+
+		if got, want := storageProof, (WitnessProof{emptyStorageProof}); !want.Equals(got) {
 			t.Errorf("unexpected storage proof: got %v, want %v", got, want)
 		}
 	})
