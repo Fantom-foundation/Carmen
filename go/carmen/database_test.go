@@ -1216,37 +1216,39 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 			}
 
 			// extract storage nodes only
-			gotStorageElements, _, complete := recovered.GetStorageElements(root, addr, keys...)
-			if !complete {
-				t.Errorf("proof is not complete")
-			}
-			// first block's account has no storage, others do
-			if j > 0 && len(gotStorageElements) == 0 {
-				t.Errorf("no storage elements")
-			}
+			for _, key := range keys {
+				gotStorageElements, _, complete := recovered.GetStorageElements(root, addr, key)
+				if !complete {
+					t.Errorf("proof is not complete")
+				}
+				// first block's account has no storage, others do
+				if j > 0 && len(gotStorageElements) == 0 {
+					t.Errorf("no storage elements")
+				}
 
-			// both proofs must be distinct
-			for _, accountElement := range gotAccount.GetElements() {
-				for _, storageElement := range gotStorageElements {
-					if accountElement == storageElement {
-						t.Errorf("account and storage proofs must be distinct")
+				// both proofs must be distinct
+				for _, accountElement := range gotAccount.GetElements() {
+					for _, storageElement := range gotStorageElements {
+						if accountElement == storageElement {
+							t.Errorf("account and storage proofs must be distinct")
+						}
 					}
 				}
-			}
 
-			// putting nodes together must provide the original proof
-			merged := CreateWitnessProofFromNodes(append(gotStorageElements, gotAccount.GetElements()...)...)
+				// putting nodes together must provide the original proof
+				merged := CreateWitnessProofFromNodes(append(gotStorageElements, gotAccount.GetElements()...)...)
 
-			gotElements := merged.GetElements()
-			wantElements := shadowProofs[addr].GetElements()
-			slices.SortFunc(gotElements, func(a, b Bytes) int {
-				return bytes.Compare(a.ToBytes(), b.ToBytes())
-			})
-			slices.SortFunc(wantElements, func(a, b Bytes) int {
-				return bytes.Compare(a.ToBytes(), b.ToBytes())
-			})
-			if got, want := gotElements, wantElements; !slices.Equal(got, want) {
-				t.Errorf("unexpected proof, wanted %v, got %v", want, got)
+				gotElements := merged.GetElements()
+				wantElements := shadowProofs[addr].GetElements()
+				slices.SortFunc(gotElements, func(a, b Bytes) int {
+					return bytes.Compare(a.ToBytes(), b.ToBytes())
+				})
+				slices.SortFunc(wantElements, func(a, b Bytes) int {
+					return bytes.Compare(a.ToBytes(), b.ToBytes())
+				})
+				if got, want := gotElements, wantElements; !slices.Equal(got, want) {
+					t.Errorf("unexpected proof, wanted %v, got %v", want, got)
+				}
 			}
 		}
 	})
