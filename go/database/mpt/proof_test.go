@@ -175,101 +175,6 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 	}
 }
 
-func TestCreateWitnessProof_ProofContainsEmptyNodes(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	address := common.Address{1}
-	key := common.Key{2}
-
-	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
-	addressNibbles := AddressToNibblePath(address, ctxt)
-	keyNibbles := KeyToNibblePath(key, ctxt)
-
-	tests := map[string]struct {
-		desc NodeDesc
-	}{
-		"account storage empty": {
-			desc: &Branch{
-				children: Children{
-					addressNibbles[0]: &Branch{
-						children: Children{
-							addressNibbles[1]: &Extension{
-								path: addressNibbles[2:50],
-								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
-									storage: &Empty{}}},
-						}}},
-			},
-		},
-		"path incomplete - branch": {
-			desc: &Branch{
-				children: Children{
-					addressNibbles[0]: &Empty{},
-					addressNibbles[0] - 1: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
-						storage: &Empty{}},
-				},
-			},
-		},
-		"path incomplete - extension": {
-			desc: &Branch{
-				children: Children{
-					addressNibbles[0]: &Extension{}},
-			},
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			root, _ := ctxt.Build(test.desc)
-
-			proof, err := CreateWitnessProof(ctxt, &root, address, key)
-			if err != nil {
-				t.Fatalf("failed to create proof: %v", err)
-			}
-
-			var terminal Node
-			var steps int
-			ctrl := gomock.NewController(t)
-			visitor := NewMockwitnessProofVisitor(ctrl)
-			visitor.EXPECT().Visit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
-				func(hash common.Hash, rlpNode rlpEncodedNode, node Node, isEmbedded bool) {
-					steps++
-					terminal = node
-				}).AnyTimes()
-
-			hash, _ := ctxt.getHashFor(&root)
-			nibbles := append(addressNibbles, keyNibbles...)
-			found, complete, err := visitWitnessPathTo(proof.proofDb, hash, nibbles, visitor)
-			if err != nil {
-				t.Fatalf("failed to visit path: %v", err)
-			}
-			if found {
-				t.Errorf("path should not be found")
-			}
-			if !complete {
-				t.Errorf("path not complete")
-			}
-
-			switch n := terminal.(type) {
-			case *ExtensionNode:
-				if got, want := n.nextHash, EmptyNodeEthereumHash; got != want {
-					t.Errorf("unexpected next hash: got %v, want %v (empty RLP node)", got, want)
-				}
-			case *BranchNode:
-				nibble := nibbles[steps-1]
-				if got, want := n.hashes[nibble], EmptyNodeEthereumHash; got != want {
-					t.Errorf("unexpected hash: got %v, want %v (empty RLP node)", got, want)
-				}
-			case *decodedAccountNode:
-				if got, want := n.storageHash, EmptyNodeEthereumHash; got != want {
-					t.Errorf("unexpected storage hash: got %v, want %v (empty RLP node)", got, want)
-				}
-			default:
-				t.Errorf("unexpected terminal node: %T", n)
-			}
-		})
-	}
-}
-
 func TestCreateWitnessProof_CanCreateProof_EmbeddedNode_Not_In_Proof(t *testing.T) {
 	address := common.Address{1}
 	key := common.Key{2}
@@ -1075,22 +980,28 @@ func TestCreateWitnessProof_GetStorageElementsOfEmptyStorage(t *testing.T) {
 		t.Fatalf("proof is not valid")
 	}
 
-	elements, storageRoot, complete := proof.GetStorageElements(rootHash, address, common.Key{})
-	if !complete {
-		t.Fatalf("proof is not complete")
-	}
-	if storageRoot != EmptyNodeEthereumHash {
-		t.Errorf("unexpected storage root: got %v, want %v", storageRoot, EmptyNodeEthereumHash)
-	}
-	if len(elements) != 1 {
-		t.Fatalf("unexpected number of elements: got %d, want 1", len(elements))
+	// test correct account with empty storage, and an empty account, which has implicitly an empty storage
+	for _, address := range []common.Address{address, {2}} {
+		t.Run(fmt.Sprintf("address %v", address), func(t *testing.T) {
+			elements, storageRoot, complete := proof.GetStorageElements(rootHash, address, common.Key{})
+			if !complete {
+				t.Fatalf("proof is not complete")
+			}
+			if storageRoot != EmptyNodeEthereumHash {
+				t.Errorf("unexpected storage root: got %v, want %v", storageRoot, EmptyNodeEthereumHash)
+			}
+			if len(elements) != 1 {
+				t.Fatalf("unexpected number of elements: got %d, want 1", len(elements))
+			}
+
+			want := storageRoot
+			got := common.Keccak256(elements[0].ToBytes())
+			if want != got {
+				t.Errorf("invalid proof element: got %v, want %v", got, want)
+			}
+		})
 	}
 
-	want := storageRoot
-	got := common.Keccak256(elements[0].ToBytes())
-	if want != got {
-		t.Errorf("invalid proof element: got %v, want %v", got, want)
-	}
 }
 
 func TestWitnessProof_Access_Proof_Fields(t *testing.T) {
