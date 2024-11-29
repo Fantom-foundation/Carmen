@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 )
@@ -245,7 +246,8 @@ func makeEthereumLikeHasher() hasher {
 
 type ethHasher struct{}
 
-var EmptyNodeEthereumHash = common.Keccak256(rlp.Encode(rlp.String{}))
+var EmptyNodeEthereumEncoding = immutable.NewBytes(rlp.Encode(rlp.String{}))
+var EmptyNodeEthereumHash = common.Keccak256(EmptyNodeEthereumEncoding.ToBytes())
 
 func (h ethHasher) updateHashes(
 	ref *NodeReference,

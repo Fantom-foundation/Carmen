@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 
@@ -1216,26 +1217,35 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 			}
 
 			// extract storage nodes only
-			gotStorageElements, _, complete := recovered.GetStorageElements(root, addr, keys...)
-			if !complete {
-				t.Errorf("proof is not complete")
-			}
-			// first block's account has no storage, others do
-			if j > 0 && len(gotStorageElements) == 0 {
-				t.Errorf("no storage elements")
-			}
+			allStorageElements := []Bytes{}
+			for _, key := range keys {
+				gotStorageElements, complete := recovered.GetStorageElements(root, addr, key)
+				if !complete {
+					t.Errorf("proof is not complete")
+				}
+				// first block's account has no storage, others do
+				if j > 0 && len(gotStorageElements) == 0 {
+					t.Errorf("no storage elements")
+				}
 
-			// both proofs must be distinct
-			for _, accountElement := range gotAccount.GetElements() {
+				// both proofs must be distinct
+				for _, accountElement := range gotAccount.GetElements() {
+					for _, storageElement := range gotStorageElements {
+						if accountElement == storageElement {
+							t.Errorf("account and storage proofs must be distinct")
+						}
+					}
+				}
+
 				for _, storageElement := range gotStorageElements {
-					if accountElement == storageElement {
-						t.Errorf("account and storage proofs must be distinct")
+					if storageElement != mpt.EmptyNodeEthereumEncoding {
+						allStorageElements = append(allStorageElements, storageElement)
 					}
 				}
 			}
 
 			// putting nodes together must provide the original proof
-			merged := CreateWitnessProofFromNodes(append(gotStorageElements, gotAccount.GetElements()...)...)
+			merged := CreateWitnessProofFromNodes(append(allStorageElements, gotAccount.GetElements()...)...)
 
 			gotElements := merged.GetElements()
 			wantElements := shadowProofs[addr].GetElements()

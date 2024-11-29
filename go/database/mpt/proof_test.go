@@ -14,12 +14,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"reflect"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/maps"
@@ -761,6 +761,101 @@ func TestWitnessProof_Extract_EmbeddedNode_In_Proof(t *testing.T) {
 	}
 }
 
+func TestCreateWitnessProof_GetAccountElements(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	address := common.Address{1}
+	key := common.Key{2}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+	addressNibbles := AddressToNibblePath(address, ctxt)
+
+	desc := &Branch{
+		children: Children{
+			addressNibbles[0]: &Branch{
+				children: Children{
+					addressNibbles[1]: &Extension{
+						path: addressNibbles[2:50],
+						next: &Tag{"A", &Account{
+							address:    address,
+							pathLength: 14,
+							info:       AccountInfo{Nonce: common.Nonce{1}},
+							storage:    &Value{key: key, length: 32, value: common.Value{0x12}},
+						}},
+					},
+				},
+			},
+		},
+	}
+
+	root, _ := ctxt.Build(desc)
+
+	proof, err := CreateWitnessProof(ctxt, &root, address)
+	if err != nil {
+		t.Fatalf("failed to create proof: %v", err)
+	}
+
+	if !proof.IsValid() {
+		t.Fatalf("proof is not valid")
+	}
+
+	_, accountNode := ctxt.Get("A")
+	accountHandle := accountNode.GetViewHandle()
+	storageHashWant := accountHandle.Get().(*AccountNode).storageHash
+	accountHandle.Release()
+
+	hash, _ := ctxt.getHashFor(&root)
+
+	t.Run("Extract present account", func(t *testing.T) {
+		elements, storageHash, complete := proof.GetAccountElements(hash, address)
+		if !complete {
+			t.Fatalf("proof is not complete")
+		}
+		if got, want := storageHash, storageHashWant; got != want {
+			t.Errorf("unexpected storage hash: got %v, want %v", got, want)
+		}
+		reconstructed := CreateWitnessProofFromNodes(elements)
+		if !reconstructed.IsValid() {
+			t.Fatalf("reconstructed proof is not valid")
+		}
+		nonce, complete, err := reconstructed.GetNonce(hash, address)
+		if err != nil {
+			t.Fatalf("failed to get nonce: %v", err)
+		}
+		if !complete {
+			t.Fatalf("nonce not found")
+		}
+		if got, want := nonce, (common.Nonce{1}); got != want {
+			t.Errorf("unexpected nonce: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("Extract missing account", func(t *testing.T) {
+		address := common.Address{2}
+		elements, storageHash, complete := proof.GetAccountElements(hash, address)
+		if !complete {
+			t.Fatalf("proof is not complete")
+		}
+		if got, want := storageHash, EmptyNodeEthereumHash; got != want {
+			t.Errorf("unexpected storage hash: got %v, want %v", got, want)
+		}
+		reconstructed := CreateWitnessProofFromNodes(elements)
+		if !reconstructed.IsValid() {
+			t.Fatalf("reconstructed proof is not valid")
+		}
+		nonce, complete, err := reconstructed.GetNonce(hash, address)
+		if err != nil {
+			t.Fatalf("failed to get nonce: %v", err)
+		}
+		if !complete {
+			t.Fatalf("nonce not found")
+		}
+		if got, want := nonce, (common.Nonce{0}); got != want {
+			t.Errorf("unexpected nonce: got %v, want %v", got, want)
+		}
+	})
+}
+
 func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -825,7 +920,12 @@ func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 	}
 
 	t.Run("Extract storage", func(t *testing.T) {
-		storageElements, storageHash, complete := proof.GetStorageElements(hash, address, key)
+		_, storageHash, complete := proof.GetAccountElements(hash, address)
+		if !complete {
+			t.Fatalf("proof is not complete")
+		}
+
+		storageElements, complete := proof.GetStorageElements(hash, address, key)
 		if !complete {
 			t.Fatalf("proof is not complete")
 		}
@@ -854,7 +954,12 @@ func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 	})
 
 	t.Run("Extract empty storage", func(t *testing.T) {
-		storageElements, storageHash, complete := proof.GetStorageElements(hash, address, common.Key{})
+		_, storageHash, complete := proof.GetAccountElements(hash, address)
+		if !complete {
+			t.Fatalf("proof is not complete")
+		}
+
+		storageElements, complete := proof.GetStorageElements(hash, address, common.Key{})
 		if !complete {
 			t.Fatalf("proof is not complete")
 		}
@@ -884,7 +989,12 @@ func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 	})
 
 	t.Run("Extract empty account", func(t *testing.T) {
-		storageElements, storageHash, complete := proof.GetStorageElements(hash, common.Address{}, common.Key{})
+		_, storageHash, complete := proof.GetAccountElements(hash, common.Address{})
+		if !complete {
+			t.Fatalf("proof is not complete")
+		}
+
+		storageElements, complete := proof.GetStorageElements(hash, common.Address{}, common.Key{})
 		if !complete {
 			t.Fatalf("proof is not complete")
 		}
@@ -893,11 +1003,14 @@ func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 			t.Fatalf("storage proof is not valid")
 		}
 
-		if got, want := storageHash, (common.Hash{}); got != want {
+		if got, want := storageHash, EmptyNodeEthereumHash; got != want {
 			t.Errorf("unexpected storage hash: got %v, want %v", got, want)
 		}
 
-		if got, want := storageProof, (WitnessProof{}); !want.Equals(got) {
+		emptyStorageProof := make(proofDb)
+		emptyStorageProof[EmptyNodeEthereumHash] = rlpEncodedNode(EmptyNodeEthereumEncoding.ToBytes())
+
+		if got, want := storageProof, (WitnessProof{emptyStorageProof}); !want.Equals(got) {
 			t.Errorf("unexpected storage proof: got %v, want %v", got, want)
 		}
 	})
@@ -914,7 +1027,7 @@ func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 		proofCopy := CreateWitnessProofFromNodes(proof.GetElements())
 		delete(proofCopy.proofDb, common.Keccak256(rlp))
 
-		_, _, complete := proofCopy.GetStorageElements(hash, address, common.Key{})
+		_, complete := proofCopy.GetStorageElements(hash, address, common.Key{})
 		if complete {
 			t.Errorf("proof should not be complete")
 		}
@@ -932,7 +1045,7 @@ func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 		proofCopy := CreateWitnessProofFromNodes(proof.GetElements())
 		proofCopy.proofDb[common.Keccak256(rlp)] = []byte{0xAA, 0xBB, 0xCC, 0xDD}
 
-		_, _, complete := proofCopy.GetStorageElements(hash, address, common.Key{})
+		_, complete := proofCopy.GetStorageElements(hash, address, common.Key{})
 		if complete {
 			t.Errorf("proof should not be complete")
 		}
@@ -1305,7 +1418,7 @@ func TestWitnessProof_String(t *testing.T) {
 		"0x0300000000000000000000000000000000000000000000000000000000000000->0x0c\n" +
 		"0x0400000000000000000000000000000000000000000000000000000000000000->0x0d\n"
 
-	if got, want := fmt.Sprintf("%s", WitnessProof{proof}), str; got != want {
+	if got, want := (WitnessProof{proof}.String()), str; got != want {
 		t.Errorf("unexpected string: got %v, want %v", got, want)
 	}
 }

@@ -14,11 +14,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/immutable"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/Fantom-foundation/Carmen/go/common/immutable"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
@@ -268,23 +269,40 @@ func (p WitnessProof) GetElements() []immutable.Bytes {
 	return res
 }
 
-func (p WitnessProof) GetStorageElements(root common.Hash, address common.Address, keys ...common.Key) ([]immutable.Bytes, common.Hash, bool) {
-	visitor := &proofCollectingVisitor{}
+func (p WitnessProof) GetAccountElements(root common.Hash, address common.Address) ([]immutable.Bytes, common.Hash, bool) {
+	visitor := &proofPathRecordingVisitor{}
 	found, complete, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
-	if err != nil || !found {
-		return []immutable.Bytes{}, common.Hash{}, complete
+	if err != nil || !complete {
+		return []immutable.Bytes{}, common.Hash{}, false
+	}
+	storageHash := EmptyNodeEthereumHash
+	if found {
+		storageHash = visitor.visitedAccount.storageHash
+	}
+	return visitor.path, storageHash, complete
+}
+
+func (p WitnessProof) GetStorageElements(root common.Hash, address common.Address, key common.Key) ([]immutable.Bytes, bool) {
+	visitor := &proofPathRecordingVisitor{}
+	found, complete, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
+	if !complete || err != nil {
+		return []immutable.Bytes{}, false
 	}
 
+	// If the account does not exist, its storage is empty, and this can be proven.
+	if !found {
+		return []immutable.Bytes{EmptyNodeEthereumEncoding}, true
+	}
+
+	// If an account was found, a storage proof can be extracted.
 	storageRoot := visitor.visitedAccount.storageHash
-	visitor.visited = make(proofDb)
-	for _, key := range keys {
-		_, keyComplete, err := visitWitnessPathTo(p.proofDb, storageRoot, keyToHashedPathNibbles(key), visitor)
-		if err != nil || !keyComplete {
-			complete = false
-		}
+	visitor.path = nil
+	_, keyComplete, err := visitWitnessPathTo(p.proofDb, storageRoot, keyToHashedPathNibbles(key), visitor)
+	if err != nil {
+		return []immutable.Bytes{}, false
 	}
 
-	return WitnessProof{visitor.visited}.GetElements(), storageRoot, complete
+	return visitor.path, keyComplete
 }
 
 // proofExtractionVisitor is a visitor that visits MPT nodes and creates a witness proof.
@@ -491,8 +509,19 @@ func (v *proofCollectingVisitor) Visit(hash common.Hash, rlpNode rlpEncodedNode,
 	if !isEmbedded && v.visited != nil {
 		v.visited[hash] = rlpNode
 	}
+}
+
+type proofPathRecordingVisitor struct {
+	path           []immutable.Bytes  // all visited RLP encoded nodes
+	visitedAccount decodedAccountNode // the last visited account node
+}
+
+func (v *proofPathRecordingVisitor) Visit(hash common.Hash, rlpNode rlpEncodedNode, node Node, isEmbedded bool) {
 	if account, ok := node.(*decodedAccountNode); ok {
 		v.visitedAccount = *account
+	}
+	if !isEmbedded {
+		v.path = append(v.path, immutable.NewBytes(rlpNode))
 	}
 }
 
