@@ -40,15 +40,18 @@ type Proof interface {
 	// GetElements returns serialised elements of the witness proof.
 	GetElements() []immutable.Bytes
 
-	// GetStorageElements returns serialised elements of the witness proof for a given account
-	// and selected storage locations from this proof.
+	// GetAccountElements returns serialised elements of the witness proof for a selected account and
+	// the root of the account's storage trie. The final return parameter indicates whether everything that
+	// was requested could be covered. If so, it is set to true, otherwise it is set to false.
+	GetAccountElements(root common.Hash, address common.Address) ([]immutable.Bytes, common.Hash, bool)
+
+	// GetStorageElements returns serialised elements of the witness proof for a selected
+	// storage location within an account.
 	// The resulting elements contains only the storage part of the account.
-	// For this reason, the second parameter of this method returns the storage root for this storage
-	// as any proving and other operations on the resulting proof must be done related to the storage root.
 	// This method returns a copy that contains only the data necessary for proving storage keys.
 	// The third return parameter indicates whether everything that was requested could be covered.
 	// If so, it is set to true, otherwise it is set to false.
-	GetStorageElements(root common.Hash, address common.Address, keys ...common.Key) ([]immutable.Bytes, common.Hash, bool)
+	GetStorageElements(root common.Hash, address common.Address, key common.Key) ([]immutable.Bytes, bool)
 
 	// GetBalance extracts a balance from the witness proof for the input root hash and the address.
 	// If the witness proof contains the requested account for the input address for the given root hash, it returns its balance.

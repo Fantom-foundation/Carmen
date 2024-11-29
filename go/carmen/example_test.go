@@ -481,10 +481,10 @@ func ExampleWitnessProof_GetStorageElements() {
 	// ------- Recover Proof and Split into Account and Storage Proof  -------
 
 	proof := carmen.CreateWitnessProofFromNodes(elements...)
-	accountProof, accountComplete := proof.Extract(rootHash, carmen.Address{1})
-	storageElements, storageRoot, storageComplete := proof.GetStorageElements(rootHash, carmen.Address{1}, carmen.Key{1})
+	accountProofElements, storageRoot, accountComplete := proof.GetAccountElements(rootHash, carmen.Address{1})
+	storageElements, storageComplete := proof.GetStorageElements(rootHash, carmen.Address{1}, carmen.Key{1})
 
-	fmt.Printf("Account proof is complete: %v and has %d elements\n", accountComplete, len(accountProof.GetElements()))
+	fmt.Printf("Account proof is complete: %v and has %d elements\n", accountComplete, len(accountProofElements))
 	fmt.Printf("Storage proof is complete: %v and has %d elements and root: %v\n", storageComplete, len(storageElements), storageRoot)
 
 	// Output: Account proof is complete: true and has 1 elements
