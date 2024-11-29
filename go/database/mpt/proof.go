@@ -397,8 +397,12 @@ func witnessAccountFieldGetter[T any](source proofDb, root common.Hash, address 
 // The proof is incomplete when the path could not be fully iterated and reached a node that is not in the proof.
 // The function returns an error if the path cannot be iterated due to error propagated from the input proof.
 func visitWitnessPathTo(source proofDb, root common.Hash, path []Nibble, visitor witnessProofVisitor) (found, complete bool, err error) {
-	nodeHash := root
+	if root == EmptyNodeEthereumHash {
+		visitor.Visit(root, emptyStringRlpEncoded, EmptyNode{}, false)
+		return false, true, nil
+	}
 
+	nodeHash := root
 	var nextEmbedded, currentEmbedded bool
 	var done bool
 	for !done && nodeHash != EmptyNodeEthereumHash {

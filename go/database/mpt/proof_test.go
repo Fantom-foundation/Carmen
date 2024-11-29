@@ -215,9 +215,6 @@ func TestCreateWitnessProof_ProofContainsEmptyNodes(t *testing.T) {
 					addressNibbles[0]: &Extension{}},
 			},
 		},
-		"empty trie": {
-			desc: &Empty{},
-		},
 	}
 
 	for name, test := range tests {
@@ -653,7 +650,7 @@ func TestWitnessProof_Extract_Can_Extract_Terminal_Nodes_In_Proof(t *testing.T) 
 	}{
 		"empty": {
 			trie: &Tag{"A", &Empty{}},
-			path: []string{},
+			path: []string{"A"},
 		},
 		"wrong account": {
 			trie: &Tag{"A", &Account{}},
