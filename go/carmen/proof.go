@@ -48,18 +48,18 @@ type WitnessProof interface {
 	// GetElements returns serialised elements of the witness proof.
 	GetElements() []Bytes
 
-	// GetAccountElements returns serialised elements of the witness proof for a selected account.
-	GetAccountElements(root Hash, address Address) ([]Bytes, bool)
+	// GetAccountElements returns serialised elements of the witness proof for a selected account and
+	// the root of the account's storage trie. The final return parameter indicates whether everything that
+	// was requested could be covered. If so, it is set to true, otherwise it is set to false.
+	GetAccountElements(root Hash, address Address) ([]Bytes, Hash, bool)
 
 	// GetStorageElements returns serialised elements of the witness proof for a selected
 	// storage location within an account.
 	// The resulting elements contains only the storage part of the account.
-	// For this reason, the second parameter of this method returns the storage root for this storage
-	// as any proving and other operations on the resulting proof must be done related to the storage root.
 	// This method returns a copy that contains only the data necessary for proving storage keys.
 	// The third return parameter indicates whether everything that was requested could be covered.
 	// If so, it is set to true, otherwise it is set to false.
-	GetStorageElements(root Hash, address Address, key Key) ([]Bytes, Hash, bool)
+	GetStorageElements(root Hash, address Address, key Key) ([]Bytes, bool)
 
 	// GetBalance extracts a balance from the witness proof for the input root hash and the address.
 	// If the witness proof contains the requested account for the input address for the given root hash, it returns its balance.
@@ -120,14 +120,14 @@ func (w witnessProof) GetElements() []Bytes {
 	return w.proof.GetElements()
 }
 
-func (w witnessProof) GetAccountElements(root Hash, address Address) ([]Bytes, bool) {
-	resProof, complete := w.proof.GetAccountElements(common.Hash(root), common.Address(address))
-	return resProof, complete
+func (w witnessProof) GetAccountElements(root Hash, address Address) ([]Bytes, Hash, bool) {
+	resProof, storageRoot, complete := w.proof.GetAccountElements(common.Hash(root), common.Address(address))
+	return resProof, Hash(storageRoot), complete
 }
 
-func (w witnessProof) GetStorageElements(root Hash, address Address, key Key) ([]Bytes, Hash, bool) {
-	resProof, storageRoot, complete := w.proof.GetStorageElements(common.Hash(root), common.Address(address), common.Key(key))
-	return resProof, Hash(storageRoot), complete
+func (w witnessProof) GetStorageElements(root Hash, address Address, key Key) ([]Bytes, bool) {
+	resProof, complete := w.proof.GetStorageElements(common.Hash(root), common.Address(address), common.Key(key))
+	return resProof, complete
 }
 
 func (w witnessProof) IsValid() bool {

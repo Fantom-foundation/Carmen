@@ -1219,7 +1219,7 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 			// extract storage nodes only
 			allStorageElements := []Bytes{}
 			for _, key := range keys {
-				gotStorageElements, _, complete := recovered.GetStorageElements(root, addr, key)
+				gotStorageElements, complete := recovered.GetStorageElements(root, addr, key)
 				if !complete {
 					t.Errorf("proof is not complete")
 				}

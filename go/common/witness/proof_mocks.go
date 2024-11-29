@@ -103,12 +103,13 @@ func (mr *MockProofMockRecorder) Extract(root, address any, keys ...any) *gomock
 }
 
 // GetAccountElements mocks base method.
-func (m *MockProof) GetAccountElements(root common.Hash, address common.Address) ([]immutable.Bytes, bool) {
+func (m *MockProof) GetAccountElements(root common.Hash, address common.Address) ([]immutable.Bytes, common.Hash, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAccountElements", root, address)
 	ret0, _ := ret[0].([]immutable.Bytes)
-	ret1, _ := ret[1].(bool)
-	return ret0, ret1
+	ret1, _ := ret[1].(common.Hash)
+	ret2, _ := ret[2].(bool)
+	return ret0, ret1, ret2
 }
 
 // GetAccountElements indicates an expected call of GetAccountElements.
@@ -196,13 +197,12 @@ func (mr *MockProofMockRecorder) GetState(root, address, key any) *gomock.Call {
 }
 
 // GetStorageElements mocks base method.
-func (m *MockProof) GetStorageElements(root common.Hash, address common.Address, key common.Key) ([]immutable.Bytes, common.Hash, bool) {
+func (m *MockProof) GetStorageElements(root common.Hash, address common.Address, key common.Key) ([]immutable.Bytes, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStorageElements", root, address, key)
 	ret0, _ := ret[0].([]immutable.Bytes)
-	ret1, _ := ret[1].(common.Hash)
-	ret2, _ := ret[2].(bool)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
 }
 
 // GetStorageElements indicates an expected call of GetStorageElements.

@@ -269,25 +269,29 @@ func (p WitnessProof) GetElements() []immutable.Bytes {
 	return res
 }
 
-func (p WitnessProof) GetAccountElements(root common.Hash, address common.Address) ([]immutable.Bytes, bool) {
-	visitor := &proofPathRecordingVisitor{}
-	_, complete, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
-	if err != nil {
-		return []immutable.Bytes{}, false
-	}
-	return visitor.path, complete
-}
-
-func (p WitnessProof) GetStorageElements(root common.Hash, address common.Address, key common.Key) ([]immutable.Bytes, common.Hash, bool) {
+func (p WitnessProof) GetAccountElements(root common.Hash, address common.Address) ([]immutable.Bytes, common.Hash, bool) {
 	visitor := &proofPathRecordingVisitor{}
 	found, complete, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
 	if err != nil || !complete {
 		return []immutable.Bytes{}, common.Hash{}, false
 	}
+	storageHash := EmptyNodeEthereumHash
+	if found {
+		storageHash = visitor.visitedAccount.storageHash
+	}
+	return visitor.path, storageHash, complete
+}
+
+func (p WitnessProof) GetStorageElements(root common.Hash, address common.Address, key common.Key) ([]immutable.Bytes, bool) {
+	visitor := &proofPathRecordingVisitor{}
+	found, complete, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
+	if !complete || err != nil {
+		return []immutable.Bytes{}, false
+	}
 
 	// If the account does not exist, its storage is empty, and this can be proven.
 	if !found {
-		return []immutable.Bytes{EmptyNodeEthereumEncoding}, EmptyNodeEthereumHash, true
+		return []immutable.Bytes{EmptyNodeEthereumEncoding}, true
 	}
 
 	// If an account was found, a storage proof can be extracted.
@@ -295,10 +299,10 @@ func (p WitnessProof) GetStorageElements(root common.Hash, address common.Addres
 	visitor.path = nil
 	_, keyComplete, err := visitWitnessPathTo(p.proofDb, storageRoot, keyToHashedPathNibbles(key), visitor)
 	if err != nil {
-		return []immutable.Bytes{}, common.Hash{}, false
+		return []immutable.Bytes{}, false
 	}
 
-	return visitor.path, storageRoot, keyComplete
+	return visitor.path, keyComplete
 }
 
 // proofExtractionVisitor is a visitor that visits MPT nodes and creates a witness proof.
