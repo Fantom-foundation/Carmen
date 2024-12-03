@@ -11,6 +11,7 @@
 package mpt
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -854,6 +855,125 @@ func TestCreateWitnessProof_GetAccountElements(t *testing.T) {
 			t.Errorf("unexpected nonce: got %v, want %v", got, want)
 		}
 	})
+
+	t.Run("Incomplete proof", func(t *testing.T) {
+		_, accountNode := ctxt.Get("A")
+		accountHandle := accountNode.GetViewHandle()
+		n := accountHandle.Get()
+		rlp, _ := encodeToRlp(n, ctxt, []byte{})
+		accountHandle.Release()
+
+		proofCopy := CreateWitnessProofFromNodes(proof.GetElements())
+		delete(proofCopy.proofDb, common.Keccak256(rlp))
+
+		_, _, complete := proofCopy.GetAccountElements(hash, address)
+		if complete {
+			t.Errorf("proof should not be complete")
+		}
+	})
+
+	t.Run("Corrupted proof", func(t *testing.T) {
+		_, accountNode := ctxt.Get("A")
+		accountHandle := accountNode.GetViewHandle()
+		n := accountHandle.Get()
+		rlp, _ := encodeToRlp(n, ctxt, []byte{})
+		accountHandle.Release()
+
+		proofCopy := CreateWitnessProofFromNodes(proof.GetElements())
+		proofCopy.proofDb[common.Keccak256(rlp)] = []byte{0xAA, 0xBB, 0xCC, 0xDD}
+
+		_, _, complete := proofCopy.GetAccountElements(hash, address)
+		if complete {
+			t.Errorf("proof should not be complete")
+		}
+	})
+}
+
+func TestCreateWitnessProof_Elements_Path_Sorted_By_Trie_Navigation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	address := common.Address{1}
+	key := common.Key{2}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+	addressNibbles := AddressToNibblePath(address, ctxt)
+	keyNibbles := KeyToNibblePath(key, ctxt)
+
+	desc := &Branch{
+		children: Children{
+			addressNibbles[0]: &Branch{
+				children: Children{
+					addressNibbles[1]: &Extension{
+						path: addressNibbles[2:50],
+						next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
+							storage: &Branch{
+								children: Children{
+									keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Value{key: key, length: 24, value: common.Value{0x12}}},
+								}}}},
+				}}},
+	}
+
+	root, _ := ctxt.Build(desc)
+	rootHash, _ := ctxt.getHashFor(&root)
+
+	proof, err := CreateWitnessProof(ctxt, &root, address, key)
+	if err != nil {
+		t.Fatalf("failed to create proof: %v", err)
+	}
+
+	// collect RLP encoding of all nodes in the path to the account and storage nodes in the MPT
+	var mptNodes []immutable.Bytes
+	var expectedStorageRootHash common.Hash
+	visitor := NewMockNodeVisitor(ctrl)
+	visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(func(node Node, _ NodeInfo) VisitResponse {
+		data := make([]byte, 0, 1024)
+		rlp, err := encodeToRlp(node, ctxt, data)
+		if err != nil {
+			t.Fatalf("failed to encode node: %v", err)
+		}
+		mptNodes = append(mptNodes, immutable.NewBytes(rlp))
+		if account, ok := node.(*AccountNode); ok {
+			expectedStorageRootHash = account.storageHash
+			if _, err := VisitPathToStorage(ctxt, &account.storage, key, visitor); err != nil {
+				t.Fatalf("failed to visit path: %v", err)
+			}
+		}
+		return VisitResponseContinue
+	}).AnyTimes()
+
+	// iterate over the path to get all nodes in order of the trie navigation
+	found, err := VisitPathToAccount(ctxt, &root, address, visitor)
+	if err != nil {
+		t.Fatalf("failed to visit path: %v", err)
+	}
+	if !found {
+		t.Fatalf("path not found in trie")
+	}
+
+	accountElements, storageRootHash, found := proof.GetAccountElements(rootHash, address)
+	if !found {
+		t.Fatalf("account elements not found")
+	}
+
+	storageElements, found := proof.GetStorageElements(rootHash, address, key)
+	if !found {
+		t.Fatalf("storage elements not found")
+	}
+
+	// check that the nodes are in the correct order, starting with account nodes, followed by storage nodes
+	proofNodes := append(accountElements, storageElements...)
+	if got, want := len(proofNodes), len(mptNodes); got != want {
+		t.Fatalf("unexpected number of nodes: got %v, want %v", got, want)
+	}
+	for i, node := range proofNodes {
+		if got, want := node, mptNodes[i]; !bytes.Equal(got.ToBytes(), want.ToBytes()) {
+			t.Errorf("unexpected node: got %v, want %v", got, want)
+		}
+	}
+
+	if got, want := storageRootHash, expectedStorageRootHash; got != want {
+		t.Errorf("unexpected storage root hash: got %v, want %v", got, want)
+	}
 }
 
 func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
@@ -1016,20 +1136,22 @@ func TestCreateWitnessProof_GetStorageElements(t *testing.T) {
 	})
 
 	t.Run("Incomplete proof", func(t *testing.T) {
-		// proof will contain first storage node, then the path diverges,
-		// i.e. only this one node is part of the proof
-		_, storageNode := ctxt.Get("B")
-		storageHandle := storageNode.GetViewHandle()
-		n := storageHandle.Get()
-		rlp, _ := encodeToRlp(n, ctxt, []byte{})
-		storageHandle.Release()
+		for _, label := range []string{"A", "B"} {
+			t.Run(label, func(t *testing.T) {
+				_, labelledNode := ctxt.Get(label)
+				handle := labelledNode.GetViewHandle()
+				n := handle.Get()
+				rlp, _ := encodeToRlp(n, ctxt, []byte{})
+				handle.Release()
 
-		proofCopy := CreateWitnessProofFromNodes(proof.GetElements())
-		delete(proofCopy.proofDb, common.Keccak256(rlp))
+				proofCopy := CreateWitnessProofFromNodes(proof.GetElements())
+				delete(proofCopy.proofDb, common.Keccak256(rlp))
 
-		_, complete := proofCopy.GetStorageElements(hash, address, common.Key{})
-		if complete {
-			t.Errorf("proof should not be complete")
+				_, complete := proofCopy.GetStorageElements(hash, address, common.Key{})
+				if complete {
+					t.Errorf("proof should not be complete")
+				}
+			})
 		}
 	})
 
