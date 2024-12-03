@@ -962,14 +962,13 @@ func TestCreateWitnessProof_Elements_Path_Sorted_By_Trie_Navigation(t *testing.T
 
 	// check that the nodes are in the correct order, starting with account nodes, followed by storage nodes
 	proofNodes := append(accountElements, storageElements...)
+	if got, want := len(proofNodes), len(mptNodes); got != want {
+		t.Fatalf("unexpected number of nodes: got %v, want %v", got, want)
+	}
 	for i, node := range proofNodes {
 		if got, want := node, mptNodes[i]; !bytes.Equal(got.ToBytes(), want.ToBytes()) {
 			t.Errorf("unexpected node: got %v, want %v", got, want)
 		}
-	}
-
-	if got, want := len(proofNodes), len(mptNodes); got != want {
-		t.Errorf("unexpected number of nodes: got %v, want %v", got, want)
 	}
 
 	if got, want := storageRootHash, expectedStorageRootHash; got != want {
