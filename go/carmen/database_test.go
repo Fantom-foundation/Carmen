@@ -1211,7 +1211,7 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 			addr := Address{byte(j)}
 
 			// extract address nodes only
-			gotAccount, complete := recovered.Extract(root, addr)
+			accountElements, storageRoot, complete := recovered.GetAccountElements(root, addr)
 			if !complete {
 				t.Errorf("proof is not complete")
 			}
@@ -1223,13 +1223,26 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 				if !complete {
 					t.Errorf("proof is not complete")
 				}
+
 				// first block's account has no storage, others do
-				if j > 0 && len(gotStorageElements) == 0 {
-					t.Errorf("no storage elements")
+				if j == 0 {
+					if got, want := storageRoot, Hash(mpt.EmptyNodeEthereumHash); got != want {
+						t.Errorf("unexpected storage root, wanted %v (empty node RLP hahs), got %v", want, got)
+					}
+					if got, want := gotStorageElements[0], mpt.EmptyNodeEthereumEncoding; got != want {
+						t.Errorf("unexpected storage element, wanted %v (empty RLP encodiing), got %v", want, got)
+					}
+				} else {
+					if got, want := storageRoot, Hash(mpt.EmptyNodeEthereumHash); got == want {
+						t.Errorf("unexpected storage root, wanted %v, got %v", want, got)
+					}
+					if len(gotStorageElements) == 0 {
+						t.Errorf("no storage elements")
+					}
 				}
 
 				// both proofs must be distinct
-				for _, accountElement := range gotAccount.GetElements() {
+				for _, accountElement := range accountElements {
 					for _, storageElement := range gotStorageElements {
 						if accountElement == storageElement {
 							t.Errorf("account and storage proofs must be distinct")
@@ -1245,7 +1258,7 @@ func TestDatabase_GetProof_Extract_SubProofs(t *testing.T) {
 			}
 
 			// putting nodes together must provide the original proof
-			merged := CreateWitnessProofFromNodes(append(allStorageElements, gotAccount.GetElements()...)...)
+			merged := CreateWitnessProofFromNodes(append(allStorageElements, accountElements...)...)
 
 			gotElements := merged.GetElements()
 			wantElements := shadowProofs[addr].GetElements()
