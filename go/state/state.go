@@ -112,7 +112,7 @@ type LiveDB interface {
 	Close() error
 	common.MemoryFootprintProvider
 
-	// getSnapshotableComponents lists all components required to back-up or restore
+	// GetSnapshotableComponents lists all components required to back-up or restore
 	// for snapshotting this schema. Returns nil if snapshotting is not supported.
 	GetSnapshotableComponents() []backend.Snapshotable
 

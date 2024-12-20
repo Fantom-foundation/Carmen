@@ -54,7 +54,7 @@ var EthereumLikeHashing = hashAlgorithm{
 // hasher is an entity retaining hashing information for individual nodes,
 // computing them as required.
 type hasher interface {
-	// updateHash refreshes the hash of the given node and all nested nodes.
+	// updateHashes refreshes the hash of the given node and all nested nodes.
 	updateHashes(root *NodeReference, nodes NodeManager) (common.Hash, *NodeHashes, error)
 
 	// getHash computes the hash of the node without modifying it. It is used
