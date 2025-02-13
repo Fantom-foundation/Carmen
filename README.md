@@ -1,3 +1,13 @@
+# We've Moved!
+
+This repository has found a new home! 
+
+You can now find everything at [https://github.com/0xsoniclabs/carmen](https://github.com/0xsoniclabs/carmen). 
+
+Please update your bookmarks and any links you have to this repo.
+
+# Carmen
+
 Sonic-DB(Carmen) is licensed under the [Business Source License (BSL)](LICENSE). 
 The BSL prohibits Sonic-DB (Carmen) from being used in production by any other project. 
 Anyone can view or use the licensed code for internal or testing purposes. 
